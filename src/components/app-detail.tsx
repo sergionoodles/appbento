@@ -1,4 +1,4 @@
-import { ExternalLink, Globe, HardDrive, Monitor, MoreHorizontal, Play, SlidersHorizontal, Image, Trash2, TriangleAlert, Volume2, Cpu, Database, type LucideIcon } from "lucide-react";
+import { ExternalLink, Globe, HardDrive, Monitor, MoreHorizontal, Play, RefreshCw, Settings, Image, Trash2, TriangleAlert, Volume2, Cpu, Database, type LucideIcon } from "lucide-react";
 import type { CatalogEntry, InstalledApp, SandboxPermissions, UpdateInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AppIcon, accentOf } from "./app-icon";
@@ -48,15 +48,19 @@ function AccessTile({ app }: { app: InstalledApp }) {
   );
 }
 
-export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, onLaunch, onPermissions, onIcon, onRemove, onOpenUrl }: {
+export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, onLaunch, onSettings, onIcon, onRemove, onOpenUrl, onUpdateSource, onCheckUpdate, onInstallUpdate, isCheckingUpdates }: {
   app: InstalledApp;
   entry?: CatalogEntry;
   update?: UpdateInfo;
   isLaunching: boolean;
   disabled: boolean;
+  isCheckingUpdates: boolean;
+  onUpdateSource: (id: string) => void;
+  onCheckUpdate: (id: string) => void;
+  onInstallUpdate: (id: string) => void;
   onBack: () => void;
   onLaunch: (id: string) => void;
-  onPermissions: (id: string) => void;
+  onSettings: (id: string) => void;
   onIcon: (id: string) => void;
   onRemove: (id: string) => void;
   onOpenUrl: (url: string) => void;
@@ -66,11 +70,12 @@ export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, o
   return (
     <div style={{ "--tile-accent": accentOf(entry) } as React.CSSProperties}>
       <StageHeader title={app.name} onBack={onBack}>
-        <Button variant="soft" size="icon" aria-label={`Permissions for ${app.name}`} disabled={disabled} onClick={() => onPermissions(app.id)}><SlidersHorizontal size={16} /></Button>
+        <Button variant="soft" size="icon" aria-label={`Settings for ${app.name}`} disabled={disabled} onClick={() => onSettings(app.id)}><Settings size={16} /></Button>
         <Menu label={`More options for ${app.name}`} variant="soft" icon={<MoreHorizontal size={17} />} disabled={disabled}>
           {entry ? <MenuItem icon={<ExternalLink size={15} />} onSelect={() => onOpenUrl(entry.app.website)}>Website</MenuItem> : null}
+          <MenuItem icon={<RefreshCw size={15} />} onSelect={() => onUpdateSource(app.id)}>Update source</MenuItem>
           <MenuItem icon={<Image size={15} />} onSelect={() => onIcon(app.id)}>Change icon</MenuItem>
-              <MenuItem icon={<Trash2 size={15} />} onSelect={() => onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
+          <MenuItem icon={<Trash2 size={15} />} onSelect={() => onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
         </Menu>
       </StageHeader>
 
@@ -93,8 +98,12 @@ export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, o
           <InfoTile title="Access" index={1}><AccessTile app={app} /></InfoTile>
           <InfoTile title="Version" index={2}>
             <p className="text-[26px] font-bold tracking-[-0.03em] leading-none">{updateText ?? versionLabel(app)}</p>
-            {update ? <Button variant="outline" size="sm" className="self-start" onClick={() => onOpenUrl(update.download_url)}>{update.status === "available" ? "Download update" : "Download latest"}</Button>
-              : <p className="text-[13px] text-[var(--muted)]">No newer release found.</p>}
+            {update ? <Button variant="outline" size="sm" className="self-start" disabled={disabled || isCheckingUpdates} onClick={() => onInstallUpdate(app.id)}>{update.status === "available" ? "Install update" : "Install latest"}</Button>
+              : <p className="text-[13px] text-[var(--muted)]">{app.update_config ? "Check your saved source for a newer release." : "Updates are disabled for this app."}</p>}
+            <div className="flex flex-wrap gap-2">
+              {app.update_config ? <Button variant="outline" size="sm" disabled={disabled || isCheckingUpdates} onClick={() => onCheckUpdate(app.id)}>Check for updates</Button> : null}
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onUpdateSource(app.id)}>Configure updates</Button>
+            </div>
           </InfoTile>
         </div>
 

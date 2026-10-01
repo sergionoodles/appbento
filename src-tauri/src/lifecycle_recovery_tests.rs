@@ -278,3 +278,79 @@ fn startup_distinguishes_uncommitted_integration_with_unchanged_metadata() {
     assert!(!desktop.exists());
     assert!(!stage.exists());
 }
+
+fn interrupted_replacement(
+    service: &Lifecycle,
+    app: &InstalledApp,
+) -> (recovery::Journal, Vec<u8>) {
+    let destination = Path::new(&app.file_path);
+    let original = fs::read(destination).unwrap();
+    let backup = crash_artifact(destination);
+    let stage = persistence::temporary_path(destination.parent().unwrap());
+    let mut updated_bytes = original.clone();
+    updated_bytes.extend_from_slice(b"replacement");
+    fs::write(&stage, updated_bytes).unwrap();
+    let replacement = recovery::Artifact {
+        original: destination.to_owned(),
+        identity: recovery::identity(&stage).unwrap(),
+        stage: stage.clone(),
+    };
+    let mut updated = app.clone();
+    updated.version_current = Some("2.0.0".into());
+    updated.size_bytes = fs::metadata(&stage).unwrap().len();
+    let journal = recovery::Journal {
+        operation: recovery::Operation::Replace,
+        app_id: app.id.clone(),
+        artifacts: vec![backup, replacement],
+        original_mode: None,
+        installed_app: Some(updated),
+        previous_library_identity: recovery::identity(&service.library_path).unwrap(),
+    };
+    recovery::write(&service.library_path, &journal).unwrap();
+    fs::rename(&stage, destination).unwrap();
+    (journal, original)
+}
+
+#[test]
+fn interrupted_update_rolls_back_bytes_and_library_before_commit() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let (journal, original) = interrupted_replacement(&service, &app);
+    assert_eq!(service.list().unwrap(), vec![app.clone()]);
+    assert_eq!(fs::read(&app.file_path).unwrap(), original);
+    assert!(journal
+        .artifacts
+        .iter()
+        .all(|artifact| !artifact.stage.exists()));
+}
+
+#[test]
+fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let (journal, original) = interrupted_replacement(&service, &app);
+    let updated = journal.installed_app.as_ref().unwrap().clone();
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        library.insert(updated.id.clone(), updated.clone());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(service.list().unwrap(), vec![updated]);
+    assert_ne!(fs::read(&app.file_path).unwrap(), original);
+    assert!(journal
+        .artifacts
+        .iter()
+        .all(|artifact| !artifact.stage.exists()));
+}
+
+#[test]
+fn interrupted_update_does_not_overwrite_foreign_destination() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let (journal, _original) = interrupted_replacement(&service, &app);
+    fs::remove_file(&app.file_path).unwrap();
+    fs::write(&app.file_path, "foreign bytes").unwrap();
+    assert!(service.list().is_err());
+    assert_eq!(fs::read_to_string(&app.file_path).unwrap(), "foreign bytes");
+    assert!(journal.artifacts[0].stage.exists());
+}

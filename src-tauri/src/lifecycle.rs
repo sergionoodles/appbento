@@ -18,9 +18,13 @@ mod desktop;
 mod integration;
 #[path = "recovery.rs"]
 pub(crate) mod recovery;
+#[path = "replacement.rs"]
+mod replacement;
 
 pub use appimage::open_appimage;
-use desktop::{desktop_content, desktop_id};
+#[cfg(test)]
+use desktop::desktop_content;
+use desktop::desktop_id;
 
 pub struct Lifecycle {
     pub library_path: PathBuf,
@@ -47,10 +51,6 @@ fn discovered_app(
         .ok_or("invalid filename")?
         .to_owned();
     let metadata = file.metadata().map_err(|error| error.to_string())?;
-    let catalog_id = catalog::match_catalog(entries, &file_name);
-    let version = catalog_id
-        .as_deref()
-        .and_then(|id| catalog::version_from_filename(entries, id, &file_name));
     if let Some(existing) = existing {
         let has_current_review = existing.launch_config.is_none()
             || existing.reviewed_digest.as_deref()
@@ -69,12 +69,32 @@ fn discovered_app(
             size_bytes: metadata.len(),
             file_created_at: file_created_at(&metadata),
             executable: metadata.permissions().mode() & 0o111 != 0,
-            catalog_id: catalog_id.or_else(|| existing.catalog_id.clone()),
-            version_current: existing.version_current.clone().or(version),
             ..existing.clone()
         });
     }
+    let catalog_id = catalog::match_catalog(entries, &file_name);
+    let entry = catalog_id
+        .as_ref()
+        .and_then(|id| entries.iter().find(|entry| &entry.app.id == id));
+    let version = catalog_id
+        .as_deref()
+        .and_then(|id| catalog::version_from_filename(entries, id, &file_name));
     Ok(InstalledApp {
+        update_config: entry.and_then(|entry| {
+            if matches!(
+                entry.update.strategy,
+                Some(crate::models::UpdateStrategy::GithubRelease)
+            ) {
+                entry
+                    .update
+                    .github
+                    .clone()
+                    .map(crate::models::UpdateConfig::GithubRelease)
+            } else {
+                None
+            }
+        }),
+        permission_defaults: entry.and_then(|entry| entry.sandbox.clone()),
         id: path_id(path)?,
         name: catalog_id
             .as_ref()
@@ -203,7 +223,9 @@ impl Lifecycle {
                             }
                         };
                         if library.values().any(|app| {
-                            app.integrated && app.source_path.as_deref() == path.to_str()
+                            (app.source_path.as_deref() == path.to_str()
+                                || app.id == path.to_string_lossy())
+                                && app.file_path != path.to_string_lossy()
                         }) {
                             continue;
                         }
@@ -218,8 +240,11 @@ impl Lifecycle {
                             }
                         };
                         let id = path_id(&path)?;
-                        let app = discovered_app(&path, &file, &self.catalog, library.get(&id))?;
-                        library.insert(id, app.clone());
+                        let existing = library
+                            .get(&id)
+                            .or_else(|| library.values().find(|app| app.file_path == id));
+                        let app = discovered_app(&path, &file, &self.catalog, existing)?;
+                        library.insert(app.id.clone(), app.clone());
                         if !found
                             .iter()
                             .any(|existing: &InstalledApp| existing.id == app.id)
@@ -262,7 +287,12 @@ impl Lifecycle {
                     let desktop = self.desktop_dir.join(&expected_desktop_id);
                     match fs::read_to_string(&desktop) {
                         Ok(content) => {
-                            let expected = desktop_content(&path, &app.name)?;
+                            let expected = desktop::desktop_content_with_hints(
+                                &path,
+                                &app.id,
+                                &app.name,
+                                &Default::default(),
+                            )?;
                             let expected_exec = expected
                                 .lines()
                                 .find(|line| line.starts_with("Exec="))

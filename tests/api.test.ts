@@ -62,3 +62,41 @@ test("native sandbox commands preserve config and return backend status", async 
     { command: "library_configure", args: { id: app.id, config } },
   ]);
 });
+
+test("native update commands use the app's saved configuration and stable identity", async () => {
+  const app = createPreviewApp("Configured", "1.0");
+  const config = { strategy: "direct-url" as const, url: "https://example.org/app.AppImage" };
+  const calls: unknown[] = [];
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return app as Commands[Command]["result"];
+  };
+  const backend = createNativeApi(transport);
+  await backend.updatesConfigure(app.id, config);
+  await backend.updatesCheck(app.id);
+  await backend.updatesInstall(app.id);
+  await backend.updatesConfigure(app.id, null);
+  assert.deepEqual(calls, [
+    { command: "updates_configure", args: { appId: app.id, config } },
+    { command: "updates_check", args: { appId: app.id } },
+    { command: "updates_install", args: { appId: app.id } },
+    { command: "updates_configure", args: { appId: app.id, config: null } },
+  ]);
+});
+
+test("preview checks only configured apps and installing retains identity and launch settings", async () => {
+  const preview = createPreviewApi();
+  const [app, disabledApp] = await preview.libraryList();
+  assert.equal((await preview.updatesCheck(disabledApp.id)).status, "unsupported");
+  await assert.rejects(preview.updatesInstall(disabledApp.id), /Configure an update source/);
+  const installed = await preview.updatesInstall(app.id);
+  assert.equal(installed.id, app.id);
+  assert.equal(installed.file_path, app.file_path);
+  assert.equal(installed.version_current, "1.6.7");
+  assert.deepEqual(installed.launch_config, app.launch_config);
+  assert.deepEqual(installed.update_config, app.update_config);
+  assert.equal((await preview.libraryList()).length, 2);
+  assert.equal((await preview.updatesCheck(app.id)).status, "up-to-date");
+  await preview.updatesConfigure(app.id, null);
+  assert.equal((await preview.updatesCheckAll()).checked_count, 0);
+});

@@ -10,8 +10,7 @@ import { AppDetail, STAGE_SELECTOR } from "@/components/app-detail";
 import { CatalogView } from "@/components/catalog-view";
 import { UpdatesView } from "@/components/updates-view";
 import { FoldersDialog } from "@/components/dialogs/folders-dialog";
-import { PermissionsDialog } from "@/components/dialogs/permissions-dialog";
-import { IconDialog } from "@/components/dialogs/icon-dialog";
+import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app-settings-dialog";
 import { IconBackendContext } from "@/components/app-icon";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
 import { Button } from "@/components/ui/button";
@@ -20,35 +19,53 @@ type View = { name: "home" } | { name: "app"; id: string } | { name: "discover" 
 
 const HOME: View = { name: "home" };
 const LAUNCH_OPERATION = "Launch app";
+const DISPLAY_NAMES_KEY = "appbento-display-names";
 
 function Shell({ backend }: { backend: AppApi }) {
   const [view, setView] = useState<View>(HOME);
   const [query, setQuery] = useState("");
   const [showFolders, setShowFolders] = useState(false);
   const [returnFocusElement, setReturnFocusElement] = useState<HTMLElement | null>(null);
-  const [iconId, setIconId] = useState<string | null>(null);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<SettingsTarget>("permissions");
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(DISPLAY_NAMES_KEY) ?? "{}"); } catch { return {}; }
+  });
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const { apps, catalog, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
   const filter = query.toLowerCase();
-  const filteredApps = apps.filter((app) => app.name.toLowerCase().includes(filter));
+  const displayApps = apps.map((app) => ({ ...app, name: displayNames[app.id] || app.name }));
+  const filteredApps = displayApps.filter((app) => app.name.toLowerCase().includes(filter));
   const filteredCatalog = catalog.filter((entry) => `${entry.app.name} ${entry.app.summary}`.toLowerCase().includes(filter));
   const updates = updateReport?.updates ?? [];
   const confirmedUpdateCount = updates.filter((update) => update.status === "available").length;
   const disabled = isLoading || operation !== null;
   const removingApp = apps.find((app) => app.id === removingId);
   const reviewingApp = apps.find((app) => app.id === reviewIds[0]);
-  const detailApp = view.name === "app" ? apps.find((app) => app.id === view.id) : undefined;
-  const iconApp = apps.find((app) => app.id === iconId);
-  const hasModal = !!iconApp || showFolders || !!removingApp || !!reviewingApp;
+  const detailApp = view.name === "app" ? displayApps.find((app) => app.id === view.id) : undefined;
+  const settingsApp = displayApps.find((app) => app.id === settingsId);
+  const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
+  const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
+  const hasModal = !!settingsApp || showFolders || !!removingApp || !!reviewingApp;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const onLaunch = (id: string) => { captureFocus(); void controller.launch(id); };
-  const onPermissions = (id: string) => { captureFocus(); controller.requestReview(id); };
-  const onIcon = (id: string) => {
+  const openSettings = (id: string, target: SettingsTarget) => {
     captureFocus();
     controller.dismissError();
-    setIconId(id);
+    setSettingsTarget(target);
+    setSettingsId(id);
+  };
+  const onSettings = (id: string) => openSettings(id, "general");
+  const onIcon = (id: string) => openSettings(id, "icon");
+  const onUpdateSource = (id: string) => openSettings(id, "updates");
+  const saveDisplayName = (id: string, originalName: string, name: string) => {
+    const next = { ...displayNames };
+    if (name === originalName) delete next[id];
+    else next[id] = name;
+    setDisplayNames(next);
+    localStorage.setItem(DISPLAY_NAMES_KEY, JSON.stringify(next));
   };
   const onRemove = (id: string) => {
     captureFocus();
@@ -86,12 +103,12 @@ function Shell({ backend }: { backend: AppApi }) {
           {isLoading ? <BentoSkeleton /> : (
             <>
               {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento apps={filteredApps} catalog={catalog} updates={updates} isAnimated={!hasEntered} onEntered={markEntered}
-                onOpen={openApp} onLaunch={onLaunch} onPermissions={onPermissions} onIcon={onIcon} onRemove={onRemove} onDiscover={() => goTo({ name: "discover" })}
+                onOpen={openApp} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onDiscover={() => goTo({ name: "discover" })}
                 onAdd={() => { captureFocus(); void controller.integrate(); }} canAdd={backend.isTauri} disabled={disabled} /> : null}
               {detailApp ? <AppDetail app={detailApp} entry={catalog.find((entry) => entry.app.id === detailApp.catalog_id)} update={updates.find((update) => update.app_id === detailApp.id)}
-                isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onPermissions={onPermissions} onIcon={onIcon} onRemove={onRemove} onOpenUrl={onOpenUrl} /> : null}
+                isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onOpenUrl={onOpenUrl} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
               {view.name === "discover" ? <CatalogView catalog={filteredCatalog} apps={apps} isPreview={!backend.isTauri} onBack={goHome} onOpen={onOpenUrl} /> : null}
-              {view.name === "updates" ? <UpdatesView report={updateReport} isChecking={isCheckingUpdates || disabled} onBack={goHome} onCheck={() => void controller.checkUpdates()} onOpen={onOpenUrl} /> : null}
+              {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
             </>
           )}
         </main>
@@ -99,8 +116,13 @@ function Shell({ backend }: { backend: AppApi }) {
           {statusText ? <p role="status" className="menu flex items-center gap-2 rounded-md px-4 h-10 text-[14px]"><Loader2 size={15} className="animate-spin" />{statusText}…</p> : null}
         </div>
       </div>
-      {reviewingApp && !iconApp && !showFolders && !removingApp ? <PermissionsDialog key={reviewingApp.id} app={reviewingApp} catalog={catalog.find((entry) => entry.app.id === reviewingApp.catalog_id)} backend={backend} launchAfterSave={launchAfterReview} onClose={controller.dismissReview} onSave={(config, launch) => controller.configure(reviewingApp.id, config, launch)} isSaving={operation !== null} error={error} returnFocusElement={returnFocusElement} /> : null}
-      {iconApp ? <IconDialog key={iconApp.id} app={iconApp} backend={backend} onClose={() => setIconId(null)} onSave={(source) => controller.setIcon(iconApp.id, source)} isSaving={operation !== null} error={error} returnFocusElement={returnFocusElement} /> : null}
+      {configuringApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
+        catalogEntry={catalog.find((entry) => entry.app.id === configuringApp.catalog_id)}
+        openTo={settingsApp ? settingsTarget : "permissions"} originalName={configuringOriginalName} launchAfterSave={launchAfterReview}
+        onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
+        onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
+        onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
+        isSaving={operation !== null} error={error} returnFocusElement={returnFocusElement} /> : null}
       {showFolders && settings ? <FoldersDialog returnFocusElement={returnFocusElement} pickFolder={backend.pickFolder} isNative={backend.isTauri} initial={settings} onClose={() => setShowFolders(false)} onSaved={controller.saveFolders} isSaving={operation !== null} error={error} /> : null}
       {removingApp ? <RemoveDialog returnFocusElement={returnFocusElement} app={removingApp} onClose={() => setRemovingId(null)} onRemove={(deleteFile) => controller.remove(removingApp.id, deleteFile)} isRemoving={operation !== null} error={error} /> : null}
     </>

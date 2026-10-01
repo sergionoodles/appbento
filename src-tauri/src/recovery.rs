@@ -13,6 +13,7 @@ use crate::store::Library;
 pub enum Operation {
     Integrate,
     Remove,
+    Replace,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -62,7 +63,7 @@ pub fn recover(repository: &mut Repository<Library>) -> Result<(), String> {
     let journal: Journal = serde_json::from_slice(&bytes)
         .map_err(|error| format!("invalid lifecycle recovery journal: {error}"))?;
     let committed = match journal.operation {
-        Operation::Integrate => {
+        Operation::Integrate | Operation::Replace => {
             identity(&repository.path)? != journal.previous_library_identity
                 && journal.installed_app.as_ref().is_some_and(|expected| {
                     repository
@@ -77,6 +78,11 @@ pub fn recover(repository: &mut Repository<Library>) -> Result<(), String> {
 }
 
 pub fn finish(library: &Path, journal: &Journal, committed: bool) -> Result<(), String> {
+    if matches!(journal.operation, Operation::Replace) {
+        finish_replacement(journal, committed)?;
+        remove_if_present(&journal_path(library))?;
+        return sync_parent(library);
+    }
     for artifact in &journal.artifacts {
         let stage = identity(&artifact.stage)?;
         if artifact.identity.is_some() && stage.is_some() && stage != artifact.identity {
@@ -174,4 +180,32 @@ pub fn sync_parent(path: &Path) -> Result<(), String> {
     fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|error| error.to_string())
+}
+
+fn finish_replacement(journal: &Journal, committed: bool) -> Result<(), String> {
+    let [backup, replacement] = journal.artifacts.as_slice() else {
+        return Err("invalid replacement journal".into());
+    };
+    for artifact in [backup, replacement] {
+        let stage = identity(&artifact.stage)?;
+        if stage.is_some() && stage != artifact.identity {
+            return Err("replacement recovery staging file was changed".into());
+        }
+    }
+    let current = identity(&backup.original)?;
+    if current.is_some() && current != backup.identity && current != replacement.identity {
+        return Err("replacement recovery destination was changed".into());
+    }
+    if !committed && current != backup.identity {
+        if identity(&backup.stage)? != backup.identity {
+            return Err("replacement recovery backup is missing".into());
+        }
+        fs::rename(&backup.stage, &backup.original).map_err(|error| error.to_string())?;
+    }
+    if committed && current != replacement.identity {
+        return Err("committed replacement is missing".into());
+    }
+    remove_if_present(&backup.stage)?;
+    remove_if_present(&replacement.stage)?;
+    sync_parent(&backup.original)
 }

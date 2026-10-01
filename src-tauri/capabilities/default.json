@@ -29,6 +29,8 @@
     "allow-catalog-get",
     "allow-updates-check",
     "allow-updates-check-all",
+    "allow-updates-configure",
+    "allow-updates-install",
     "allow-settings-get",
     "allow-settings-set"
   ]

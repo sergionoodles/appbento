@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Compass, MoreHorizontal, Play, Plus, ShieldCheck, SlidersHorizontal, Image, Trash2 } from "lucide-react";
+import { Compass, MoreHorizontal, Play, Plus, ShieldCheck, Settings, Image, Trash2 } from "lucide-react";
 import type { CatalogEntry, InstalledApp, UpdateInfo } from "@/lib/types";
 import { recentApps } from "@/lib/library-controller";
 import { formatAge } from "@/lib/relative-time";
@@ -15,7 +15,7 @@ function sizeClass(isMostUsed: boolean, isSecondMostUsed: boolean) {
   return isSecondMostUsed ? "span-wide" : "";
 }
 
-function AppTile({ app, entry, update, index, isMostUsed, isSecondMostUsed, onOpen, onLaunch, onPermissions, onIcon, onRemove, disabled }: {
+function AppTile({ app, entry, update, index, isMostUsed, isSecondMostUsed, onOpen, onLaunch, onSettings, onIcon, onRemove, disabled }: {
   app: InstalledApp;
   entry?: CatalogEntry;
   update?: UpdateInfo;
@@ -24,7 +24,7 @@ function AppTile({ app, entry, update, index, isMostUsed, isSecondMostUsed, onOp
   isSecondMostUsed: boolean;
   onOpen: (id: string) => void;
   onLaunch: (id: string) => void;
-  onPermissions: (id: string) => void;
+  onSettings: (id: string) => void;
   onIcon: (id: string) => void;
   onRemove: (id: string) => void;
   disabled: boolean;
@@ -43,7 +43,7 @@ function AppTile({ app, entry, update, index, isMostUsed, isSecondMostUsed, onOp
           {isHero && app.launch_count > 0 ? <span className="rounded-full bg-[var(--panel2)] px-3 py-1 text-[12px] text-[var(--muted)]">Most used</span> : null}
           <div className="pointer-events-auto tile-action">
             <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={17} />} disabled={disabled}>
-              <MenuItem icon={<SlidersHorizontal size={15} />} onSelect={() => onPermissions(app.id)}>Permissions</MenuItem>
+              <MenuItem icon={<Settings size={15} />} onSelect={() => onSettings(app.id)}>Settings</MenuItem>
               <MenuItem icon={<Image size={15} />} onSelect={() => onIcon(app.id)}>Change icon</MenuItem>
               <MenuItem icon={<Trash2 size={15} />} onSelect={() => onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
             </Menu>
@@ -99,7 +99,7 @@ export function BentoSkeleton() {
   );
 }
 
-export function Bento({ apps, catalog, updates, isAnimated, onEntered, onOpen, onLaunch, onPermissions, onIcon, onRemove, onDiscover, onAdd, canAdd, disabled }: {
+export function Bento({ apps, catalog, updates, isAnimated, onEntered, onOpen, onLaunch, onSettings, onIcon, onRemove, onDiscover, onAdd, canAdd, disabled }: {
   apps: InstalledApp[];
   catalog: CatalogEntry[];
   updates: UpdateInfo[];
@@ -107,7 +107,7 @@ export function Bento({ apps, catalog, updates, isAnimated, onEntered, onOpen, o
   onEntered: () => void;
   onOpen: (id: string) => void;
   onLaunch: (id: string) => void;
-  onPermissions: (id: string) => void;
+  onSettings: (id: string) => void;
   onIcon: (id: string) => void;
   onRemove: (id: string) => void;
   onDiscover: () => void;
@@ -132,7 +132,7 @@ export function Bento({ apps, catalog, updates, isAnimated, onEntered, onOpen, o
       <div className={cn("bento", isAnimated && "intro")}>
         {recent.map((app, index) => (
           <AppTile key={app.id} app={app} index={index} isMostUsed={app.id === mostUsedId} isSecondMostUsed={app.id === secondMostUsedId} entry={catalog.find((entry) => entry.app.id === app.catalog_id)} update={updatesById.get(app.id)}
-            onOpen={onOpen} onLaunch={onLaunch} onPermissions={onPermissions} onIcon={onIcon} onRemove={onRemove} disabled={disabled} />
+            onOpen={onOpen} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} disabled={disabled} />
         ))}
         <ShortcutTile index={recent.length} className="span-wide" icon={<Compass size={20} />} title="Discover apps" hint={`${catalog.length} ready-made entries`} onClick={onDiscover} />
         {canAdd ? <ShortcutTile index={recent.length + 1} isDashed icon={<Plus size={20} />} title="Add an AppImage" hint="Or scan your folders" onClick={onAdd} /> : null}

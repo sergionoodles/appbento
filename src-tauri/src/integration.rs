@@ -83,9 +83,10 @@ impl Lifecycle {
         let destination_id = path_id(&destination)?;
         let existing = library
             .get(&destination_id)
-            .or_else(|| library.get(&source_id));
+            .or_else(|| library.get(&source_id))
+            .or_else(|| library.values().find(|app| app.file_path == source_id));
         let mut app = discovered_app(&source, source_file, &self.catalog, existing)?;
-        app.id = destination_id.clone();
+        app.id = existing.map_or_else(|| destination_id.clone(), |app| app.id.clone());
         app.file_path = destination_id.clone();
         app.integrated = true;
         app.executable = true;
@@ -113,7 +114,7 @@ impl Lifecycle {
         if let Some(existing) = existing.filter(|app| app.integrated) {
             super::desktop::migrate(&desktop_path, existing)?;
         }
-        let content = desktop_content_with_hints(&destination, &app.name, &hints)?;
+        let content = desktop_content_with_hints(&destination, &app.id, &app.name, &hints)?;
         let is_idempotent = source == destination
             && existing.is_some_and(|app| app.integrated)
             && desktop_path.exists();

@@ -325,3 +325,198 @@ fn matching_catalog_sandbox_profile_still_requires_review() {
     assert!(app.launch_config.is_none());
     assert!(app.reviewed_digest.is_none());
 }
+
+fn staged_update(directory: &Path, source: &Path) -> PathBuf {
+    let staged = directory.join("download.tmp");
+    let mut bytes = fs::read(source).unwrap();
+    bytes.extend_from_slice(b"new release");
+    fs::write(&staged, bytes).unwrap();
+    staged
+}
+
+#[test]
+fn manual_update_preserves_identity_permissions_history_and_desktop() {
+    let (directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let config = crate::models::LaunchConfig {
+        mode: crate::models::LaunchMode::Direct,
+        permissions: Default::default(),
+    };
+    let configured = service.configure(&app.id, &config).unwrap();
+    let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+    let staged = staged_update(&directory.0, &source);
+    let updated = service
+        .replace_update(&configured, &staged, Some("2.0.0"), &digest)
+        .unwrap();
+    assert_eq!(updated.id, app.id);
+    assert_eq!(updated.file_path, app.file_path);
+    assert_eq!(updated.launch_config, Some(config));
+    assert_eq!(updated.added_at, app.added_at);
+    assert_eq!(updated.desktop_id, app.desktop_id);
+    assert_ne!(updated.reviewed_digest, configured.reviewed_digest);
+    assert_eq!(updated.version_current.as_deref(), Some("2.0.0"));
+    assert!(source.exists());
+    assert_eq!(service.list().unwrap(), vec![updated]);
+}
+
+#[test]
+fn portable_updates_keep_original_and_do_not_duplicate_scan_records() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let staged = staged_update(&directory.0, &source);
+    let updated = service
+        .replace_update(&app, &staged, Some("2.0.0"), &digest)
+        .unwrap();
+    assert_eq!(updated.id, app.id);
+    assert_ne!(updated.file_path, app.file_path);
+    assert!(!updated.integrated);
+    assert_eq!(fs::read(&source).unwrap().len(), ELF_HEADER_LENGTH);
+    let internal = Path::new(&updated.file_path).parent().unwrap().to_owned();
+    service.scan(vec![directory.0.clone(), internal]).unwrap();
+    assert_eq!(service.list().unwrap(), vec![updated.clone()]);
+    let next_digest = crate::sandbox::appimage_digest(Path::new(&updated.file_path)).unwrap();
+    let next = service
+        .replace_update(&updated, &staged, Some("3.0.0"), &next_digest)
+        .unwrap();
+    assert_eq!(next.file_path, updated.file_path);
+}
+
+#[test]
+fn update_rejects_invalid_download_changed_config_and_changed_file() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let staged = directory.0.join("invalid.tmp");
+    fs::write(&staged, "not AppImage").unwrap();
+    assert!(service
+        .replace_update(&app, &staged, None, &digest)
+        .is_err());
+    let staged = staged_update(&directory.0, &source);
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        library.get_mut(&app.id).unwrap().update_config =
+            Some(crate::models::UpdateConfig::DirectUrl {
+                url: "https://example.com/app.AppImage".into(),
+            });
+        Ok(())
+    })
+    .unwrap();
+    assert!(service
+        .replace_update(&app, &staged, None, &digest)
+        .is_err());
+    let current = service.list().unwrap().remove(0);
+    let mut bytes = fs::read(&source).unwrap();
+    bytes[11] = 42;
+    fs::write(&source, bytes).unwrap();
+    assert!(service
+        .replace_update(&current, &staged, None, &digest)
+        .is_err());
+    assert_eq!(service.list().unwrap(), vec![current]);
+}
+
+#[test]
+fn initial_catalog_defaults_are_snapshotted_and_rescan_does_not_replace_them() {
+    let (directory, mut service, source) = fixture();
+    let matched = directory.0.join("Obsidian-1.2.3.AppImage");
+    fs::rename(&source, &matched).unwrap();
+    service.catalog = catalog::load_catalog().unwrap();
+    let imported = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    assert!(imported.update_config.is_some());
+    assert!(imported.permission_defaults.is_some());
+    service.catalog.clear();
+    assert_eq!(
+        service.scan(vec![directory.0.clone()]).unwrap().apps,
+        vec![imported]
+    );
+}
+
+#[test]
+fn update_inherits_permissions_and_history_changed_during_download() {
+    let (directory, service, source) = fixture();
+    let expected = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let staged = staged_update(&directory.0, &source);
+    let config = crate::models::LaunchConfig {
+        mode: crate::models::LaunchMode::Direct,
+        permissions: crate::models::SandboxPermissions {
+            network: true,
+            ..Default::default()
+        },
+    };
+    service.configure(&expected.id, &config).unwrap();
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        library.get_mut(&expected.id).unwrap().launch_count = 7;
+        Ok(())
+    })
+    .unwrap();
+    let updated = service
+        .replace_update(&expected, &staged, Some("2.0.0"), &digest)
+        .unwrap();
+    assert_eq!(updated.launch_config, Some(config));
+    assert_eq!(updated.launch_count, 7);
+    assert_eq!(
+        updated.reviewed_digest,
+        Some(crate::sandbox::appimage_digest(Path::new(&updated.file_path)).unwrap())
+    );
+}
+
+#[test]
+fn integrating_updated_portable_preserves_identity_configuration_and_private_home() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let config = crate::models::LaunchConfig {
+        mode: crate::models::LaunchMode::Direct,
+        permissions: Default::default(),
+    };
+    let configured = service.configure(&app.id, &config).unwrap();
+    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let staged = staged_update(&directory.0, &source);
+    let updated = service
+        .replace_update(&configured, &staged, Some("2.0.0"), &digest)
+        .unwrap();
+    let internal = Path::new(&updated.file_path).parent().unwrap().to_owned();
+    let integrated = service.integrate(Path::new(&updated.file_path)).unwrap();
+    assert_eq!(integrated.id, updated.id);
+    assert_eq!(integrated.launch_config, updated.launch_config);
+    assert_eq!(integrated.update_config, updated.update_config);
+    assert_eq!(integrated.reviewed_digest, updated.reviewed_digest);
+    let desktop = fs::read_to_string(
+        service
+            .desktop_dir
+            .join(integrated.desktop_id.as_ref().unwrap()),
+    )
+    .unwrap();
+    assert!(desktop.contains(&format!(" --launch \"{}\"", integrated.id)));
+    service
+        .scan(vec![
+            directory.0.clone(),
+            internal,
+            service.managed_dir.clone(),
+        ])
+        .unwrap();
+    assert_eq!(service.list().unwrap().len(), 1);
+    assert_eq!(service.list().unwrap()[0].id, updated.id);
+    service.remove(&integrated.id, true).unwrap();
+    assert!(source.exists());
+    assert!(service.list().unwrap().is_empty());
+}

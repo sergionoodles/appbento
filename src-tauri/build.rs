@@ -14,6 +14,8 @@ const COMMANDS: &[&str] = &[
     "catalog_get",
     "updates_check",
     "updates_check_all",
+    "updates_configure",
+    "updates_install",
     "settings_get",
     "settings_set",
 ];

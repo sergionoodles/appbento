@@ -10,12 +10,19 @@ pub fn desktop_id(path: &Path) -> String {
     )
 }
 
+#[cfg(test)]
 pub fn desktop_content(path: &Path, name: &str) -> Result<String, String> {
-    desktop_content_with_hints(path, name, &DesktopHints::default())
+    desktop_content_with_hints(
+        path,
+        &path.to_string_lossy(),
+        name,
+        &DesktopHints::default(),
+    )
 }
 
 pub(super) fn desktop_content_with_hints(
     path: &Path,
+    app_id: &str,
     name: &str,
     hints: &DesktopHints,
 ) -> Result<String, String> {
@@ -25,7 +32,7 @@ pub(super) fn desktop_content_with_hints(
     )?;
     let old = legacy_desktop_content(path, name, hints);
     let executable = escape_exec(&executable.to_string_lossy());
-    let id = escape_exec(&path.to_string_lossy());
+    let id = escape_exec(app_id);
     Ok(old
         .lines()
         .map(|line| {
@@ -78,7 +85,8 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         Err(error) => return Err(error.to_string()),
     };
     let app_path = Path::new(&app.file_path);
-    let current = desktop_content(app_path, &app.name)?;
+    let current =
+        desktop_content_with_hints(app_path, &app.id, &app.name, &DesktopHints::default())?;
     let legacy = legacy_desktop_content(app_path, &app.name, &DesktopHints::default());
     let expected_exec = current
         .lines()

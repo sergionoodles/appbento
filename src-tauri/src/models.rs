@@ -9,7 +9,7 @@ pub enum UpdateStrategy {
     Manual,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GithubUpdateConfig {
     /// "owner/repo"
@@ -27,6 +27,15 @@ pub struct GithubUpdateConfig {
 
 fn default_channel() -> String {
     "stable".to_string()
+}
+
+/// Saved with the installed app; catalog defaults are copied only during import.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "strategy", rename_all = "kebab-case")]
+pub enum UpdateConfig {
+    GithubRelease(GithubUpdateConfig),
+    GitlabRelease(GithubUpdateConfig),
+    DirectUrl { url: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -102,6 +111,10 @@ pub struct CatalogEntry {
 /// Local library state for AppImages actually on disk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InstalledApp {
+    #[serde(default)]
+    pub update_config: Option<UpdateConfig>,
+    #[serde(default)]
+    pub permission_defaults: Option<SandboxPermissions>,
     pub id: String,
     pub name: String,
     pub file_path: String,

@@ -25,9 +25,15 @@ function unreviewedBackend(patch: Partial<AppApi> = {}) {
 async function openReview(backend: AppApi) {
   const user = userEvent.setup();
   render(<App backend={backend} />);
-  const dialog = await screen.findByRole("dialog", { name: "Launch permissions for Obsidian" });
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Recheck bubblewrap" })).toBeEnabled());
+  await screen.findByRole("heading", { name: "Recent applications" });
+  await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
+  const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
   return { user, dialog };
+}
+
+async function restrict(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) {
+  await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Recheck bubblewrap" })).toBeEnabled());
 }
 
 describe("AppImage permission review", () => {
@@ -35,27 +41,29 @@ describe("AppImage permission review", () => {
   it("keeps reviewed configuration visible after a save-and-launch failure", async () => {
     const { backend } = unreviewedBackend({ async libraryLaunch() { throw new Error("Sandbox launch failed"); } });
     const { user, dialog } = await openReview(backend);
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
-    const reopened = screen.getByRole("dialog");
-    await waitFor(() => expect(within(reopened).getByRole("button", { name: "Save and launch" })).toBeEnabled());
-    await user.click(within(reopened).getByRole("checkbox", { name: /Display/ }));
-    await user.click(within(reopened).getByRole("button", { name: "Save and launch" }));
-    expect(await within(reopened).findByRole("alert")).toHaveTextContent("Sandbox launch failed");
-    expect(within(reopened).getByRole("checkbox", { name: /Display/ })).not.toBeChecked();
+    await restrict(user, dialog);
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save and launch" })).toBeEnabled());
+    await user.click(within(dialog).getByRole("checkbox", { name: /Display/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Save and launch" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Sandbox launch failed");
+    expect(within(dialog).getByRole("checkbox", { name: /Display/ })).not.toBeChecked();
   });
 
-  it("moves to the next unreviewed app when a queued review is canceled", async () => {
-    const { backend } = unreviewedBackend({ async libraryList() { return [createPreviewApp("Obsidian", "1"), createPreviewApp("Second", null)]; } });
-    const { user, dialog } = await openReview(backend);
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    const next = screen.getByRole("dialog", { name: "Launch permissions for Second" });
-    await user.click(within(next).getByRole("button", { name: "Cancel" }));
+  it("only asks for a review when an unreviewed app is launched", async () => {
+    const { backend, libraryLaunch } = unreviewedBackend({ async libraryList() { return [createPreviewApp("Obsidian", "1"), createPreviewApp("Second", null)]; } });
+    const user = userEvent.setup();
+    render(<App backend={backend} />);
+    await screen.findByRole("heading", { name: "Recent applications" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Launch Second" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings for Second" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(libraryLaunch).not.toHaveBeenCalled();
     expect(screen.getAllByText(/^Needs setup/)).toHaveLength(2);
   });
 
-  it.each([["Add apps", "Scan folders"], ["Add apps", "Add an AppImage"]])("opens review for an app discovered by %s > %s", async (menu, item) => {
+  it.each([["Add apps", "Scan folders"], ["Add apps", "Add an AppImage"]])("does not open a review for an app discovered by %s > %s", async (menu, item) => {
     const preview = createPreviewApi();
     const app = createPreviewApp("Imported", null);
     let isDiscovered = false;
@@ -70,14 +78,15 @@ describe("AppImage permission review", () => {
     render(<App backend={backend} />);
     await screen.findByRole("heading", { name: "Recent applications" });
     await chooseFromMenu(user, menu, item);
-    expect(await screen.findByRole("dialog", { name: "Launch permissions for Imported" })).toBeInTheDocument();
+    expect(await screen.findByText("Imported")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(app.launch_count).toBe(0);
   });
 
   it("cancellation leaves an app unreviewed and launching asks again before explicit direct launch", async () => {
     const { backend, libraryLaunch, libraryConfigure } = unreviewedBackend();
     const { user, dialog } = await openReview(backend);
-    expect(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" })).toBeChecked();
+    expect(within(dialog).getByRole("radio", { name: "Run without restrictions" })).toBeChecked();
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(libraryLaunch).not.toHaveBeenCalled();
@@ -85,7 +94,7 @@ describe("AppImage permission review", () => {
     await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
     const reopened = screen.getByRole("dialog");
     expect(libraryLaunch).not.toHaveBeenCalled();
-    await user.click(within(reopened).getByRole("radio", { name: "Run without restrictions" }));
+    expect(within(reopened).getByRole("radio", { name: "Run without restrictions" })).toBeChecked();
     expect(within(reopened).getByText(/normal account access/)).toBeInTheDocument();
     await user.click(within(reopened).getByRole("button", { name: "Save and launch" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -98,34 +107,48 @@ describe("AppImage permission review", () => {
   it("blocks unavailable bubblewrap until a successful recheck, then saves restricted permissions without launching", async () => {
     const sandboxStatus = vi.fn().mockResolvedValueOnce({ available: false, version: null, error: "Not installed" }).mockResolvedValue({ available: true, version: "0.11", error: null });
     const { backend, libraryConfigure, libraryLaunch } = unreviewedBackend({ sandboxStatus });
-    const { user, dialog } = await openReview(backend);
-    expect(within(dialog).getByText("sudo pacman -S bubblewrap")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Save permissions" })).toBeDisabled();
+    const user = userEvent.setup();
+    render(<App backend={backend} />);
+    await screen.findByRole("heading", { name: "Recent applications" });
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+    await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
+    await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+    expect(await within(dialog).findByText("sudo pacman -S bubblewrap")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
     expect(within(dialog).getByRole("checkbox", { name: /Display/ })).toBeChecked();
     expect(within(dialog).getByRole("checkbox", { name: /Keep private app data/ })).toBeChecked();
     await user.click(within(dialog).getByRole("button", { name: "Recheck bubblewrap" }));
-    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save permissions" })).toBeEnabled());
-    await user.click(within(dialog).getByRole("button", { name: "Save permissions" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeEnabled());
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(libraryConfigure.mock.calls[0][1]).toEqual({ mode: "bubblewrap", permissions: { network: false, display: true, audio: false, gpu: false, persistent_data: true, paths: [] } });
     expect(libraryLaunch).not.toHaveBeenCalled();
   });
 
-  it("requires explicit catalog suggestions and preserves editable grants when saving fails", async () => {
+  it("requires explicit import defaults and preserves editable grants when saving fails", async () => {
     const libraryConfigure = vi.fn<(id: string, config: LaunchConfig) => Promise<InstalledApp>>(async () => { throw new Error("Cannot save configuration"); });
-    const { backend, libraryLaunch } = unreviewedBackend({ libraryConfigure });
-    const { user, dialog } = await openReview(backend);
+    const imported = { ...createPreviewApp("Obsidian", "1"), permission_defaults: { network: false, display: true, audio: false, gpu: false, persistent_data: true, paths: [] } };
+    const { backend, libraryLaunch } = unreviewedBackend({ libraryConfigure, async libraryList() { return [imported]; } });
+    const user = userEvent.setup();
+    render(<App backend={backend} />);
+    await screen.findByRole("heading", { name: "Recent applications" });
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+    await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
+    await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeEnabled());
     expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
     await user.click(within(dialog).getByRole("checkbox", { name: /Display/ }));
     expect(within(dialog).getByRole("checkbox", { name: /Display/ })).not.toBeChecked();
-    await user.click(within(dialog).getByRole("button", { name: "Use catalog suggestion" }));
+    await user.click(within(dialog).getByRole("button", { name: "Use import defaults" }));
     expect(within(dialog).getByRole("checkbox", { name: /Display/ })).toBeChecked();
     expect(libraryConfigure).not.toHaveBeenCalled();
     await user.type(within(dialog).getByRole("textbox", { name: "Absolute path" }), "/home/me/Notes");
     await user.click(within(dialog).getByRole("button", { name: "Add path" }));
     await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" }), "read-write");
-    await user.click(within(dialog).getByRole("button", { name: "Save permissions" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Cannot save configuration");
     expect(within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" })).toHaveValue("read-write");
     expect(libraryConfigure.mock.calls[0][1].permissions.paths).toEqual([{ path: "/home/me/Notes", access: "read-write" }]);
@@ -137,19 +160,39 @@ describe("AppImage permission review", () => {
   it("keeps sandbox save blocked on a failed availability probe but allows explicit direct choice", async () => {
     const { backend, libraryConfigure } = unreviewedBackend({ async sandboxStatus() { throw new Error("Probe failed"); } });
     const { user, dialog } = await openReview(backend);
-    expect(within(dialog).getByText(/Probe failed/)).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Save permissions" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Save and launch" })).toBeEnabled();
+    await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+    expect(await within(dialog).findByText(/Probe failed/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save and launch" })).toBeDisabled();
     await user.click(within(dialog).getByRole("radio", { name: "Run without restrictions" }));
-    await user.click(within(dialog).getByRole("button", { name: "Save permissions" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save and launch" }));
     await waitFor(() => expect(libraryConfigure).toHaveBeenCalledOnce());
   });
 
   it("rejects relative filesystem grants without adding them", async () => {
     const { backend } = unreviewedBackend();
     const { user, dialog } = await openReview(backend);
+    await restrict(user, dialog);
     await user.type(within(dialog).getByRole("textbox", { name: "Absolute path" }), "Documents");
     await user.click(within(dialog).getByRole("button", { name: "Add path" }));
     expect(within(dialog).getByRole("alert")).toHaveTextContent("Choose absolute paths");
     expect(within(dialog).getByText("No personal paths allowed.")).toBeInTheDocument();
   });
+});
+
+
+it("permission defaults come from the import snapshot when the catalog changes", async () => {
+  const permissions = { network: true, display: true, audio: false, gpu: false, persistent_data: true, paths: [] };
+  const imported = { ...createPreviewApp("Obsidian", "1"), permission_defaults: permissions };
+  const preview = createPreviewApi();
+  const user = userEvent.setup();
+  render(<App backend={{ ...preview, async libraryList() { return [imported]; } }} />);
+  await screen.findByRole("heading", { name: "Recent applications" });
+  await chooseFromMenu(user, "More options for Obsidian", "Settings");
+  const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+  await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
+  await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+  expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
+  await user.click(within(dialog).getByRole("button", { name: "Use import defaults" }));
+  expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).toBeChecked();
 });

@@ -1,5 +1,5 @@
 import { Profiler } from "react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
@@ -76,9 +76,9 @@ describe("library management", () => {
     await user.click(screen.getByRole("button", { name: "save + rescan" }));
     await screen.findByText("Discovered");
     expect(screen.queryByRole("dialog", { name: "Scan and managed folders" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Launch permissions for Discovered" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Settings for Discovered" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Launch Discovered" }));
-    const permissions = screen.getByRole("dialog", { name: "Launch permissions for Discovered" });
+    const permissions = screen.getByRole("dialog", { name: "Settings for Discovered" });
     expect(within(permissions).getByRole("radio", { name: "Run without restrictions" })).toBeChecked();
     expect((await preview.settingsGet()).scan_dirs).toEqual(["/new"]);
   });
@@ -104,8 +104,8 @@ describe("library management", () => {
     expect(await screen.findByText(/Version unknown/)).toHaveTextContent("Runs as is");
     await user.click(screen.getByRole("button", { name: "Updates" }));
     expect(screen.getByText("current version unknown")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "download latest" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "download update" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Install latest" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
   });
 });
 
@@ -147,7 +147,7 @@ it("opens an app into its launch view and returns to the grid", async () => {
   await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
   expect(await screen.findByRole("heading", { name: "Obsidian" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Launch" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Permissions for Obsidian" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Settings for Obsidian" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Back to all apps" }));
   expect(await screen.findByRole("button", { name: "Open Obsidian" })).toBeInTheDocument();
 });
@@ -171,8 +171,10 @@ describe("custom app icons", () => {
     await chooseFromMenu(user, "More options for Obsidian", "Change icon");
     await user.type(screen.getByRole("textbox", { name: "Image URL" }), "https://example.com/icon.png");
     await user.click(screen.getByRole("button", { name: "Save icon" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Change icon" })).not.toBeInTheDocument());
     expect(sources).toEqual(["https://example.com/icon.png"]);
+    await waitFor(() => expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute("src", imageUrl));
+    await user.click(screen.getByRole("button", { name: "Close settings" }));
     await waitFor(() => expect(document.querySelector("[data-tile-id] img")).toHaveAttribute("src", imageUrl));
     await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
     await waitFor(() => expect(document.querySelector("[data-stage] img")).toHaveAttribute("src", imageUrl));
@@ -195,7 +197,7 @@ describe("custom app icons", () => {
     expect(await screen.findByText("Selected: /home/user/Pictures/icon.png")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Image URL" })).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Save icon" }));
-    const dialog = screen.getByRole("dialog", { name: "Change icon for Obsidian" });
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Invalid image");
     expect(sources).toEqual(["/home/user/Pictures/icon.png"]);
   });
@@ -217,5 +219,109 @@ describe("custom app icons", () => {
     shouldFail = true;
     await user.click(screen.getByRole("button", { name: "Choose local image" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Picker unavailable");
+  });
+});
+
+
+describe("app update sources", () => {
+  it("configures a direct source, checks it, and installs while retaining settings", async () => {
+    const preview = createPreviewApi();
+    const app = (await preview.libraryList())[1];
+    const user = await openHome(preview);
+    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
+    expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Configure updates" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "direct-url");
+    await user.type(screen.getByRole("textbox", { name: "Download URL" }), "https://example.org/Joplin.AppImage");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    await user.click(await screen.findByRole("button", { name: "Install update" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument());
+    const installed = (await preview.libraryList()).find((entry) => entry.id === app.id);
+    expect(installed?.launch_config).toEqual(app.launch_config);
+    expect(installed?.update_config).toEqual({ strategy: "direct-url", url: "https://example.org/Joplin.AppImage" });
+    expect(installed?.file_path).toEqual(app.file_path);
+    expect(installed?.version_current).toEqual(app.version_current);
+    expect((await preview.updatesCheck(app.id)).status).toEqual("up-to-date");
+    expect(await screen.findByRole("heading", { name: "Joplin" })).toBeInTheDocument();
+  });
+
+  it("disables updates and excludes the app from release checks", async () => {
+    const preview = createPreviewApi();
+    const user = await openHome(preview);
+    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
+    await chooseFromMenu(user, "More options for Obsidian", "Update source");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "disabled");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check for updates" })).not.toBeInTheDocument();
+    expect((await preview.updatesCheckAll()).checked_count).toBe(0);
+  });
+
+  it("retains source inputs and reports a configuration error", async () => {
+    const user = await openHome({ ...createPreviewApi(), async updatesConfigure() { throw new Error("Invalid filename matcher"); } });
+    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
+    await user.click(screen.getByRole("button", { name: "Configure updates" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "github-release");
+    await user.type(screen.getByRole("textbox", { name: "Repository" }), "owner/app");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings for Joplin" });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Invalid filename matcher");
+    expect(within(dialog).getByRole("textbox", { name: "Repository" })).toHaveValue("owner/app");
+  });
+});
+
+
+it("failed update installation keeps the installed version visible and reports the error", async () => {
+  const preview = createPreviewApi();
+  const original = (await preview.libraryList())[0];
+  const user = await openHome({ ...preview, async updatesInstall() { throw new Error("Download interrupted"); } });
+  await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
+  await user.click(await screen.findByRole("button", { name: "Install update" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+  expect((await preview.libraryList())[0]).toEqual(original);
+  expect(screen.getByRole("button", { name: "Install update" })).toBeEnabled();
+});
+
+describe("app settings", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("saves edits from several pages with one save", async () => {
+    const preview = createPreviewApi();
+    const user = await openHome(preview);
+    await chooseFromMenu(user, "More options for Joplin", "Settings");
+    const dialog = screen.getByRole("dialog", { name: "Settings for Joplin" });
+    expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeDisabled();
+
+    const name = within(dialog).getByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Notes");
+    await user.click(within(dialog).getByRole("button", { name: "Updates" }));
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Source" }), "direct-url");
+    await user.type(within(dialog).getByRole("textbox", { name: "Download URL" }), "https://example.org/Joplin.AppImage");
+    await user.click(within(dialog).getByRole("button", { name: "General" }));
+    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Notes");
+    await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Open Notes" })).toBeInTheDocument();
+    const joplin = (await preview.libraryList()).find((app) => app.name === "Joplin");
+    expect(joplin?.update_config).toEqual({ strategy: "direct-url", url: "https://example.org/Joplin.AppImage" });
+  });
+
+  it("resets a custom name back to the original", async () => {
+    const user = await openHome(createPreviewApi());
+    await chooseFromMenu(user, "More options for Joplin", "Settings");
+    const name = screen.getByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Notes");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await chooseFromMenu(user, "More options for Notes", "Settings");
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Joplin");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByRole("button", { name: "Open Joplin" })).toBeInTheDocument();
   });
 });

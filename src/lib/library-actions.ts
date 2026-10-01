@@ -1,6 +1,6 @@
 import type { AppApi } from "./api.ts";
 import type { LibraryState } from "./library-controller.ts";
-import type { InstalledApp, LaunchConfig, Settings } from "./types";
+import type { InstalledApp, LaunchConfig, Settings, UpdateConfig } from "./types";
 
 type RunOperation = (operation: string, action: () => Promise<void>, changesLibrary?: boolean) => Promise<boolean>;
 
@@ -47,6 +47,36 @@ export function createLibraryActions(
       const updated = await backend.librarySetIcon(id, source);
       publishState({ apps: getState().apps.map((app) => app.id === id ? updated : app) });
     }),
+    configureUpdates: (id: string, config: UpdateConfig | null) => runOperation("Save update source", async () => {
+      const configured = await backend.updatesConfigure(id, config);
+      publishApps(getState().apps.map((app) => app.id === id ? configured : app));
+    }, true),
+    installUpdate: (id: string) => runOperation("Install update", async () => {
+      const updated = await backend.updatesInstall(id);
+      publishApps(getState().apps.map((app) => app.id === id ? updated : app));
+    }, true),
+    checkAppUpdates: (id: string) => {
+      if (getState().isCheckingUpdates) return Promise.resolve(false);
+      return runOperation("Check app updates", async () => {
+        const previousReport = getState().updateReport;
+        if (previousReport) {
+          publishState({ updateReport: { ...previousReport,
+            updates: previousReport.updates.filter((update) => update.app_id !== id),
+            unknown_versions: previousReport.unknown_versions.filter((appId) => appId !== id),
+          } });
+        }
+        const result = await backend.updatesCheck(id);
+        if (result.status === "error") throw new Error(result.error ?? "Update check failed");
+        const report = getState().updateReport;
+        publishState({ updateReport: {
+          updates: [...(report?.updates ?? []).filter((update) => update.app_id !== id), ...(result.update ? [result.update] : [])],
+          errors: (report?.errors ?? []).filter((error) => error.app_id !== id),
+          unknown_versions: [...(report?.unknown_versions ?? []).filter((appId) => appId !== id), ...(result.status === "unknown-current" ? [id] : [])],
+          checked_count: report?.checked_count ?? (result.status === "unsupported" ? 0 : 1),
+          unsupported_count: report?.unsupported_count ?? (result.status === "unsupported" ? 1 : 0),
+        } });
+      });
+    },
     scan: () => runOperation("Scan folders", scan, true),
     requestReview: (id: string) => publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: false, error: null }),
     dismissReview: () => publishState({ reviewIds: getState().reviewIds.slice(1), launchAfterReview: false, error: null }),

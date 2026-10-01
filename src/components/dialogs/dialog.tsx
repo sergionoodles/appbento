@@ -3,12 +3,15 @@ import { cn } from "@/lib/utils";
 
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]';
 
-export function Dialog({ title, children, onClose, returnFocusElement, canClose = true, isSheet = false }: {
+/** `isBare` drops the padded card chrome so children can lay out the whole panel; the title stays as the accessible name. */
+export function Dialog({ title, children, onClose, returnFocusElement, canClose = true, isSheet = false, isBare = false, className }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   canClose?: boolean;
   isSheet?: boolean;
+  isBare?: boolean;
+  className?: string;
   returnFocusElement?: HTMLElement | null;
 }) {
   const titleId = useId();
@@ -66,10 +69,12 @@ export function Dialog({ title, children, onClose, returnFocusElement, canClose 
     }}>
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         className={cn(
-          "bg-[var(--panel)] border border-[var(--border)] shadow-2xl p-7 max-w-full overflow-auto flex flex-col gap-5 outline-none",
-          isSheet ? "sheet w-[480px] h-full rounded-[10px]" : "dialog-card w-[520px] max-h-[90vh] rounded-[10px]"
+          "bg-[var(--panel)] border border-[var(--border)] shadow-2xl max-w-full flex flex-col outline-none",
+          isBare ? "overflow-hidden" : "p-7 overflow-auto gap-5",
+          isSheet ? "sheet w-[480px] h-full rounded-[10px]" : "dialog-card w-[520px] max-h-[90vh] rounded-[10px]",
+          className
         )}>
-        <h2 id={titleId} className="text-[24px] font-bold tracking-[-0.035em] leading-tight">{title}</h2>
+        <h2 id={titleId} className={isBare ? "sr-only" : "text-[24px] font-bold tracking-[-0.035em] leading-tight"}>{title}</h2>
         {children}
       </div>
     </div>

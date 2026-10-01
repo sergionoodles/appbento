@@ -79,6 +79,9 @@ body {
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* The open list of a native select is drawn by the platform; give its options the theme colors where supported. */
+option { background-color: var(--panel2); color: var(--fg); }
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 

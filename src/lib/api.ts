@@ -1,4 +1,4 @@
-import type { CatalogEntry, InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateReport } from "./types";
+import type { CatalogEntry, InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 
 export interface Commands {
@@ -15,6 +15,8 @@ export interface Commands {
   catalog_get: { args: { id: string }; result: CatalogEntry | null };
   settings_get: { args: undefined; result: Settings };
   settings_set: { args: { scanDirs: string[] | null; managedDir: string | null }; result: Settings };
+  updates_configure: { args: { appId: string; config: UpdateConfig | null }; result: InstalledApp };
+  updates_install: { args: { appId: string }; result: InstalledApp };
   updates_check: { args: { appId: string }; result: UpdateCheckResult };
   updates_check_all: { args: undefined; result: UpdateReport };
 }
@@ -39,6 +41,9 @@ export interface AppApi {
   catalogList(): Promise<CatalogEntry[]>;
   settingsGet(): Promise<Settings>;
   settingsSet(patch: Partial<Settings>): Promise<Settings>;
+  updatesConfigure(appId: string, config: UpdateConfig | null): Promise<InstalledApp>;
+  updatesInstall(appId: string): Promise<InstalledApp>;
+  updatesCheck(appId: string): Promise<UpdateCheckResult>;
   updatesCheckAll(): Promise<UpdateReport>;
   pickAppImage(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
@@ -78,6 +83,9 @@ export function createNativeApi(transport: CommandTransport): AppApi {
       scanDirs: patch.scan_dirs ?? null,
       managedDir: patch.managed_dir ?? null,
     }),
+    updatesConfigure: (appId, config) => transport("updates_configure", { appId, config }),
+    updatesInstall: (appId) => transport("updates_install", { appId }),
+    updatesCheck: (appId) => transport("updates_check", { appId }),
     updatesCheckAll: () => transport("updates_check_all", undefined),
     async pickAppImage() {
       const { open } = await import("@tauri-apps/plugin-dialog");

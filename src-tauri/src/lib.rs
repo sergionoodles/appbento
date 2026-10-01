@@ -9,6 +9,8 @@ mod persistence;
 mod sandbox;
 mod settings;
 mod store;
+mod update_download;
+mod update_sources;
 mod updates;
 
 use models::{CatalogEntry, UpdateCheckResult, UpdateReport};
@@ -25,31 +27,57 @@ fn catalog_get(id: String) -> Result<Option<CatalogEntry>, String> {
         .find(|entry| entry.app.id == id))
 }
 
-async fn update_snapshot() -> Result<(Vec<models::InstalledApp>, Vec<CatalogEntry>), String> {
-    tokio::task::spawn_blocking(|| {
-        Ok((
-            store::load_all()?.into_values().collect(),
-            catalog::load_catalog()?,
-        ))
+async fn update_snapshot() -> Result<Vec<models::InstalledApp>, String> {
+    tokio::task::spawn_blocking(|| Ok(store::load_all()?.into_values().collect()))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn updates_check(app_id: String) -> Result<UpdateCheckResult, String> {
+    let apps = update_snapshot().await?;
+    let app = apps
+        .iter()
+        .find(|app| app.id == app_id)
+        .ok_or("app not found")?;
+    Ok(updates::check_app(app).await)
+}
+
+#[tauri::command]
+async fn updates_check_all() -> Result<UpdateReport, String> {
+    Ok(updates::check_all(update_snapshot().await?).await)
+}
+
+#[tauri::command]
+async fn updates_configure(
+    app_id: String,
+    config: Option<models::UpdateConfig>,
+) -> Result<models::InstalledApp, String> {
+    if let Some(config) = &config {
+        update_sources::validate_config(config)?;
+    }
+    tokio::task::spawn_blocking(move || {
+        store::mutate_library(|library| {
+            let app = library.get_mut(&app_id).ok_or("app not found")?;
+            app.update_config = config;
+            Ok(app.clone())
+        })
     })
     .await
     .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
-async fn updates_check(app_id: String) -> Result<UpdateCheckResult, String> {
-    let (apps, entries) = update_snapshot().await?;
-    let app = apps
-        .iter()
+async fn updates_install(app_id: String) -> Result<models::InstalledApp, String> {
+    let app = update_snapshot()
+        .await?
+        .into_iter()
         .find(|app| app.id == app_id)
         .ok_or("app not found")?;
-    Ok(updates::check_app(app, &entries).await)
-}
-
-#[tauri::command]
-async fn updates_check_all() -> Result<UpdateReport, String> {
-    let (apps, entries) = update_snapshot().await?;
-    Ok(updates::check_all(apps, entries).await)
+    let lifecycle = tokio::task::spawn_blocking(|| apps::lifecycle(false))
+        .await
+        .map_err(|error| error.to_string())??;
+    update_download::install(app, lifecycle).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,6 +124,8 @@ pub fn run() {
             catalog_get,
             updates_check,
             updates_check_all,
+            updates_configure,
+            updates_install,
             settings::settings_get,
             settings::settings_set,
         ])
@@ -106,10 +136,15 @@ pub fn run() {
 #[cfg(test)]
 mod permission_tests {
     #[test]
-    fn main_window_can_read_and_customize_app_icons() {
+    fn main_window_can_read_icons_and_manage_updates() {
         let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
         let authority = context.runtime_authority_mut();
-        for command in ["library_icon", "library_set_icon"] {
+        for command in [
+            "library_icon",
+            "library_set_icon",
+            "updates_configure",
+            "updates_install",
+        ] {
             assert!(
                 authority
                     .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)

@@ -6,7 +6,7 @@ use crate::lifecycle::Lifecycle;
 use crate::models::{InstalledApp, LaunchConfig, ScanReport};
 use crate::{icons, persistence, settings};
 
-fn lifecycle() -> Result<Lifecycle, String> {
+pub(crate) fn lifecycle(with_import_defaults: bool) -> Result<Lifecycle, String> {
     let stored = settings::load()?;
     Ok(Lifecycle {
         library_path: persistence::data_path("library.json")?,
@@ -14,14 +14,18 @@ fn lifecycle() -> Result<Lifecycle, String> {
         desktop_dir: dirs::data_dir()
             .ok_or("data directory unavailable")?
             .join("applications"),
-        catalog: catalog::load_catalog()?,
+        catalog: if with_import_defaults {
+            catalog::load_catalog()?
+        } else {
+            Vec::new()
+        },
     })
 }
 
 #[tauri::command]
 pub async fn library_list() -> Result<Vec<InstalledApp>, String> {
     tokio::task::spawn_blocking(|| {
-        let mut apps = lifecycle()?.list()?;
+        let mut apps = lifecycle(false)?.list()?;
         let arguments = std::env::args().skip(1).collect::<Vec<_>>();
         if arguments
             .first()
@@ -51,7 +55,7 @@ pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport,
         ];
         let directories =
             settings::merge_scan_dirs(defaults, extra_dirs.unwrap_or_default(), stored.scan_dirs)?;
-        lifecycle()?.scan(directories)
+        lifecycle(true)?.scan(directories)
     })
     .await
     .map_err(|error| error.to_string())??;
@@ -69,10 +73,11 @@ pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport,
 
 #[tauri::command]
 pub async fn library_integrate(source_path: String) -> Result<InstalledApp, String> {
-    let app =
-        tokio::task::spawn_blocking(move || lifecycle()?.integrate(&PathBuf::from(source_path)))
-            .await
-            .map_err(|error| error.to_string())??;
+    let app = tokio::task::spawn_blocking(move || {
+        lifecycle(true)?.integrate(&PathBuf::from(source_path))
+    })
+    .await
+    .map_err(|error| error.to_string())??;
     match discover_icon(&app).await {
         Ok(discovered) => Ok(discovered),
         Err(error) => {
@@ -91,7 +96,7 @@ pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
 
 #[tauri::command]
 pub async fn library_remove(id: String, delete_file: bool) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || lifecycle()?.remove(&id, delete_file))
+    tokio::task::spawn_blocking(move || lifecycle(false)?.remove(&id, delete_file))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -105,7 +110,7 @@ pub async fn sandbox_status() -> Result<crate::sandbox::SandboxStatus, String> {
 
 #[tauri::command]
 pub async fn library_configure(id: String, config: LaunchConfig) -> Result<InstalledApp, String> {
-    tokio::task::spawn_blocking(move || lifecycle()?.configure(&id, &config))
+    tokio::task::spawn_blocking(move || lifecycle(false)?.configure(&id, &config))
         .await
         .map_err(|error| error.to_string())?
 }

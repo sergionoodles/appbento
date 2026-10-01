@@ -7,6 +7,7 @@ export function accessLabel(app: InstalledApp) {
 
 export function updateLabel(update?: UpdateInfo) {
   if (!update) return null;
+  if (update.latest === "Updated file") return "File content changed";
   return update.status === "available" ? `Update to ${update.latest}` : "Version unknown";
 }
 

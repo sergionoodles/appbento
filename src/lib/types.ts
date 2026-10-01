@@ -25,6 +25,20 @@ export interface SandboxStatus {
 
 export type UpdateStrategy = "github-release" | "manual";
 
+export type ReleaseUpdateStrategy = "github-release" | "gitlab-release";
+
+export interface ReleaseUpdateConfig {
+  strategy: ReleaseUpdateStrategy;
+  repo: string;
+  asset_regex: string;
+  architecture: string;
+  tag_regex: string;
+  prerelease: boolean;
+  channel: string;
+}
+
+export type UpdateConfig = ReleaseUpdateConfig | { strategy: "direct-url"; url: string };
+
 export interface CatalogEntry {
   sandbox?: SandboxPermissions | null;
   app: {
@@ -65,6 +79,8 @@ export interface CatalogEntry {
 
 export interface InstalledApp {
   launch_config?: LaunchConfig | null;
+  update_config?: UpdateConfig | null;
+  permission_defaults?: SandboxPermissions | null;
   id: string;
   name: string;
   file_path: string;

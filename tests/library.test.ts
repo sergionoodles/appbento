@@ -189,3 +189,44 @@ test("launch and refresh failures are both reported", async () => {
   assert.equal(await controller.launch(controller.getState().apps[0].id), false);
   assert.match(controller.getState().error ?? "", /Launch failed; Library refresh failed: Cannot read library/);
 });
+
+test("saving an update source and installing replaces the app without losing settings", async () => {
+  const preview = createPreviewApi();
+  const controller = createLibraryController(preview);
+  await controller.initialize();
+  const app = controller.getState().apps[1];
+  const config = { strategy: "github-release" as const, repo: "owner/repository", asset_regex: ".*AppImage$", architecture: "x86_64", tag_regex: "^v?(?P<version>.*)$", prerelease: false, channel: "stable" };
+  assert.equal(await controller.configureUpdates(app.id, config), true);
+  assert.deepEqual(controller.getState().apps[1].update_config, config);
+  assert.equal(await controller.checkAppUpdates(app.id), true);
+  assert.equal(controller.getState().updateReport?.updates.some((update) => update.app_id === app.id), true);
+  assert.equal(await controller.installUpdate(app.id), true);
+  const installed = controller.getState().apps[1];
+  assert.equal(installed.id, app.id);
+  assert.equal(installed.version_current, "1.6.7");
+  assert.deepEqual(installed.launch_config, app.launch_config);
+  assert.deepEqual(installed.update_config, config);
+  assert.equal(controller.getState().apps.length, 2);
+});
+
+test("failed update installation preserves the old app and reports the failure", async () => {
+  const controller = createLibraryController({ ...createPreviewApi(), async updatesInstall() { throw new Error("Download interrupted"); } });
+  await controller.initialize();
+  const app = controller.getState().apps[0];
+  assert.equal(await controller.installUpdate(app.id), false);
+  assert.deepEqual(controller.getState().apps[0], app);
+  assert.match(controller.getState().error ?? "", /Download interrupted/);
+});
+
+
+test("failed per-app checks clear stale releases and show the source error", async () => {
+  const controller = createLibraryController({ ...createPreviewApi(), async updatesCheck(appId) {
+    return { app_id: appId, status: "error", update: null, error: "Repository unavailable" };
+  } });
+  await controller.initialize();
+  const app = controller.getState().apps[0];
+  assert.equal(controller.getState().updateReport?.updates.length, 1);
+  assert.equal(await controller.checkAppUpdates(app.id), false);
+  assert.equal(controller.getState().updateReport?.updates.length, 0);
+  assert.match(controller.getState().error ?? "", /Repository unavailable/);
+});

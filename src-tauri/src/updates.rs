@@ -1,12 +1,12 @@
-//! Update checks are read-only: resolve manual downloads without changing installed files.
+//! Update checks use only configuration saved with each installed app.
 use std::cmp::Ordering;
 
 use futures::{stream, StreamExt};
 
-use crate::github::{self, ResolvedUpdate};
+use crate::github::ResolvedUpdate;
 use crate::models::{
-    CatalogEntry, InstalledApp, UpdateCheckError, UpdateCheckResult, UpdateInfo, UpdateReport,
-    UpdateStatus, UpdateStrategy,
+    InstalledApp, UpdateCheckError, UpdateCheckResult, UpdateConfig, UpdateInfo, UpdateReport,
+    UpdateStatus,
 };
 
 const MAX_CONCURRENT_CHECKS: usize = 4;
@@ -144,52 +144,29 @@ pub(crate) fn resolve_update(app: &InstalledApp, resolved: ResolvedUpdate) -> Up
     }
 }
 
-pub async fn check_app(app: &InstalledApp, entries: &[CatalogEntry]) -> UpdateCheckResult {
-    let entry = app
-        .catalog_id
-        .as_ref()
-        .and_then(|id| entries.iter().find(|entry| &entry.app.id == id));
-    let Some(entry) = entry else {
+pub async fn check_app(app: &InstalledApp) -> UpdateCheckResult {
+    let Some(config) = app.update_config.as_ref() else {
         return failure(
             &app.id,
             UpdateStatus::Unsupported,
-            "no catalog update source for this app".into(),
+            "configure an update source for this app".into(),
         );
     };
-    if !matches!(entry.update.strategy, Some(UpdateStrategy::GithubRelease)) {
-        return failure(
-            &app.id,
-            UpdateStatus::Unsupported,
-            "automatic checks are unsupported for this update strategy".into(),
-        );
-    }
-    let Some(config) = entry.update.github.as_ref() else {
-        return failure(
-            &app.id,
-            UpdateStatus::Error,
-            "GitHub update configuration missing".into(),
-        );
-    };
-    if config.architecture != std::env::consts::ARCH {
-        return failure(
-            &app.id,
-            UpdateStatus::Unsupported,
-            format!("no catalog assets for {}", std::env::consts::ARCH),
-        );
-    }
-    match github::check_github(config).await {
+    match crate::update_sources::resolve(config).await {
+        Ok(resolved) if matches!(config, UpdateConfig::DirectUrl { .. }) => {
+            match crate::update_download::check_content(app, resolved).await {
+                Ok(result) => result,
+                Err(message) => failure(&app.id, UpdateStatus::Error, message),
+            }
+        }
         Ok(resolved) => resolve_update(app, resolved),
         Err(message) => failure(&app.id, UpdateStatus::Error, message),
     }
 }
 
-pub async fn check_all(apps: Vec<InstalledApp>, entries: Vec<CatalogEntry>) -> UpdateReport {
-    let entries = std::sync::Arc::new(entries);
+pub async fn check_all(apps: Vec<InstalledApp>) -> UpdateReport {
     let results = stream::iter(apps)
-        .map(move |app| {
-            let entries = entries.clone();
-            async move { check_app(&app, &entries).await }
-        })
+        .map(|app| async move { check_app(&app).await })
         .buffer_unordered(MAX_CONCURRENT_CHECKS)
         .collect::<Vec<_>>()
         .await;
@@ -279,6 +256,8 @@ mod tests {
             file_created_at: None,
             launch_config: None,
             reviewed_digest: None,
+            update_config: None,
+            permission_defaults: None,
         }
     }
 
@@ -315,10 +294,12 @@ mod tests {
 
     #[tokio::test]
     async fn unmatched_apps_report_unsupported_without_network() {
-        let result = check_app(&app(None), &[]).await;
+        let mut installed = app(None);
+        installed.catalog_id = Some("obsidian".into());
+        let result = check_app(&installed).await;
         assert_eq!(result.status, UpdateStatus::Unsupported);
         assert!(result.update.is_none());
-        let report = check_all(vec![app(None)], vec![]).await;
+        let report = check_all(vec![installed]).await;
         assert_eq!(report.unsupported_count, 1);
         assert_eq!(report.checked_count, 0);
     }
