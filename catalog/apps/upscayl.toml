@@ -1,0 +1,36 @@
+match_filenames = ["upscayl-*.AppImage", "Upscayl-*.AppImage"]
+match_binaries = ["upscayl"]
+version_regex = "(?i)(?:^|[-_])v?(?P<version>[0-9]+(?:\\.[0-9]+){1,3}(?:-(?:alpha|beta|rc)\\.?[0-9]+)?)(?:[-_.]|$)"
+
+[app]
+id = "upscayl"
+name = "Upscayl"
+summary = "Free AI image upscaler"
+description = "Upscayl lets you enlarge and enhance low-resolution images with AI."
+website = "https://upscayl.org"
+repo = "https://github.com/upscayl/upscayl"
+license = "AGPL-3.0"
+categories = ["Graphics", "Photography"]
+verified = true
+
+[branding]
+logo = "https://upscayl.org/favicon.ico"
+cover = "https://upscayl.org/images/hero.png"
+screenshots = []
+accent = "#d63a6c"
+
+[update]
+strategy = "github-release"
+
+[update.github]
+architecture = "x86_64"
+tag_regex = "^[vV]?(?P<version>[0-9]+(?:\\.[0-9]+){1,3}(?:-[A-Za-z0-9.]+)?)(?:\\+[A-Za-z0-9.]+)?$"
+repo = "upscayl/upscayl"
+asset_regex = "upscayl-.*\\.AppImage$"
+prerelease = false
+channel = "stable"
+
+[desktop]
+categories = "Graphics;"
+terminal = false
+

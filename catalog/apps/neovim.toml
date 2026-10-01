@@ -1,0 +1,37 @@
+match_filenames = ["nvim*.appimage", "Neovim-*.AppImage"]
+match_binaries = ["nvim"]
+version_regex = "(?i)(?:^|[-_])v?(?P<version>[0-9]+(?:\\.[0-9]+){1,3}(?:-(?:alpha|beta|rc)\\.?[0-9]+)?)(?:[-_.]|$)"
+
+[app]
+id = "neovim"
+name = "Neovim"
+summary = "Hyperextensible Vim-based text editor"
+description = "Neovim is a refactor of Vim focused on extensibility and usability."
+website = "https://neovim.io"
+docs_url = "https://neovim.io/doc/"
+repo = "https://github.com/neovim/neovim"
+license = "Apache-2.0"
+categories = ["Development", "Editors"]
+verified = true
+
+[branding]
+logo = "https://neovim.io/favicon.ico"
+cover = "https://neovim.io/images/hero.png"
+screenshots = []
+accent = "#57a143"
+
+[update]
+strategy = "github-release"
+
+[update.github]
+architecture = "x86_64"
+tag_regex = "^[vV]?(?P<version>[0-9]+(?:\\.[0-9]+){1,3}(?:-[A-Za-z0-9.]+)?)(?:\\+[A-Za-z0-9.]+)?$"
+repo = "neovim/neovim"
+asset_regex = "nvim-linux-x86_64\\.appimage$"
+prerelease = false
+channel = "stable"
+
+[desktop]
+categories = "Development;"
+terminal = true
+

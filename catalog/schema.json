@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AppBento catalog entry",
+  "type": "object",
+  "required": [
+    "app",
+    "branding",
+    "update",
+    "match_filenames",
+    "version_regex"
+  ],
+  "properties": {
+    "app": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "summary",
+        "website"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string",
+          "format": "uri"
+        },
+        "docs_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "repo": {
+          "type": "string",
+          "format": "uri"
+        },
+        "license": {
+          "type": "string"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "branding": {
+      "type": "object",
+      "required": [
+        "logo"
+      ],
+      "properties": {
+        "logo": {
+          "type": "string"
+        },
+        "logo_dark": {
+          "type": "string"
+        },
+        "cover": {
+          "type": "string"
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accent": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update": {
+      "type": "object",
+      "required": [
+        "strategy"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "github-release",
+            "manual"
+          ]
+        },
+        "github": {
+          "type": "object",
+          "required": [
+            "repo",
+            "asset_regex",
+            "architecture",
+            "tag_regex"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "pattern": "^[^/]+/[^/]+$"
+            },
+            "asset_regex": {
+              "type": "string"
+            },
+            "prerelease": {
+              "const": false
+            },
+            "channel": {
+              "enum": [
+                "stable"
+              ]
+            },
+            "architecture": {
+              "enum": [
+                "x86_64",
+                "aarch64"
+              ]
+            },
+            "tag_regex": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "match_filenames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "match_binaries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "version_regex": {
+      "type": "string"
+    },
+    "desktop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "categories": {
+          "type": "string"
+        },
+        "terminal": {
+          "type": "boolean"
+        },
+        "mime_type": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

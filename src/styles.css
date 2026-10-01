@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-edge: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+}
+
+/* ---- AppBento themes: TUI-inspired palettes via CSS vars ---- */
+:root,
+[data-theme="tokyo-night"] {
+  --bg: #1a1b26; --panel: #24283b; --panel2: #1f2335;
+  --border: #414868; --fg: #c0caf5; --muted: #828bb8;
+  --accent: #7aa2f7; --accent2: #bb9af7; --ok: #9ece6a; --warn: #e0af68; --bad: #f7768e;
+}
+[data-theme="gruvbox"] {
+  --bg: #282828; --panel: #3c3836; --panel2: #32302f;
+  --border: #665c54; --fg: #ebdbb2; --muted: #a89984;
+  --accent: #fabd2f; --accent2: #83a598; --ok: #b8bb26; --warn: #fe8019; --bad: #fb4934;
+}
+[data-theme="catppuccin"] {
+  --bg: #1e1e2e; --panel: #313244; --panel2: #181825;
+  --border: #45475a; --fg: #cdd6f4; --muted: #9399b2;
+  --accent: #cba6f7; --accent2: #89b4fa; --ok: #a6e3a1; --warn: #f9e2af; --bad: #f38ba8;
+}
+[data-theme="nord"] {
+  --bg: #2e3440; --panel: #3b4252; --panel2: #292e39;
+  --border: #4c566a; --fg: #eceff4; --muted: #88a0b8;
+  --accent: #88c0d0; --accent2: #81a1c1; --ok: #a3be8c; --warn: #ebcb8b; --bad: #bf616a;
+}
+[data-theme="dracula"] {
+  --bg: #282a36; --panel: #343746; --panel2: #21222c;
+  --border: #6272a4; --fg: #f8f8f2; --muted: #9a9aba;
+  --accent: #bd93f9; --accent2: #8be9fd; --ok: #50fa7b; --warn: #ffb86c; --bad: #ff5555;
+}
+[data-theme="terminal"] {
+  --bg: #0a0f0a; --panel: #101810; --panel2: #0c120c;
+  --border: #1f3d1f; --fg: #33ff66; --muted: #2a8a4a;
+  --accent: #33ff66; --accent2: #ccff00; --ok: #33ff66; --warn: #ffcc00; --bad: #ff3333;
+}
+[data-theme="paper"] {
+  --bg: #f4f1e8; --panel: #ffffff; --panel2: #e9e4d5;
+  --border: #d4cdb8; --fg: #2b2b2b; --muted: #7a7466;
+  --accent: #2f6feb; --accent2: #7c3aed; --ok: #1a7f37; --warn: #9a6700; --bad: #d1242f;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.tui-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+}
+.tui-panel::before {
+  content: attr(data-corners);
+  position: absolute; top: -9px; left: 12px;
+  background: var(--bg); padding: 0 6px;
+  color: var(--muted); font-size: 11px; letter-spacing: 0.12em;
+}
+.tui-title { letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; color: var(--muted); }
+.tui-prompt { color: var(--accent); }
+.statusbar {
+  background: var(--panel2);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }

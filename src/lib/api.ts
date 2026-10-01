@@ -1,0 +1,95 @@
+import type { CatalogEntry, InstalledApp, ScanReport, Settings, UpdateCheckResult, UpdateReport } from "./types";
+import { createPreviewApi } from "./preview.ts";
+
+export interface Commands {
+  library_list: { args: undefined; result: InstalledApp[] };
+  library_scan: { args: { extraDirs: string[] }; result: ScanReport };
+  library_integrate: { args: { sourcePath: string }; result: InstalledApp };
+  library_launch: { args: { id: string }; result: InstalledApp };
+  library_remove: { args: { id: string; deleteFile: boolean }; result: null };
+  catalog_list: { args: undefined; result: CatalogEntry[] };
+  catalog_get: { args: { id: string }; result: CatalogEntry | null };
+  settings_get: { args: undefined; result: Settings };
+  settings_set: { args: { scanDirs: string[] | null; managedDir: string | null }; result: Settings };
+  updates_check: { args: { appId: string }; result: UpdateCheckResult };
+  updates_check_all: { args: undefined; result: UpdateReport };
+}
+
+export type CommandTransport = <Command extends keyof Commands>(
+  command: Command,
+  args: Commands[Command]["args"],
+) => Promise<Commands[Command]["result"]>;
+
+export interface AppApi {
+  readonly isTauri: boolean;
+  libraryList(): Promise<InstalledApp[]>;
+  libraryScan(): Promise<ScanReport>;
+  libraryIntegrate(sourcePath: string): Promise<InstalledApp>;
+  libraryLaunch(id: string): Promise<InstalledApp>;
+  libraryRemove(id: string, deleteFile: boolean): Promise<void>;
+  catalogList(): Promise<CatalogEntry[]>;
+  settingsGet(): Promise<Settings>;
+  settingsSet(patch: Partial<Settings>): Promise<Settings>;
+  updatesCheckAll(): Promise<UpdateReport>;
+  pickAppImage(): Promise<string | null>;
+  pickFolder(): Promise<string | null>;
+  openExternal(url: string): Promise<void>;
+}
+
+export function validateExternalUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new Error("Only HTTPS links without credentials can be opened.");
+  }
+  return url.href;
+}
+
+export function createNativeApi(transport: CommandTransport): AppApi {
+  return {
+    isTauri: true,
+    libraryList: () => transport("library_list", undefined),
+    libraryScan: () => transport("library_scan", { extraDirs: [] }),
+    libraryIntegrate: (sourcePath) => transport("library_integrate", { sourcePath }),
+    libraryLaunch: (id) => transport("library_launch", { id }),
+    libraryRemove: async (id, deleteFile) => {
+      await transport("library_remove", { id, deleteFile });
+    },
+    catalogList: () => transport("catalog_list", undefined),
+    settingsGet: () => transport("settings_get", undefined),
+    settingsSet: (patch) => transport("settings_set", {
+      scanDirs: patch.scan_dirs ?? null,
+      managedDir: patch.managed_dir ?? null,
+    }),
+    updatesCheckAll: () => transport("updates_check_all", undefined),
+    async pickAppImage() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ multiple: false, filters: [{ name: "AppImage", extensions: ["AppImage", "appimage"] }] });
+      return typeof selected === "string" ? selected : null;
+    },
+    async pickFolder() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ multiple: false, directory: true });
+      return typeof selected === "string" ? selected : null;
+    },
+    async openExternal(value) {
+      const url = validateExternalUrl(value);
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(url);
+    },
+  };
+}
+
+const invoke: CommandTransport = async (command, args) => {
+  const { invoke: nativeInvoke } = await import("@tauri-apps/api/core");
+  return nativeInvoke(command, args);
+};
+
+const nativeApi = createNativeApi(invoke);
+const previewApi = createPreviewApi();
+
+export const api: AppApi = new Proxy(nativeApi, {
+  get(_target, property: keyof AppApi) {
+    const current = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window ? nativeApi : previewApi;
+    return current[property];
+  },
+});
