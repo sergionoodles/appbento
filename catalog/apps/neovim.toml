@@ -35,3 +35,10 @@ channel = "stable"
 categories = "Development;"
 terminal = true
 
+[sandbox]
+network = false
+display = false
+audio = false
+gpu = false
+persistent_data = true
+paths = []

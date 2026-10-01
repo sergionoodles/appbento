@@ -1,7 +1,11 @@
-import type { CatalogEntry, InstalledApp, ScanReport, Settings, UpdateCheckResult, UpdateReport } from "./types";
+import type { CatalogEntry, InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 
 export interface Commands {
+  library_set_icon: { args: { id: string; source: string }; result: InstalledApp };
+  library_icon: { args: { id: string }; result: string | null };
+  sandbox_status: { args: undefined; result: SandboxStatus };
+  library_configure: { args: { id: string; config: LaunchConfig }; result: InstalledApp };
   library_list: { args: undefined; result: InstalledApp[] };
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
   library_integrate: { args: { sourcePath: string }; result: InstalledApp };
@@ -22,6 +26,11 @@ export type CommandTransport = <Command extends keyof Commands>(
 
 export interface AppApi {
   readonly isTauri: boolean;
+  librarySetIcon(id: string, source: string): Promise<InstalledApp>;
+  libraryIcon(id: string): Promise<string | null>;
+  pickIcon(): Promise<string | null>;
+  sandboxStatus(): Promise<SandboxStatus>;
+  libraryConfigure(id: string, config: LaunchConfig): Promise<InstalledApp>;
   libraryList(): Promise<InstalledApp[]>;
   libraryScan(): Promise<ScanReport>;
   libraryIntegrate(sourcePath: string): Promise<InstalledApp>;
@@ -47,6 +56,15 @@ export function validateExternalUrl(value: string): string {
 export function createNativeApi(transport: CommandTransport): AppApi {
   return {
     isTauri: true,
+    librarySetIcon: (id, source) => transport("library_set_icon", { id, source }),
+    libraryIcon: (id) => transport("library_icon", { id }),
+    async pickIcon() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ multiple: false, filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "ico", "svg"] }] });
+      return typeof selected === "string" ? selected : null;
+    },
+    sandboxStatus: () => transport("sandbox_status", undefined),
+    libraryConfigure: (id, config) => transport("library_configure", { id, config }),
     libraryList: () => transport("library_list", undefined),
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
     libraryIntegrate: (sourcePath) => transport("library_integrate", { sourcePath }),

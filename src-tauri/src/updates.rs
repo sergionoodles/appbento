@@ -276,6 +276,9 @@ mod tests {
             launch_count: 0,
             last_launched: None,
             added_at: chrono::Utc::now(),
+            file_created_at: None,
+            launch_config: None,
+            reviewed_digest: None,
         }
     }
 

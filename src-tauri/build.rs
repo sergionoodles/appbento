@@ -2,9 +2,13 @@ use std::path::PathBuf;
 
 const COMMANDS: &[&str] = &[
     "library_list",
+    "library_icon",
+    "library_set_icon",
     "library_scan",
     "library_integrate",
     "library_launch",
+    "library_configure",
+    "sandbox_status",
     "library_remove",
     "catalog_list",
     "catalog_get",

@@ -40,7 +40,8 @@ pub struct UpdateDefaults {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Branding {
-    /// HTTPS URL or `catalog://<id>/logo.png` for locally bundled art.
+    /// Optional HTTPS artwork URL; otherwise the website favicon is used.
+    #[serde(default)]
     pub logo: String,
     pub logo_dark: Option<String>,
     pub cover: Option<String>,
@@ -94,6 +95,8 @@ pub struct CatalogEntry {
     #[serde(default)]
     pub match_binaries: Vec<String>,
     pub version_regex: String,
+    #[serde(default)]
+    pub sandbox: Option<SandboxPermissions>,
 }
 
 /// Local library state for AppImages actually on disk.
@@ -115,6 +118,13 @@ pub struct InstalledApp {
     pub launch_count: u64,
     pub last_launched: Option<DateTime<Utc>>,
     pub added_at: DateTime<Utc>,
+    /// Filesystem creation time, or modification time where the filesystem has no creation time.
+    #[serde(default)]
+    pub file_created_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub launch_config: Option<LaunchConfig>,
+    #[serde(default)]
+    pub reviewed_digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,4 +182,57 @@ pub struct UpdateReport {
     pub unknown_versions: Vec<String>,
     pub checked_count: usize,
     pub unsupported_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum LaunchMode {
+    Direct,
+    Bubblewrap,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct LaunchConfig {
+    pub mode: LaunchMode,
+    #[serde(default)]
+    pub permissions: SandboxPermissions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PathAccess {
+    ReadOnly,
+    ReadWrite,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct PathPermission {
+    pub path: String,
+    pub access: PathAccess,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SandboxPermissions {
+    pub network: bool,
+    pub display: bool,
+    pub audio: bool,
+    pub gpu: bool,
+    pub persistent_data: bool,
+    pub paths: Vec<PathPermission>,
+}
+
+impl Default for SandboxPermissions {
+    fn default() -> Self {
+        Self {
+            network: false,
+            display: true,
+            audio: false,
+            gpu: false,
+            persistent_data: true,
+            paths: Vec::new(),
+        }
+    }
 }

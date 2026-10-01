@@ -61,9 +61,6 @@
     },
     "branding": {
       "type": "object",
-      "required": [
-        "logo"
-      ],
       "properties": {
         "logo": {
           "type": "string"
@@ -165,6 +162,58 @@
         },
         "mime_type": {
           "type": "string"
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "description": "Suggested Bubblewrap permissions. Users must review and confirm; folder access is never inferred from a filename match.",
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "type": "boolean",
+          "default": false
+        },
+        "display": {
+          "type": "boolean",
+          "default": true
+        },
+        "audio": {
+          "type": "boolean",
+          "default": false
+        },
+        "gpu": {
+          "type": "boolean",
+          "default": false
+        },
+        "persistent_data": {
+          "type": "boolean",
+          "default": true
+        },
+        "paths": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "access"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Absolute folder path, validated on the user\u2019s system before approval."
+              },
+              "access": {
+                "enum": [
+                  "read-only",
+                  "read-write"
+                ]
+              }
+            }
+          }
         }
       }
     }

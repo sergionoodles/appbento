@@ -41,21 +41,21 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
       }}>
         <fieldset disabled={isSaving} className="flex flex-col gap-4">
           <div>
-            <label htmlFor="managed-folder" className="block text-[13px] mb-1">Managed folder</label>
-            <p className="text-[12px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. Enter an absolute path.</p>
+            <label htmlFor="managed-folder" className="block font-medium mb-1">Managed folder</label>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. Enter an absolute path.</p>
             <div className="flex gap-2">
               <Input id="managed-folder" required value={managed} onChange={(event) => setManaged(event.target.value)} />
               <Button type="button" onClick={() => void browse(true)} disabled={!isNative}>browse</Button>
             </div>
           </div>
           <div>
-            <div className="text-[13px] mb-1">Extra scan folders</div>
-            <p className="text-[12px] text-[var(--muted)] mb-2">Scanned together with the managed folder, ~/Applications, ~/Downloads and other defaults.</p>
+            <div className="font-medium mb-1">Extra scan folders</div>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Scanned together with the managed folder, ~/Applications, ~/Downloads and other defaults.</p>
             <div className="flex flex-col gap-1">
               {directories.map((directory) => (
-                <div key={directory} className="flex items-center gap-2 text-[13px] border border-[var(--border)] rounded-md px-2 py-1">
+                <div key={directory} className="flex items-center gap-2 text-[14px] bg-[var(--panel2)] rounded-md pl-4 pr-1 py-1">
                   <span className="truncate flex-1">{directory}</span>
-                  <Button type="button" variant="ghost" aria-label={`Remove scan folder ${directory}`}
+                  <Button type="button" variant="ghost" size="icon" aria-label={`Remove scan folder ${directory}`}
                     onClick={() => setDirectories((existing) => existing.filter((entry) => entry !== directory))}><X size={14} /></Button>
                 </div>
               ))}
@@ -63,10 +63,10 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
             </div>
           </div>
         </fieldset>
-        {error || browseError ? <p role="alert" className="text-[var(--bad)] text-[13px]">{browseError ?? error}</p> : null}
+        {error || browseError ? <p role="alert" className="text-[var(--bad)] text-[14px]">{browseError ?? error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" disabled={isSaving} onClick={onClose}>cancel</Button>
-          <Button type="submit" variant="default" disabled={isSaving}>{isSaving ? "saving…" : "save + rescan"}</Button>
+          <Button type="submit" variant="accent" disabled={isSaving}>{isSaving ? "saving…" : "save + rescan"}</Button>
         </div>
       </form>
     </Dialog>

@@ -49,6 +49,17 @@ fn scan_preserves_history_and_desktop_metadata() {
 }
 
 #[test]
+fn scan_records_when_the_file_was_created() {
+    let (directory, service, _source) = fixture();
+    let before = Utc::now() - chrono::Duration::minutes(1);
+    let result = service.scan(vec![directory.0.clone()]).unwrap();
+    let created = result.apps[0]
+        .file_created_at
+        .expect("creation time recorded");
+    assert!(created > before && created <= Utc::now());
+}
+
+#[test]
 fn integration_preserves_source_and_history_without_duplicate_scan_records() {
     let (directory, service, source) = fixture();
     service.scan(vec![directory.0.clone()]).unwrap();
@@ -136,7 +147,7 @@ fn rejects_non_appimage_symlink_and_architecture_mismatch() {
 #[test]
 fn desktop_escapes_special_characters_and_uses_stable_unique_ids() {
     let path = Path::new("/tmp/App \"special\" 100%.AppImage");
-    let content = desktop_content(path, "name\nExec=bad");
+    let content = desktop_content(path, "name\nExec=bad").unwrap();
     assert!(content.contains("100%%"));
     assert!(content.contains("\\\\\"special\\\\\""));
     assert!(!content.contains("\nExec=bad"));
@@ -209,3 +220,108 @@ fn integration_cleanup_does_not_delete_appimage_with_temporary_extension() {
 
 #[path = "lifecycle_recovery_tests.rs"]
 mod recovery_tests;
+
+#[test]
+fn replacing_reviewed_appimage_requires_new_review() {
+    let (directory, service, source) = fixture();
+    service.scan(vec![directory.0.clone()]).unwrap();
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        let app = library.get_mut(source.to_str().unwrap()).unwrap();
+        app.reviewed_digest = Some(crate::sandbox::appimage_digest(&source)?);
+        app.launch_config = Some(crate::models::LaunchConfig {
+            mode: crate::models::LaunchMode::Direct,
+            permissions: Default::default(),
+        });
+        Ok(())
+    })
+    .unwrap();
+    let mut bytes = fs::read(&source).unwrap();
+    bytes.extend_from_slice(b"changed executable");
+    fs::write(&source, bytes).unwrap();
+    let apps = service.scan(vec![directory.0.clone()]).unwrap().apps;
+    assert!(apps[0].launch_config.is_none());
+}
+
+#[test]
+fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_preserved() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
+    let legacy =
+        desktop::legacy_desktop_content(Path::new(&app.file_path), &app.name, &Default::default());
+    fs::write(&desktop_path, legacy).unwrap();
+    service.list().unwrap();
+    let content = fs::read_to_string(&desktop_path).unwrap();
+    assert!(content.contains(" --launch "));
+    assert!(content.contains("X-AppBento-Managed=true"));
+    fs::write(&desktop_path, "foreign entry").unwrap();
+    assert!(service.list().is_err());
+    assert_eq!(fs::read_to_string(&desktop_path).unwrap(), "foreign entry");
+}
+
+#[test]
+fn packaged_launcher_uses_stable_outer_appimage_path() {
+    let directory = TemporaryDirectory::new();
+    let stable = directory.0.join("AppBento.AppImage");
+    fs::write(&stable, "fixture").unwrap();
+    let ephemeral = Path::new("/tmp/.mount_AppBento/usr/bin/appbento");
+    assert_eq!(
+        desktop::resolve_launcher(ephemeral, Some(&stable)).unwrap(),
+        stable
+    );
+    assert!(desktop::resolve_launcher(ephemeral, Some(Path::new("relative"))).is_err());
+}
+
+#[test]
+fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let config = crate::models::LaunchConfig {
+        mode: crate::models::LaunchMode::Direct,
+        permissions: Default::default(),
+    };
+    let configured = service.configure(&app.id, &config).unwrap();
+    assert_eq!(configured.launch_config, Some(config.clone()));
+    assert!(configured.reviewed_digest.is_some());
+    assert_eq!(service.list().unwrap()[0], configured);
+    let invalid = crate::models::LaunchConfig {
+        permissions: crate::models::SandboxPermissions {
+            paths: vec![crate::models::PathPermission {
+                path: "/".into(),
+                access: crate::models::PathAccess::ReadWrite,
+            }],
+            ..Default::default()
+        },
+        ..config
+    };
+    assert!(service.configure(&app.id, &invalid).is_err());
+    assert_eq!(service.list().unwrap()[0], configured);
+    assert!(source.exists());
+}
+
+#[test]
+fn matching_catalog_sandbox_profile_still_requires_review() {
+    let (directory, mut service, source) = fixture();
+    let matched = directory.0.join("Obsidian-1.2.3.AppImage");
+    fs::rename(&source, &matched).unwrap();
+    service.catalog = crate::catalog::load_catalog().unwrap();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    assert_eq!(app.catalog_id.as_deref(), Some("obsidian"));
+    assert!(service
+        .catalog
+        .iter()
+        .find(|entry| entry.app.id == "obsidian")
+        .unwrap()
+        .sandbox
+        .is_some());
+    assert!(app.launch_config.is_none());
+    assert!(app.reviewed_digest.is_none());
+}

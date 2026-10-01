@@ -40,3 +40,25 @@ test("external URL guard permits HTTPS and rejects dangerous protocols or creden
     assert.throws(() => validateExternalUrl(url));
   }
 });
+
+import type { Commands, CommandTransport } from "../src/lib/api.ts";
+import { createPreviewApp } from "../src/lib/preview.ts";
+import { restrictedPermissions } from "../src/lib/sandbox.ts";
+
+test("native sandbox commands preserve config and return backend status", async () => {
+  const config = { mode: "bubblewrap" as const, permissions: restrictedPermissions() };
+  const app = { ...createPreviewApp("Configured", null), launch_config: config };
+  const status = { available: true, version: "0.11", error: null };
+  const calls: unknown[] = [];
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return (command === "sandbox_status" ? status : app) as Commands[Command]["result"];
+  };
+  const backend = createNativeApi(transport);
+  assert.deepEqual(await backend.sandboxStatus(), status);
+  assert.deepEqual(await backend.libraryConfigure(app.id, config), app);
+  assert.deepEqual(calls, [
+    { command: "sandbox_status", args: undefined },
+    { command: "library_configure", args: { id: app.id, config } },
+  ]);
+});

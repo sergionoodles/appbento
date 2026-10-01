@@ -1,6 +1,32 @@
+export interface SandboxPath {
+  path: string;
+  access: "read-only" | "read-write";
+}
+
+export interface SandboxPermissions {
+  network: boolean;
+  display: boolean;
+  audio: boolean;
+  gpu: boolean;
+  persistent_data: boolean;
+  paths: SandboxPath[];
+}
+
+export interface LaunchConfig {
+  mode: "direct" | "bubblewrap";
+  permissions: SandboxPermissions;
+}
+
+export interface SandboxStatus {
+  available: boolean;
+  version: string | null;
+  error: string | null;
+}
+
 export type UpdateStrategy = "github-release" | "manual";
 
 export interface CatalogEntry {
+  sandbox?: SandboxPermissions | null;
   app: {
     id: string;
     name: string;
@@ -38,6 +64,7 @@ export interface CatalogEntry {
 }
 
 export interface InstalledApp {
+  launch_config?: LaunchConfig | null;
   id: string;
   name: string;
   file_path: string;
@@ -53,6 +80,7 @@ export interface InstalledApp {
   launch_count: number;
   last_launched: string | null;
   added_at: string;
+  file_created_at?: string | null;
 }
 
 export interface ScanWarning {

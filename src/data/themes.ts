@@ -5,11 +5,13 @@ export interface ThemeDef {
 }
 
 export const THEMES: ThemeDef[] = [
-  { id: "tokyo-night", label: "Tokyo Night", blurb: "neon night // default" },
+  { id: "midnight", label: "Midnight", blurb: "ink and lilac" },
+  { id: "daylight", label: "Daylight", blurb: "cool light" },
+  { id: "tokyo-night", label: "Tokyo Night", blurb: "neon night" },
   { id: "gruvbox", label: "Gruvbox", blurb: "retro groove" },
   { id: "catppuccin", label: "Catppuccin", blurb: "pastel mocha" },
   { id: "nord", label: "Nord", blurb: "arctic calm" },
   { id: "dracula", label: "Dracula", blurb: "purple hiss" },
   { id: "terminal", label: "Terminal", blurb: "phosphor green" },
-  { id: "paper", label: "Paper", blurb: "light mode" },
+  { id: "paper", label: "Paper", blurb: "warm light" },
 ];

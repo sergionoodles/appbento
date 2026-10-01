@@ -1,12 +1,14 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]';
 
-export function Dialog({ title, children, onClose, returnFocusElement, canClose = true }: {
+export function Dialog({ title, children, onClose, returnFocusElement, canClose = true, isSheet = false }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   canClose?: boolean;
+  isSheet?: boolean;
   returnFocusElement?: HTMLElement | null;
 }) {
   const titleId = useId();
@@ -53,18 +55,21 @@ export function Dialog({ title, children, onClose, returnFocusElement, canClose 
       if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
         previouslyFocused.focus();
       } else {
-        document.querySelector<HTMLElement>("nav button")?.focus();
+        document.querySelector<HTMLElement>("header button")?.focus();
       }
     };
   }, [returnFocusElement]);
 
   return (
-    <div className="fixed inset-0 bg-black/60 grid place-items-center z-50 p-4" onClick={(event) => {
+    <div className={cn("sheet-backdrop fixed inset-0 bg-black/55 backdrop-blur-sm z-50 flex p-3", isSheet ? "justify-end" : "items-center justify-center")} onClick={(event) => {
       if (event.target === event.currentTarget && canClose) onClose();
     }}>
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
-        className="tui-panel p-5 w-[520px] max-w-full max-h-[90vh] overflow-auto flex flex-col gap-4">
-        <h2 id={titleId} className="tui-title">{title}</h2>
+        className={cn(
+          "bg-[var(--panel)] border border-[var(--border)] shadow-2xl p-7 max-w-full overflow-auto flex flex-col gap-5 outline-none",
+          isSheet ? "sheet w-[480px] h-full rounded-[10px]" : "dialog-card w-[520px] max-h-[90vh] rounded-[10px]"
+        )}>
+        <h2 id={titleId} className="text-[24px] font-bold tracking-[-0.035em] leading-tight">{title}</h2>
         {children}
       </div>
     </div>

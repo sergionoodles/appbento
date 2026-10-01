@@ -45,7 +45,7 @@ fn validate_entry(entry: &CatalogEntry) -> Result<(), String> {
     for url in std::iter::once(&entry.app.website)
         .chain(entry.app.repo.iter())
         .chain(entry.app.docs_url.iter())
-        .chain(std::iter::once(&entry.branding.logo))
+        .chain(std::iter::once(&entry.branding.logo).filter(|url| !url.is_empty()))
         .chain(entry.branding.logo_dark.iter())
         .chain(entry.branding.cover.iter())
         .chain(entry.branding.screenshots.iter())

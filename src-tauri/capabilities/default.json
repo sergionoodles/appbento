@@ -17,9 +17,13 @@
       ]
     },
     "allow-library-list",
+    "allow-library-icon",
+    "allow-library-set-icon",
     "allow-library-scan",
     "allow-library-integrate",
     "allow-library-launch",
+    "allow-library-configure",
+    "allow-sandbox-status",
     "allow-library-remove",
     "allow-catalog-list",
     "allow-catalog-get",

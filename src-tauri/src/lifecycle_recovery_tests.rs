@@ -46,7 +46,11 @@ fn startup_rolls_back_uncommitted_integration_and_preserves_source() {
     let destination = service.managed_dir.join(source.file_name().unwrap());
     fs::copy(&source, &destination).unwrap();
     let desktop = service.desktop_dir.join(desktop_id(&destination));
-    fs::write(&desktop, desktop_content(&destination, &portable.name)).unwrap();
+    fs::write(
+        &desktop,
+        desktop_content(&destination, &portable.name).unwrap(),
+    )
+    .unwrap();
     let artifacts = vec![crash_artifact(&destination), crash_artifact(&desktop)];
     let mut expected = portable.clone();
     expected.id = destination.to_str().unwrap().to_owned();
@@ -250,7 +254,7 @@ fn startup_distinguishes_uncommitted_integration_with_unchanged_metadata() {
     let stage = persistence::temporary_path(&service.desktop_dir);
     fs::write(
         &stage,
-        desktop_content(Path::new(&app.file_path), &app.name),
+        desktop_content(Path::new(&app.file_path), &app.name).unwrap(),
     )
     .unwrap();
     fs::hard_link(&stage, &desktop).unwrap();

@@ -1,7 +1,7 @@
 import { THEMES } from "../data/themes.ts";
 
 const THEME_KEY = "appbento-theme";
-export const DEFAULT_THEME = "tokyo-night";
+export const DEFAULT_THEME = "midnight";
 const STORAGE_UNAVAILABLE = "Theme preferences cannot be saved in this session.";
 
 export function resolveTheme(value: string | null): string {

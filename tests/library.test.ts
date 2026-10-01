@@ -124,3 +124,68 @@ test("successful scans retain readable apps and surface invalid file warnings", 
   assert.equal(controller.getState().error, null);
   assert.deepEqual(controller.getState().scanWarnings, [{ path: "/bad.AppImage", message: "Invalid executable format" }]);
 });
+
+test("changed AppImages reopen review after launch invalidates persisted permissions", async () => {
+  const preview = createPreviewApi();
+  const apps = await preview.libraryList();
+  const original = apps[0];
+  let hasChanged = false;
+  const controller = createLibraryController({
+    ...preview,
+    async libraryList() {
+      return apps.map((app) => app.id === original.id && hasChanged ? { ...app, launch_config: null } : app);
+    },
+    async libraryLaunch() {
+      hasChanged = true;
+      throw new Error("AppImage changed; review permissions again");
+    },
+  });
+  await controller.initialize();
+  assert.equal(await controller.launch(original.id), false);
+  assert.equal(controller.getState().apps[0].launch_config, null);
+  assert.deepEqual(controller.getState().reviewIds, [original.id]);
+  assert.match(controller.getState().error ?? "", /AppImage changed; review permissions again/);
+});
+
+test("save-and-launch refreshes invalidated permissions without closing review", async () => {
+  const preview = createPreviewApi();
+  const original = (await preview.libraryList())[0];
+  let app = original;
+  const controller = createLibraryController({
+    ...preview,
+    async libraryList() { return [app]; },
+    async libraryConfigure(_id, config) {
+      app = { ...app, launch_config: config };
+      return app;
+    },
+    async libraryLaunch() {
+      app = { ...app, launch_config: null };
+      throw new Error("AppImage changed during launch");
+    },
+  });
+  await controller.initialize();
+  controller.requestReview(original.id);
+  const config = original.launch_config;
+  assert.ok(config);
+  assert.equal(await controller.configure(original.id, config, true), false);
+  assert.equal(controller.getState().apps[0].launch_config, null);
+  assert.deepEqual(controller.getState().reviewIds, [original.id]);
+  assert.match(controller.getState().error ?? "", /AppImage changed during launch/);
+});
+
+test("launch and refresh failures are both reported", async () => {
+  const preview = createPreviewApi();
+  let isLoaded = false;
+  const controller = createLibraryController({
+    ...preview,
+    async libraryList() {
+      if (isLoaded) throw new Error("Cannot read library");
+      isLoaded = true;
+      return preview.libraryList();
+    },
+    async libraryLaunch() { throw new Error("Launch failed"); },
+  });
+  await controller.initialize();
+  assert.equal(await controller.launch(controller.getState().apps[0].id), false);
+  assert.match(controller.getState().error ?? "", /Launch failed; Library refresh failed: Cannot read library/);
+});

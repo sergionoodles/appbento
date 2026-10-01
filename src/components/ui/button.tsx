@@ -3,28 +3,30 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md font-mono text-[13px] px-3 py-1.5 border transition-colors cursor-pointer disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-md font-medium border transition-[background-color,color,border-color,transform] duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed active:scale-[0.97]",
   {
     variants: {
       variant: {
-        default: "bg-[var(--accent)] text-black border-transparent hover:brightness-110",
-        outline: "bg-transparent border-[var(--border)] text-[var(--fg)] hover:border-[var(--accent)]",
-        ghost: "border-transparent text-[var(--muted)] hover:text-[var(--fg)]",
-        danger: "bg-transparent border-[var(--bad)] text-[var(--bad)] hover:bg-[var(--bad)] hover:text-black",
+        default: "bg-[var(--fg)] text-[var(--bg)] border-transparent hover:opacity-90",
+        accent: "bg-[var(--accent)] text-[var(--on-accent)] border-transparent hover:brightness-110",
+        soft: "bg-[var(--panel2)] text-[var(--fg)] border-[var(--border)] hover:border-[var(--muted)]",
+        outline: "bg-transparent border-[var(--border)] text-[var(--fg)] hover:border-[var(--muted)]",
+        ghost: "border-transparent text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--panel2)]",
+        danger: "bg-transparent border-[var(--bad)] text-[var(--bad)] hover:bg-[var(--bad)] hover:text-[var(--bg)]",
       },
       size: {
-        sm: "px-2 py-1 text-[12px]",
-        md: "px-3 py-1.5",
+        sm: "px-3 h-8 text-[13px]",
+        md: "px-4 h-10 text-[14px]",
+        lg: "px-6 h-12 text-[16px]",
+        icon: "size-9 text-[14px]",
       },
     },
-    defaultVariants: { variant: "outline", size: "md" },
+    defaultVariants: { variant: "soft", size: "md" },
   }
 );
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+export type ButtonProps = React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>;
 
-export function Button({ className, variant, size, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
+  return <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }

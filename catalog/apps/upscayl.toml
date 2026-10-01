@@ -34,3 +34,10 @@ channel = "stable"
 categories = "Graphics;"
 terminal = false
 
+[sandbox]
+network = false
+display = true
+audio = false
+gpu = true
+persistent_data = true
+paths = []

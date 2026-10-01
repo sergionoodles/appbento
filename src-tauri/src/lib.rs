@@ -1,9 +1,12 @@
 mod apps;
 mod catalog;
+mod embedded_icon;
 mod github;
+mod icons;
 mod lifecycle;
 mod models;
 mod persistence;
+mod sandbox;
 mod settings;
 mod store;
 mod updates;
@@ -51,6 +54,31 @@ async fn updates_check_all() -> Result<UpdateReport, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "--launch")
+    {
+        if let Some(id) = arguments.get(1) {
+            match store::load_all()
+                .and_then(|mut library| library.remove(id).ok_or("app not found".into()))
+            {
+                Ok(app) if app.launch_config.is_some() => {
+                    if let Err(error) = sandbox::launch_with_wait(id, &arguments[2..], true) {
+                        eprintln!("{error}");
+                        std::process::exit(1);
+                    }
+                    return;
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -59,6 +87,10 @@ pub fn run() {
             apps::library_scan,
             apps::library_integrate,
             apps::library_launch,
+            apps::library_configure,
+            apps::library_set_icon,
+            apps::library_icon,
+            apps::sandbox_status,
             apps::library_remove,
             catalog_list,
             catalog_get,
@@ -69,4 +101,21 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running AppBento");
+}
+
+#[cfg(test)]
+mod permission_tests {
+    #[test]
+    fn main_window_can_read_and_customize_app_icons() {
+        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let authority = context.runtime_authority_mut();
+        for command in ["library_icon", "library_set_icon"] {
+            assert!(
+                authority
+                    .resolve_access(command, "main", "main", &tauri::ipc::Origin::Local)
+                    .is_some(),
+                "the main window must be allowed to invoke {command}"
+            );
+        }
+    }
 }

@@ -3,6 +3,8 @@ import { createLibraryActions } from "./library-actions.ts";
 import type { CatalogEntry, InstalledApp, ScanWarning, Settings, UpdateReport } from "./types";
 
 export interface LibraryState {
+  reviewIds: string[];
+  launchAfterReview: boolean;
   apps: InstalledApp[];
   catalog: CatalogEntry[];
   settings: Settings | null;
@@ -26,6 +28,7 @@ export function recentApps(apps: InstalledApp[], limit = 6): InstalledApp[] {
 
 export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
+    reviewIds: [], launchAfterReview: false,
     apps: [], catalog: [], settings: null, updateReport: null, scanWarnings: [],
     isLoading: true, isCheckingUpdates: false, operation: null, error: null,
   };
