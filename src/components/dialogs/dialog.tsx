@@ -74,7 +74,7 @@ export function Dialog({ title, children, onClose, returnFocusElement, canClose 
           isSheet ? "sheet w-[480px] h-full rounded-[10px]" : "dialog-card w-[520px] max-h-[90vh] rounded-[10px]",
           className
         )}>
-        <h2 id={titleId} className={isBare ? "sr-only" : "text-[24px] font-bold tracking-[-0.035em] leading-tight"}>{title}</h2>
+        <h2 id={titleId} className={isBare ? "sr-only" : "text-[18px] font-semibold leading-tight"}>{title}</h2>
         {children}
       </div>
     </div>

@@ -7,7 +7,7 @@ export function Select({ className, children, ...props }: React.ComponentProps<"
   return (
     <span className={cn("relative inline-flex w-full", className)}>
       <select
-        className="peer appearance-none w-full h-10 rounded-md border border-[var(--border)] bg-[var(--panel2)] pl-3.5 pr-9 text-[14px] text-[var(--fg)] cursor-pointer outline-none transition-colors hover:border-[var(--muted)] focus:border-[var(--accent)] disabled:opacity-45 disabled:cursor-not-allowed"
+        className="peer appearance-none w-full h-10 rounded-md border border-[var(--border)] bg-[var(--panel2)] pl-3.5 pr-9 text-[14px] text-[var(--fg)] outline-none transition-colors hover:border-[var(--muted)] focus:border-[var(--accent)] disabled:opacity-45 disabled:cursor-not-allowed"
         {...props}
       >
         {children}

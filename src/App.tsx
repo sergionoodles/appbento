@@ -1,11 +1,16 @@
-import { useCallback, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type AppApi } from "@/lib/api";
 import { useLibrary } from "@/lib/use-library";
+import { useAppLayout } from "@/lib/use-app-layout";
+import { useTileDrag } from "@/lib/use-tile-drag";
 import { transitionTo } from "@/lib/view-transition";
 import { ThemeProvider } from "@/components/theme";
 import { Header } from "@/components/header";
 import { Bento, BentoSkeleton, tileSelector } from "@/components/bento";
+import { Sidebar, type SidebarPage } from "@/components/sidebar";
+import { StatusBar } from "@/components/status-bar";
+import type { TileActions } from "@/components/app-tile";
+import type { GroupActions } from "@/components/group-header";
 import { AppDetail, STAGE_SELECTOR } from "@/components/app-detail";
 import { CatalogView } from "@/components/catalog-view";
 import { UpdatesView } from "@/components/updates-view";
@@ -14,12 +19,33 @@ import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app
 import { IconBackendContext } from "@/components/app-icon";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-type View = { name: "home" } | { name: "app"; id: string } | { name: "discover" } | { name: "updates" };
+/** The app view remembers which group it was opened from so going back returns there. */
+type View = { name: "home"; groupId: string | null } | { name: "app"; id: string; groupId: string | null } | { name: "discover" } | { name: "updates" };
 
-const HOME: View = { name: "home" };
+const HOME: View = { name: "home", groupId: null };
 const LAUNCH_OPERATION = "Launch app";
 const DISPLAY_NAMES_KEY = "appbento-display-names";
+
+function sidebarPage(view: View): SidebarPage {
+  if (view.name === "home") return view.groupId ? { name: "group", id: view.groupId } : { name: "all" };
+  if (view.name === "app") return { name: "other" };
+  return { name: view.name };
+}
+
+/** Replaces the web view's own context menu (Reload, Inspect…) outside text fields, as a native window would. */
+function useNativeContextMenu(isNative: boolean) {
+  useEffect(() => {
+    if (!isNative) return;
+    const preventWebMenu = (event: MouseEvent) => {
+      const isEditable = event.target instanceof HTMLElement && event.target.closest("input, textarea, .selectable");
+      if (!isEditable) event.preventDefault();
+    };
+    document.addEventListener("contextmenu", preventWebMenu);
+    return () => document.removeEventListener("contextmenu", preventWebMenu);
+  }, [isNative]);
+}
 
 function Shell({ backend }: { backend: AppApi }) {
   const [view, setView] = useState<View>(HOME);
@@ -33,8 +59,13 @@ function Shell({ backend }: { backend: AppApi }) {
   });
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const { apps, catalog, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
+  const installedIds = [...apps].sort((first, second) => first.name.localeCompare(second.name)).map((app) => app.id);
+  const { layout, error: layoutError, actions: layoutActions } = useAppLayout(installedIds);
+  const { drag, startDrag, suppressClickAfterDrag } = useTileDrag(layout, (appId, target) => layoutActions.moveApp(appId, target.sectionId, target.index));
+  useNativeContextMenu(backend.isTauri);
   const filter = query.toLowerCase();
   const displayApps = apps.map((app) => ({ ...app, name: displayNames[app.id] || app.name }));
   const filteredApps = displayApps.filter((app) => app.name.toLowerCase().includes(filter));
@@ -73,48 +104,76 @@ function Shell({ backend }: { backend: AppApi }) {
     setRemovingId(id);
   };
   const onOpenUrl = (url: string) => { void controller.openExternal(url); };
+  const activeGroupId = view.name === "home" && layout.groups.some((group) => group.id === view.groupId) ? view.groupId : null;
   const goHome = () => {
-    const fromId = view.name === "app" ? view.id : null;
-    transitionTo(() => setView(HOME), { fromSelector: fromId ? STAGE_SELECTOR : null, toSelector: fromId ? tileSelector(fromId) : null });
+    if (view.name !== "app") {
+      transitionTo(() => setView(HOME));
+      return;
+    }
+    transitionTo(() => setView({ name: "home", groupId: view.groupId }), { fromSelector: STAGE_SELECTOR, toSelector: tileSelector(view.id) });
   };
   const goTo = (next: View) => transitionTo(() => setView(next));
-  const openApp = (id: string) => transitionTo(() => setView({ name: "app", id }), { fromSelector: tileSelector(id), toSelector: STAGE_SELECTOR });
+  const openApp = (id: string) => transitionTo(() => setView({ name: "app", id, groupId: activeGroupId }), { fromSelector: tileSelector(id), toSelector: STAGE_SELECTOR });
+  const createGroup = (appIds: string[] = []) => {
+    setEditingGroupId(layoutActions.addGroup(appIds));
+    setView(HOME);
+  };
+  const tileActions: TileActions = {
+    onOpen: openApp, onLaunch, onSettings, onIcon, onRemove,
+    onShift: layoutActions.shiftApp,
+    onMoveTo: (id, sectionId) => layoutActions.moveApp(id, sectionId, Number.MAX_SAFE_INTEGER),
+    onNewGroup: (id) => createGroup([id]),
+    onDragStart: startDrag,
+  };
+  const groupActions: GroupActions = {
+    onToggle: layoutActions.toggleGroup, onRename: layoutActions.renameGroup, onShift: layoutActions.shiftGroup, onEdit: setEditingGroupId,
+    onDelete: (groupId) => {
+      layoutActions.deleteGroup(groupId);
+      if (activeGroupId === groupId) setView(HOME);
+    },
+  };
   const statusText = operation ?? (isCheckingUpdates ? "Checking for updates" : null);
 
   return (
     <>
-      <div className="min-h-full flex flex-col" inert={hasModal}>
-        <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null} updateCount={confirmedUpdateCount}
-          onHome={goHome} onUpdates={() => goTo({ name: "updates" })}
-          onFolders={() => {
-            captureFocus();
-            controller.dismissError();
-            setShowFolders(true);
-          }}
-          onAdd={() => { captureFocus(); void controller.integrate(); }} onScan={() => { captureFocus(); void controller.scan(); }} />
-        <main className="flex-1 px-6 pb-24 max-w-[1240px] w-full mx-auto">
-          {error ? <div role="alert" className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--bad)] p-4 text-[var(--bad)]">
-            <span className="flex-1">{error}</span><Button variant="outline" onClick={controller.dismissError}>Dismiss</Button><Button variant="outline" disabled={disabled} onClick={() => void controller.reload()}>Reload</Button>
-          </div> : null}
-          {scanWarnings.length ? <section aria-label="Scan warnings" className="mb-4 rounded-lg border border-[var(--warn)] p-4">
-            <div className="flex items-center justify-between gap-3"><h2 className="text-[var(--warn)] font-medium">Some files were skipped</h2><Button variant="outline" size="sm" onClick={controller.dismissScanWarnings}>Dismiss scan warnings</Button></div>
-            <ul className="text-[13px] text-[var(--muted)] mt-2">{scanWarnings.map((warning) => <li key={warning.path} className="break-all">{warning.path}: {warning.message}</li>)}</ul>
-          </section> : null}
-          {isLoading ? <BentoSkeleton /> : (
-            <>
-              {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento apps={filteredApps} catalog={catalog} updates={updates} isAnimated={!hasEntered} onEntered={markEntered}
-                onOpen={openApp} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onDiscover={() => goTo({ name: "discover" })}
-                onAdd={() => { captureFocus(); void controller.integrate(); }} canAdd={backend.isTauri} disabled={disabled} /> : null}
-              {detailApp ? <AppDetail app={detailApp} entry={catalog.find((entry) => entry.app.id === detailApp.catalog_id)} update={updates.find((update) => update.app_id === detailApp.id)}
-                isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onOpenUrl={onOpenUrl} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
-              {view.name === "discover" ? <CatalogView catalog={filteredCatalog} apps={apps} isPreview={!backend.isTauri} onBack={goHome} onOpen={onOpenUrl} /> : null}
-              {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
-            </>
-          )}
-        </main>
-        <div aria-live="polite" className="fixed bottom-5 inset-x-0 flex justify-center pointer-events-none">
-          {statusText ? <p role="status" className="menu flex items-center gap-2 rounded-md px-4 h-10 text-[14px]"><Loader2 size={15} className="animate-spin" />{statusText}…</p> : null}
+      <div className={cn("h-full flex flex-col", drag && "is-dragging")} inert={hasModal} onClickCapture={suppressClickAfterDrag}>
+        <div className="flex-1 min-h-0 flex">
+          <Sidebar page={sidebarPage(view)} appCount={apps.length} groups={layout.groups} updateCount={confirmedUpdateCount} dropSectionId={drag?.target.sectionId ?? null}
+            onHome={() => goTo(HOME)} onGroup={(groupId) => goTo({ name: "home", groupId })} onNewGroup={() => createGroup()}
+            onDiscover={() => goTo({ name: "discover" })} onUpdates={() => goTo({ name: "updates" })} />
+          <div className="flex-1 min-w-0 flex flex-col">
+            <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}
+              onFolders={() => {
+                captureFocus();
+                controller.dismissError();
+                setShowFolders(true);
+              }}
+              onAdd={() => { captureFocus(); void controller.integrate(); }} onScan={() => { captureFocus(); void controller.scan(); }} />
+            <main data-scroll-container className="flex-1 min-h-0 overflow-y-auto">
+              <div className="px-6 pt-5 pb-10 max-w-[1600px]">
+                {error ? <div role="alert" className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--bad)] p-4 text-[var(--bad)]">
+                  <span className="flex-1 selectable">{error}</span><Button variant="outline" onClick={controller.dismissError}>Dismiss</Button><Button variant="outline" disabled={disabled} onClick={() => void controller.reload()}>Reload</Button>
+                </div> : null}
+                {scanWarnings.length ? <section aria-label="Scan warnings" className="mb-4 rounded-lg border border-[var(--warn)] p-4">
+                  <div className="flex items-center justify-between gap-3"><h2 className="text-[var(--warn)] font-medium">Some files were skipped</h2><Button variant="outline" size="sm" onClick={controller.dismissScanWarnings}>Dismiss scan warnings</Button></div>
+                  <ul className="text-[13px] text-[var(--muted)] mt-2 selectable">{scanWarnings.map((warning) => <li key={warning.path} className="break-all">{warning.path}: {warning.message}</li>)}</ul>
+                </section> : null}
+                {isLoading ? <BentoSkeleton /> : (
+                  <>
+                    {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento layout={layout} apps={filteredApps} catalog={catalog} updates={updates} activeGroupId={activeGroupId}
+                      isFiltering={filter.length > 0} drag={drag} editingGroupId={editingGroupId} isAnimated={!hasEntered} onEntered={markEntered}
+                      tileActions={tileActions} groupActions={groupActions} disabled={disabled} /> : null}
+                    {detailApp ? <AppDetail app={detailApp} entry={catalog.find((entry) => entry.app.id === detailApp.catalog_id)} update={updates.find((update) => update.app_id === detailApp.id)}
+                      isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onOpenUrl={onOpenUrl} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
+                    {view.name === "discover" ? <CatalogView catalog={filteredCatalog} apps={apps} isPreview={!backend.isTauri} onBack={goHome} onOpen={onOpenUrl} /> : null}
+                    {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
+                  </>
+                )}
+              </div>
+            </main>
+          </div>
         </div>
+        <StatusBar status={statusText} appCount={apps.length} groupCount={layout.groups.length} warning={layoutError} />
       </div>
       {configuringApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
         catalogEntry={catalog.find((entry) => entry.app.id === configuringApp.catalog_id)}

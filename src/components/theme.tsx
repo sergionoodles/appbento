@@ -41,7 +41,7 @@ export function ThemeSwatches() {
       {THEMES.map((theme) => (
         <button key={theme.id} type="button" role="radio" aria-checked={context.theme === theme.id} aria-label={theme.label} title={theme.label}
           onClick={() => context.setTheme(theme.id)} data-theme={theme.id}
-          className="size-7 rounded-md border-2 cursor-pointer aria-checked:border-[var(--accent)] border-[var(--border)] transition-transform hover:scale-110"
+          className="size-7 rounded-md border-2 aria-checked:border-[var(--accent)] border-[var(--border)] transition-transform hover:scale-110"
           style={{ background: "linear-gradient(135deg, var(--bg) 50%, var(--accent) 50%)" }} />
       ))}
       {context.storageError ? <span role="status" className="basis-full text-[12px] text-[var(--warn)]">{context.storageError}</span> : null}

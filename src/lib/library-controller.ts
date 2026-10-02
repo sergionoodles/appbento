@@ -20,12 +20,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function recentApps(apps: InstalledApp[], limit = 6): InstalledApp[] {
-  return [...apps].sort((first, second) =>
-    (second.last_launched ?? "").localeCompare(first.last_launched ?? "")
-  ).slice(0, limit);
-}
-
 export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
     reviewIds: [], launchAfterReview: false,

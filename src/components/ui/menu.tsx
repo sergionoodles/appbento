@@ -55,7 +55,7 @@ export function Menu({ label, icon, children, disabled, className, variant = "gh
         {icon}
       </Button>
       {isOpen ? (
-        <div id={menuId} role="menu" aria-label={label} className="menu absolute right-0 top-full mt-2 z-30 w-max min-w-52 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg p-1.5 flex flex-col">
+        <div id={menuId} role="menu" aria-label={label} className="menu absolute right-0 top-full mt-2 z-30 w-max min-w-52 max-w-[min(22rem,calc(100vw-2rem))] rounded-lg p-1 flex flex-col">
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
         </div>
       ) : null}
@@ -76,7 +76,7 @@ export function MenuItem({ icon, children, label, onSelect, isDanger, disabled }
   return (
     <button type="button" role="menuitem" aria-label={label} disabled={disabled}
       className={cn(
-        "flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 h-9 text-left text-[14px] cursor-pointer disabled:opacity-45 hover:bg-[var(--border)] focus-visible:bg-[var(--border)] focus-visible:outline-none",
+        "flex items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 h-8 text-left text-[13.5px] disabled:opacity-45 hover:bg-[var(--border)] focus-visible:bg-[var(--border)] focus-visible:outline-none",
         isDanger ? "text-[var(--bad)]" : "text-[var(--fg)]"
       )}
       onClick={() => {

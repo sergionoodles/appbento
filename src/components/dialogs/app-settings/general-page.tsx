@@ -37,13 +37,13 @@ export function GeneralPage({ app, entry, backend, name, originalName, onNameCha
         <div className="relative shrink-0">
           <AppIcon app={app} name={name || originalName} entry={entry} className="size-20 rounded-xl" />
           <button type="button" aria-label="Change icon" aria-expanded={isEditingIcon} disabled={isSaving} onClick={() => onEditIcon(!isEditingIcon)}
-            className="absolute -bottom-1.5 -right-1.5 grid size-7 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] shadow-md ring-[3px] ring-[var(--panel)] cursor-pointer transition-transform hover:scale-110 disabled:opacity-45 disabled:cursor-not-allowed">
+            className="absolute -bottom-1.5 -right-1.5 grid size-7 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] shadow-md ring-[3px] ring-[var(--panel)] transition-transform hover:scale-110 disabled:opacity-45 disabled:cursor-not-allowed">
             <Pencil size={13} />
           </button>
         </div>
         <Field label="Name" htmlFor="app-display-name" className="flex-1" hint={name.trim() === originalName ? "Shown in your library and on the app page." : <>
           Original name: {originalName}.{" "}
-          <button type="button" className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline cursor-pointer" onClick={() => onNameChange(originalName)}><RotateCcw size={11} />Reset</button>
+          <button type="button" className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline" onClick={() => onNameChange(originalName)}><RotateCcw size={11} />Reset</button>
         </>}>
           <Input id="app-display-name" value={name} disabled={isSaving} onChange={(event) => onNameChange(event.target.value)} />
         </Field>

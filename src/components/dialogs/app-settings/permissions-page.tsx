@@ -80,7 +80,7 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
       <fieldset disabled={isSaving} className="grid grid-cols-2 gap-3">
         <legend className="sr-only">Launch mode</legend>
         {LAUNCH_MODES.map(({ mode, label, description, icon: Icon }) => (
-          <label key={mode} className="group relative flex cursor-pointer flex-col gap-3 rounded-lg border border-[var(--border)] p-4 transition-colors hover:border-[var(--muted)] has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_oklab,var(--accent)_7%,transparent)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--accent)]">
+          <label key={mode} className="group relative flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4 transition-colors hover:border-[var(--muted)] has-[:checked]:border-[var(--accent)] has-[:checked]:bg-[color-mix(in_oklab,var(--accent)_7%,transparent)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--accent)]">
             <input type="radio" name="launch-mode" className="sr-only" aria-label={label} aria-describedby={`launch-mode-${mode}`}
               checked={config.mode === mode} onChange={() => onChange({ ...config, mode })} />
             <span className="flex items-center justify-between">
@@ -152,7 +152,7 @@ function PermissionToggles({ permissions, isSaving, onChange }: {
   return (
     <FieldGroup title="Access" description="Everything is blocked unless you turn it on.">
       {PERMISSIONS.map(({ key, label, description }) => (
-        <label key={key} className="flex cursor-pointer items-center gap-4 px-4 py-3">
+        <label key={key} className="flex items-center gap-4 px-4 py-3">
           <span className="flex-1 min-w-0">
             <span className="block text-[14px]">{label}</span>
             <span id={`permission-${key}`} className="block text-[12.5px] leading-snug text-[var(--muted)]">{description}</span>

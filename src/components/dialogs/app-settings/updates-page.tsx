@@ -65,7 +65,7 @@ export function UpdatesPage({ draft, onChange, isSaving }: {
             <option value="prerelease">Prerelease</option>
           </Select>
         </Field>
-        <label className="col-span-2 flex cursor-pointer items-center gap-4 rounded-lg border border-[var(--border)] px-4 py-3">
+        <label className="col-span-2 flex items-center gap-4 rounded-lg border border-[var(--border)] px-4 py-3">
           <span className="flex-1">
             <span className="block text-[14px]">Include prereleases</span>
             <span id="update-prerelease-hint" className="block text-[12.5px] text-[var(--muted)]">Offer beta and release candidate builds too.</span>

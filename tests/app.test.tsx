@@ -13,7 +13,7 @@ const emptyReport: UpdateReport = { updates: [], errors: [], checked_count: 0, u
 async function openHome(backend: AppApi) {
   const user = userEvent.setup();
   render(<App backend={backend} />);
-  await screen.findByRole("heading", { name: "Recent applications" });
+  await screen.findByRole("heading", { name: "All apps" });
   return user;
 }
 
@@ -130,7 +130,7 @@ it("restores the actual app trigger after inert clears focus during dialog commi
     const focused = document.activeElement;
     if (dialog && focused instanceof HTMLElement && !dialog.contains(focused)) focused.blur();
   }}><App backend={createPreviewApi()} /></Profiler>);
-  await screen.findByRole("heading", { name: "Recent applications" });
+  await screen.findByRole("heading", { name: "All apps" });
   const settings = screen.getByRole("button", { name: "Settings" });
   await chooseFromMenu(user, "Settings", "Folders");
   expect(screen.getByRole("textbox", { name: "Managed folder" })).toHaveFocus();

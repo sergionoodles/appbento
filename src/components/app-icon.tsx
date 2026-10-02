@@ -42,10 +42,10 @@ export function AppIcon({ name, entry, app, className }: { name: string; entry?:
       aria-hidden="true"
       title={path ? loadError ?? undefined : undefined}
       className={cn("grid place-items-center shrink-0 rounded-lg font-bold tracking-tight", className)}
-      style={{ containerType: "size", background: `color-mix(in oklab, ${accent} 22%, var(--panel))`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${accent} 40%, transparent)` }}
+      style={{ containerType: "size", background: `color-mix(in oklab, ${accent} 9%, var(--panel2))`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${accent} 10%, var(--hairline))` }}
     >
       {image
-        ? <img src={image} onError={() => setFailedSource(image)} alt="" className="size-3/5 object-contain" loading="lazy" />
+        ? <img src={image} onError={() => setFailedSource(image)} alt="" draggable={false} className="size-3/5 object-contain" loading="lazy" />
         : <span style={{ color: accent, fontSize: "38cqmin" }} className="leading-none">{initials(name)}</span>}
     </div>
   );

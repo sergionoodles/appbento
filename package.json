@@ -11,8 +11,8 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test:unit": "vitest run tests/api.test.ts tests/library.test.ts tests/theme.test.ts",
-    "test:ui": "vitest run tests/app.test.tsx tests/dialog.test.tsx",
+    "test:unit": "vitest run tests/api.test.ts tests/library.test.ts tests/theme.test.ts tests/app-layout.test.ts",
+    "test:ui": "vitest run tests/app.test.tsx tests/dialog.test.tsx tests/groups.test.tsx",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },

@@ -25,7 +25,7 @@ function unreviewedBackend(patch: Partial<AppApi> = {}) {
 async function openReview(backend: AppApi) {
   const user = userEvent.setup();
   render(<App backend={backend} />);
-  await screen.findByRole("heading", { name: "Recent applications" });
+  await screen.findByRole("heading", { name: "All apps" });
   await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
   const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
   return { user, dialog };
@@ -53,7 +53,7 @@ describe("AppImage permission review", () => {
     const { backend, libraryLaunch } = unreviewedBackend({ async libraryList() { return [createPreviewApp("Obsidian", "1"), createPreviewApp("Second", null)]; } });
     const user = userEvent.setup();
     render(<App backend={backend} />);
-    await screen.findByRole("heading", { name: "Recent applications" });
+    await screen.findByRole("heading", { name: "All apps" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Launch Second" }));
     const dialog = screen.getByRole("dialog", { name: "Settings for Second" });
@@ -76,7 +76,7 @@ describe("AppImage permission review", () => {
     };
     const user = userEvent.setup();
     render(<App backend={backend} />);
-    await screen.findByRole("heading", { name: "Recent applications" });
+    await screen.findByRole("heading", { name: "All apps" });
     await chooseFromMenu(user, menu, item);
     expect(await screen.findByText("Imported")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("AppImage permission review", () => {
     const { backend, libraryConfigure, libraryLaunch } = unreviewedBackend({ sandboxStatus });
     const user = userEvent.setup();
     render(<App backend={backend} />);
-    await screen.findByRole("heading", { name: "Recent applications" });
+    await screen.findByRole("heading", { name: "All apps" });
     await chooseFromMenu(user, "More options for Obsidian", "Settings");
     const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
     await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
@@ -133,7 +133,7 @@ describe("AppImage permission review", () => {
     const { backend, libraryLaunch } = unreviewedBackend({ libraryConfigure, async libraryList() { return [imported]; } });
     const user = userEvent.setup();
     render(<App backend={backend} />);
-    await screen.findByRole("heading", { name: "Recent applications" });
+    await screen.findByRole("heading", { name: "All apps" });
     await chooseFromMenu(user, "More options for Obsidian", "Settings");
     const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
     await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
@@ -187,7 +187,7 @@ it("permission defaults come from the import snapshot when the catalog changes",
   const preview = createPreviewApi();
   const user = userEvent.setup();
   render(<App backend={{ ...preview, async libraryList() { return [imported]; } }} />);
-  await screen.findByRole("heading", { name: "Recent applications" });
+  await screen.findByRole("heading", { name: "All apps" });
   await chooseFromMenu(user, "More options for Obsidian", "Settings");
   const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
   await user.click(within(dialog).getByRole("button", { name: "Permissions" }));

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { createLibraryController, recentApps } from "../src/lib/library-controller.ts";
+import { createLibraryController } from "../src/lib/library-controller.ts";
 import { createPreviewApi, createPreviewApp } from "../src/lib/preview.ts";
 import type { UpdateReport } from "../src/lib/types.ts";
 
@@ -77,14 +77,6 @@ test("an older update check cannot repopulate a removed app", async () => {
   await Promise.resolve();
   assert.equal(controller.getState().updateReport?.updates.some((update) => update.app_id === report.updates[0].app_id) ?? false, false);
   assert.equal(controller.getState().apps.length, 1);
-});
-
-test("recent apps use last launch time rather than lifetime frequency without mutating input", () => {
-  const old = { ...createPreviewApp("Old", null), launch_count: 100, last_launched: "2025-01-01T00:00:00Z" };
-  const recent = { ...createPreviewApp("Recent", null), launch_count: 1, last_launched: "2026-01-01T00:00:00Z" };
-  const apps = [old, recent];
-  assert.deepEqual(recentApps(apps, 1), [recent]);
-  assert.deepEqual(apps, [old, recent]);
 });
 
 test("launches preserve an update check in progress and do not perform another check", async () => {

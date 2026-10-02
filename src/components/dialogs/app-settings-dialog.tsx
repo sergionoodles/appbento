@@ -88,7 +88,7 @@ export function AppSettingsDialog({ app, catalogEntry, backend, openTo, original
             {PAGES.map(({ page: key, label, icon: Icon }) => (
               <button key={key} type="button" aria-current={page === key ? "page" : undefined} onClick={() => setPage(key)}
                 className={cn(
-                  "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-[14px] cursor-pointer transition-colors",
+                  "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-[14px] transition-colors",
                   page === key ? "bg-[var(--panel)] text-[var(--fg)] shadow-sm ring-1 ring-[var(--border)]" : "text-[var(--muted)] hover:bg-[var(--panel)]/60 hover:text-[var(--fg)]"
                 )}>
                 <Icon size={16} className={page === key ? "text-[var(--accent)]" : undefined} />

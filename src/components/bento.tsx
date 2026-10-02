@@ -1,143 +1,123 @@
 import { useEffect } from "react";
-import { Compass, MoreHorizontal, Play, Plus, ShieldCheck, Settings, Image, Trash2 } from "lucide-react";
+import { PackageOpen } from "lucide-react";
+import { UNGROUPED_ID, moveApp, type AppGroup, type AppLayout } from "@/lib/app-layout";
+import type { TileDrag } from "@/lib/use-tile-drag";
 import type { CatalogEntry, InstalledApp, UpdateInfo } from "@/lib/types";
-import { recentApps } from "@/lib/library-controller";
-import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
-import { AppIcon, accentOf } from "./app-icon";
-import { accessLabel, updateLabel, versionLabel } from "./app-status";
-import { Menu, MenuItem } from "./ui/menu";
+import { AppTile, TileGhost, type TileActions, type TilePlacement } from "./app-tile";
+import { GroupHeader, SectionTitle, type GroupActions } from "./group-header";
 
 export const tileSelector = (id: string) => `[data-tile-id="${CSS.escape(id)}"]`;
 
-function sizeClass(isMostUsed: boolean, isSecondMostUsed: boolean) {
-  if (isMostUsed) return "span-hero";
-  return isSecondMostUsed ? "span-wide" : "";
-}
+const UNGROUPED_NAME = "Ungrouped";
+const ENTRANCE_DURATION_MS = 900;
 
-function AppTile({ app, entry, update, index, isMostUsed, isSecondMostUsed, onOpen, onLaunch, onSettings, onIcon, onRemove, disabled }: {
-  app: InstalledApp;
-  entry?: CatalogEntry;
-  update?: UpdateInfo;
-  index: number;
-  isMostUsed: boolean;
-  isSecondMostUsed: boolean;
-  onOpen: (id: string) => void;
-  onLaunch: (id: string) => void;
-  onSettings: (id: string) => void;
-  onIcon: (id: string) => void;
-  onRemove: (id: string) => void;
-  disabled: boolean;
-}) {
-  const isHero = isMostUsed;
-  const isWide = isSecondMostUsed;
-  const fileAge = formatAge(app.file_created_at);
-  const baseStatus = app.launch_config ? `${accessLabel(app)} · ${versionLabel(app)}` : accessLabel(app);
-  const status = [updateLabel(update), baseStatus, fileAge].filter(Boolean).join(" · ");
-  return (
-    <article className={cn("tile", sizeClass(isHero, isWide))} data-tile-id={app.id} style={{ "--tile-accent": accentOf(entry), "--i": index } as React.CSSProperties}>
-      <button type="button" className="tile-hit" aria-label={`Open ${app.name}`} onClick={() => onOpen(app.id)} />
-      <div className={cn("pointer-events-none relative h-full flex flex-col justify-between", isHero ? "p-7" : "p-5")}>
-        <div className="flex items-start justify-between">
-          <AppIcon app={app} name={app.name} entry={entry} className={isHero ? "size-24" : "size-16"} />
-          {isHero && app.launch_count > 0 ? <span className="rounded-full bg-[var(--panel2)] px-3 py-1 text-[12px] text-[var(--muted)]">Most used</span> : null}
-          <div className="pointer-events-auto tile-action">
-            <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={17} />} disabled={disabled}>
-              <MenuItem icon={<Settings size={15} />} onSelect={() => onSettings(app.id)}>Settings</MenuItem>
-              <MenuItem icon={<Image size={15} />} onSelect={() => onIcon(app.id)}>Change icon</MenuItem>
-              <MenuItem icon={<Trash2 size={15} />} onSelect={() => onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
-            </Menu>
-          </div>
-        </div>
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className={cn("font-bold tracking-[-0.035em] leading-none truncate", isHero ? "text-[44px]" : "text-[22px]")}>{app.name}</h3>
-            {(isHero || isWide) && entry ? <p className="mt-2 text-[var(--muted)] max-w-[34ch] line-clamp-2">{entry.app.summary}</p> : null}
-            <p className={cn("mt-1.5 text-[13px] truncate", update ? "text-[var(--warn)]" : "text-[var(--muted)]")}>{status}</p>
-          </div>
-          <button type="button" aria-label={`Launch ${app.name}`} disabled={disabled} onClick={() => onLaunch(app.id)}
-            className="tile-play tile-action pointer-events-auto grid place-items-center size-11 shrink-0 rounded-md cursor-pointer disabled:opacity-40"
-            style={{ background: "var(--tile-accent)", color: "var(--on-accent)" }}>
-            <Play size={18} fill="currentColor" />
-          </button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function ShortcutTile({ icon, title, hint, className, index, onClick, isDashed }: {
-  icon: React.ReactNode;
-  title: string;
-  hint: string;
-  className?: string;
-  index: number;
-  onClick: () => void;
-  isDashed?: boolean;
-}) {
-  return (
-    <article className={cn("tile tile-plain", isDashed && "tile-dashed", className)} style={{ "--i": index } as React.CSSProperties}>
-      <button type="button" className="tile-hit" aria-label={title} onClick={onClick} />
-      <div className="pointer-events-none h-full p-5 flex flex-col justify-between">
-        <span className="grid place-items-center size-12 rounded-md bg-[var(--panel2)]">{icon}</span>
-        <div>
-          <h3 className="text-[20px] font-bold tracking-[-0.03em]">{title}</h3>
-          <p className="text-[13px] text-[var(--muted)]">{hint}</p>
-        </div>
-      </div>
-    </article>
-  );
+interface Section {
+  id: string;
+  name: string;
+  group: AppGroup | null;
+  apps: InstalledApp[];
 }
 
 export function BentoSkeleton() {
   return (
     <div className="bento" role="status" aria-label="Loading local library">
       {Array.from({ length: 6 }, (_, index) => (
-        <div key={index} className={cn("rounded-[10px] bg-[var(--panel)] skeleton", sizeClass(index === 0, index === 1))} style={{ animationDelay: `${index * 120}ms` }} />
+        <div key={index} className="rounded-[10px] bg-[var(--panel)] skeleton" style={{ animationDelay: `${index * 120}ms` }} />
       ))}
     </div>
   );
 }
 
-export function Bento({ apps, catalog, updates, isAnimated, onEntered, onOpen, onLaunch, onSettings, onIcon, onRemove, onDiscover, onAdd, canAdd, disabled }: {
+function buildSections(layout: AppLayout, apps: InstalledApp[]): Section[] {
+  const byId = new Map(apps.map((app) => [app.id, app]));
+  const resolve = (ids: string[]) => ids.flatMap((id) => byId.get(id) ?? []);
+  return [
+    { id: UNGROUPED_ID, name: UNGROUPED_NAME, group: null, apps: resolve(layout.ungrouped) },
+    ...layout.groups.map((group) => ({ id: group.id, name: group.name, group, apps: resolve(group.appIds) })),
+  ];
+}
+
+function placementOf(sections: Section[], section: Section, index: number): TilePlacement {
+  return {
+    isFirst: index === 0,
+    isLast: index === section.apps.length - 1,
+    destinations: sections.filter((other) => other.id !== section.id),
+  };
+}
+
+function EmptyGroup({ sectionId }: { sectionId: string }) {
+  return (
+    <div data-drop-section={sectionId} className="section-drop h-[132px] grid place-items-center rounded-[10px] border border-dashed border-[var(--border)] text-[13px] text-[var(--muted)]">
+      Drag apps here, or use “Move to” in an app’s menu.
+    </div>
+  );
+}
+
+export function Bento({ layout, apps, catalog, updates, activeGroupId, isFiltering, drag, editingGroupId, isAnimated, onEntered, tileActions, groupActions, disabled }: {
+  layout: AppLayout;
+  /** Apps to show, already filtered by the search query. */
   apps: InstalledApp[];
   catalog: CatalogEntry[];
   updates: UpdateInfo[];
+  activeGroupId: string | null;
+  isFiltering: boolean;
+  drag: TileDrag | null;
+  editingGroupId: string | null;
   isAnimated: boolean;
   onEntered: () => void;
-  onOpen: (id: string) => void;
-  onLaunch: (id: string) => void;
-  onSettings: (id: string) => void;
-  onIcon: (id: string) => void;
-  onRemove: (id: string) => void;
-  onDiscover: () => void;
-  onAdd: () => void;
-  canAdd: boolean;
+  tileActions: TileActions;
+  groupActions: GroupActions;
   disabled: boolean;
 }) {
   useEffect(() => {
     if (!isAnimated) return;
-    const timer = window.setTimeout(onEntered, 1400);
+    const timer = window.setTimeout(onEntered, ENTRANCE_DURATION_MS);
     return () => window.clearTimeout(timer);
   }, [isAnimated, onEntered]);
 
-  const recent = recentApps(apps, apps.length);
-  const ranked = [...recent].sort((first, second) => second.launch_count - first.launch_count || (second.last_launched ?? "").localeCompare(first.last_launched ?? ""));
-  const mostUsedId = ranked[0]?.launch_count ? ranked[0].id : null;
-  const secondMostUsedId = ranked[1]?.launch_count ? ranked[1].id : null;
+  const shownLayout = drag ? moveApp(layout, drag.appId, drag.target.sectionId, drag.target.index) : layout;
+  const sections = buildSections(shownLayout, apps);
+  const hasGroups = layout.groups.length > 0;
+  const visibleSections = sections.filter((section) => {
+    if (activeGroupId) return section.id === activeGroupId;
+    if (!section.group) return section.apps.length > 0 || (hasGroups && drag !== null);
+    return !isFiltering || section.apps.length > 0;
+  });
   const updatesById = new Map(updates.map((update) => [update.app_id, update]));
+  const entryOf = (app: InstalledApp) => catalog.find((entry) => entry.app.id === app.catalog_id);
+  const draggedApp = drag ? apps.find((app) => app.id === drag.appId) : undefined;
+
   return (
-    <>
-      <h1 className="sr-only">Recent applications</h1>
-      <div className={cn("bento", isAnimated && "intro")}>
-        {recent.map((app, index) => (
-          <AppTile key={app.id} app={app} index={index} isMostUsed={app.id === mostUsedId} isSecondMostUsed={app.id === secondMostUsedId} entry={catalog.find((entry) => entry.app.id === app.catalog_id)} update={updatesById.get(app.id)}
-            onOpen={onOpen} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} disabled={disabled} />
-        ))}
-        <ShortcutTile index={recent.length} className="span-wide" icon={<Compass size={20} />} title="Discover apps" hint={`${catalog.length} ready-made entries`} onClick={onDiscover} />
-        {canAdd ? <ShortcutTile index={recent.length + 1} isDashed icon={<Plus size={20} />} title="Add an AppImage" hint="Or scan your folders" onClick={onAdd} /> : null}
-      </div>
-      {!recent.length ? <p className="mt-6 flex items-center gap-2 text-[var(--muted)]"><ShieldCheck size={16} />No apps match. Add an AppImage or scan your folders from the + menu.</p> : null}
-    </>
+    <div className="flex flex-col gap-7">
+      {activeGroupId ? null : <div className="flex items-baseline gap-2 -mb-3"><SectionTitle title="All apps" count={apps.length} level={1} /></div>}
+      {visibleSections.map((section) => {
+        const groupIndex = layout.groups.findIndex((group) => group.id === section.id);
+        const isCollapsed = section.group?.isCollapsed && !activeGroupId;
+        return (
+          <section key={section.id} data-section-id={section.id} aria-label={section.name}>
+            {section.group
+              ? <GroupHeader group={section.group} count={section.apps.length} position={{ isFirst: groupIndex === 0, isLast: groupIndex === layout.groups.length - 1 }}
+                  isEditing={editingGroupId === section.id} isPage={activeGroupId !== null} actions={groupActions} disabled={disabled} />
+              : hasGroups ? <div data-drop-section={UNGROUPED_ID} className="flex items-baseline gap-2 h-9 mb-2.5"><SectionTitle title={UNGROUPED_NAME} count={section.apps.length} /></div> : null}
+            {isCollapsed ? null : section.apps.length ? (
+              <div className={cn("bento", isAnimated && "intro")}>
+                {section.apps.map((app, index) => (
+                  <AppTile key={app.id} app={app} index={index} entry={entryOf(app)} update={updatesById.get(app.id)} placement={placementOf(sections, section, index)}
+                    actions={tileActions} isPlaceholder={drag?.appId === app.id} disabled={disabled} />
+                ))}
+              </div>
+            ) : <EmptyGroup sectionId={section.id} />}
+          </section>
+        );
+      })}
+      {!apps.length && (isFiltering || !hasGroups) ? (
+        <p className="flex items-center gap-2 text-[var(--muted)]"><PackageOpen size={16} />{isFiltering ? "No apps match your search." : "No apps yet. Add an AppImage or scan your folders from the + menu."}</p>
+      ) : null}
+      {drag && draggedApp ? (
+        <TileGhost app={draggedApp} entry={entryOf(draggedApp)} update={updatesById.get(draggedApp.id)}
+          isShrunk={drag.isOverZone} style={{ left: drag.x - drag.offsetX, top: drag.y - drag.offsetY, width: drag.width, height: drag.height, transformOrigin: `${drag.offsetX}px ${drag.offsetY}px` }} />
+      ) : null}
+    </div>
   );
 }

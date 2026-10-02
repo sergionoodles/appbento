@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Source for the PNG icons. Render with: rsvg-convert -w <size> -h <size> icon.svg -o <size>.png -->
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2030"/>
+      <stop offset="1" stop-color="#121420"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#plate)"/>
+  <rect x="32.5" y="32.5" width="447" height="447" rx="99.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <!-- Same 24-unit mark as src/components/logo.tsx, scaled 12x and centred. -->
+  <g transform="translate(112 112) scale(12)">
+    <path d="M5 0H9A2 2 0 0 1 11 2V9A2 2 0 0 1 9 11H2A2 2 0 0 1 0 9V5A5 5 0 0 1 5 0Z" fill="#8f82ff"/>
+    <path d="M15 0H19A5 5 0 0 1 24 5V9A2 2 0 0 1 22 11H15A2 2 0 0 1 13 9V2A2 2 0 0 1 15 0Z" fill="#edecf6" fill-opacity="0.8"/>
+    <path d="M2 13H9A2 2 0 0 1 11 15V22A2 2 0 0 1 9 24H5A5 5 0 0 1 0 19V15A2 2 0 0 1 2 13Z" fill="#edecf6" fill-opacity="0.4"/>
+    <path d="M15 13H22A2 2 0 0 1 24 15V19A5 5 0 0 1 19 24H15A2 2 0 0 1 13 22V15A2 2 0 0 1 15 13Z" fill="#8f82ff" fill-opacity="0.6"/>
+  </g>
+</svg>
