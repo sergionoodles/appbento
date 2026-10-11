@@ -288,5 +288,6 @@ pub(super) fn prepare_command(plan: &LaunchPlan) -> Command {
     if plan.clear_environment {
         command.env_clear().stdin(std::process::Stdio::null());
     }
+    command.envs(&plan.environment);
     command
 }

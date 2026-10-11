@@ -243,6 +243,8 @@ fn replacing_reviewed_appimage_requires_new_review() {
         let app = library.get_mut(source.to_str().unwrap()).unwrap();
         app.reviewed_digest = Some(crate::sandbox::appimage_digest(&source)?);
         app.launch_config = Some(crate::models::LaunchConfig {
+            arguments: Vec::new(),
+            environment: Default::default(),
             mode: crate::models::LaunchMode::Direct,
             permissions: Default::default(),
         });
@@ -294,6 +296,8 @@ fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
         .apps
         .remove(0);
     let config = crate::models::LaunchConfig {
+        arguments: vec!["--profile".into(), "My profile".into()],
+        environment: [("LABEL".into(), "literal value".into())].into(),
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };
@@ -346,6 +350,8 @@ fn manual_update_preserves_identity_permissions_history_and_desktop() {
     let (directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
     let config = crate::models::LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };
@@ -438,6 +444,8 @@ fn old_library_records_keep_saved_settings_and_discard_removed_metadata() {
         .apps
         .remove(0);
     let config = crate::models::LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: crate::models::LaunchMode::Direct,
         permissions: crate::models::SandboxPermissions::default(),
     };
@@ -478,6 +486,8 @@ fn update_inherits_permissions_and_history_changed_during_download() {
     let digest = crate::sandbox::appimage_digest(&source).unwrap();
     let staged = staged_update(&directory.0, &source);
     let config = crate::models::LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: crate::models::LaunchMode::Direct,
         permissions: crate::models::SandboxPermissions {
             network: true,
@@ -510,6 +520,8 @@ fn integrating_updated_portable_preserves_identity_configuration_and_private_hom
         .apps
         .remove(0);
     let config = crate::models::LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };

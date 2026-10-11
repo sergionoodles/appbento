@@ -13,6 +13,8 @@ export interface SandboxPermissions {
 }
 
 export interface LaunchConfig {
+  arguments?: string[];
+  environment?: Record<string, string>;
   mode: "direct" | "bubblewrap";
   permissions: SandboxPermissions;
 }

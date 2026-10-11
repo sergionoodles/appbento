@@ -45,6 +45,8 @@ fn unreviewed_app_cannot_launch_and_scan_does_not_apply_permissions() {
 fn default_plan_denies_host_access_and_preserves_uri_arguments() {
     let (directory, mut app) = fixture();
     app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: LaunchMode::Bubblewrap,
         permissions: SandboxPermissions::default(),
     });
@@ -89,6 +91,8 @@ fn grants_are_explicit_and_protected_paths_and_traversal_are_rejected() {
         ..Default::default()
     };
     app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: LaunchMode::Bubblewrap,
         permissions,
     });
@@ -134,6 +138,8 @@ fn actual_bubblewrap_isolates_home_files_environment_and_network() {
     let secret = directory.0.join("host-secret");
     fs::write(&secret, "private").unwrap();
     app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: LaunchMode::Bubblewrap,
         permissions: SandboxPermissions {
             persistent_data: false,
@@ -183,6 +189,8 @@ fn folder_and_image_replacement_after_planning_preserves_reviewed_access() {
     fs::write(approved.join("allowed"), "public").unwrap();
     app.reviewed_digest = Some(appimage_digest(Path::new(&app.file_path)).unwrap());
     app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: LaunchMode::Bubblewrap,
         permissions: SandboxPermissions {
             persistent_data: false,
@@ -232,6 +240,7 @@ fn direct_stdin_worker() {
         return;
     };
     let planned = LaunchPlan {
+        environment: Default::default(),
         program: image.to_string_lossy().into_owned(),
         arguments: Vec::new(),
         clear_environment: false,
@@ -277,6 +286,8 @@ fn changed_intermediate_folder_symlink_requires_review_instead_of_unpinned_mount
     let grant = approved.join("nested");
     app.reviewed_digest = Some(appimage_digest(Path::new(&app.file_path)).unwrap());
     app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
         mode: LaunchMode::Bubblewrap,
         permissions: SandboxPermissions {
             persistent_data: false,
@@ -292,4 +303,80 @@ fn changed_intermediate_folder_symlink_requires_review_instead_of_unpinned_mount
     let policy = directory.0.join("policy");
     let mut planned = plan(&app, &[], &policy, &Runtime::default()).unwrap();
     assert!(execution::pin_launch_paths_in_place(&mut planned, &app, &policy).is_err());
+}
+
+#[test]
+fn configured_options_apply_in_both_modes_before_uri_arguments() {
+    let (directory, mut app) = fixture();
+    for mode in [LaunchMode::Direct, LaunchMode::Bubblewrap] {
+        let config = LaunchConfig {
+            mode: mode.clone(),
+            permissions: Default::default(),
+            arguments: vec!["--profile".into(), "two words; $(literal)".into()],
+            environment: [
+                ("LABEL".into(), "two words=value".into()),
+                ("EMPTY".into(), "".into()),
+            ]
+            .into(),
+        };
+        app.launch_config = Some(config.clone());
+        let planned = plan(
+            &app,
+            &["file:///example".into()],
+            &directory.0.join("policy"),
+            &Runtime::default(),
+        )
+        .unwrap();
+        assert!(planned.arguments.ends_with(&[
+            "--profile".into(),
+            "two words; $(literal)".into(),
+            "file:///example".into()
+        ]));
+        if mode == LaunchMode::Direct {
+            assert_eq!(planned.environment, config.environment);
+            let command = execution::prepare_command(&planned);
+            assert!(command.get_envs().any(|(name, value)| name == "LABEL"
+                && value == Some(std::ffi::OsStr::new("two words=value"))));
+        } else {
+            assert!(planned.environment.is_empty());
+            assert!(planned
+                .arguments
+                .windows(3)
+                .any(|arguments| arguments == ["--setenv", "LABEL", "two words=value"]));
+            assert!(planned
+                .arguments
+                .windows(3)
+                .any(|arguments| arguments == ["--setenv", "EMPTY", ""]));
+        }
+    }
+}
+
+#[test]
+fn old_launch_configs_default_to_empty_options_and_invalid_options_are_rejected() {
+    let config: LaunchConfig =
+        serde_json::from_str(r#"{"mode":"direct","permissions":{}}"#).unwrap();
+    assert!(config.arguments.is_empty());
+    assert!(config.environment.is_empty());
+    let (directory, mut app) = fixture();
+    for name in ["", "1NAME", "BAD-NAME", "NAME=value"] {
+        let invalid = LaunchConfig {
+            environment: [(name.into(), "value".into())].into(),
+            ..config.clone()
+        };
+        assert!(validate_config(&invalid, &directory.0).is_err());
+        app.launch_config = Some(invalid);
+        assert!(plan(&app, &[], &directory.0, &Runtime::default()).is_err());
+    }
+    for invalid in [
+        LaunchConfig {
+            arguments: vec!["bad\0argument".into()],
+            ..config.clone()
+        },
+        LaunchConfig {
+            environment: [("NAME".into(), "bad\0value".into())].into(),
+            ..config
+        },
+    ] {
+        assert!(validate_config(&invalid, &directory.0).is_err());
+    }
 }

@@ -19,6 +19,9 @@ use crate::models::{InstalledApp, LaunchConfig, LaunchMode, PathAccess, SandboxP
 mod execution;
 pub use execution::{launch, launch_with_wait};
 
+#[path = "launch_options.rs"]
+mod launch_options;
+
 const SYSTEM_RUNTIME: &[&str] = &["/usr", "/bin", "/sbin", "/lib", "/lib64"];
 const BWRAP_CANDIDATES: &[&str] = &["/usr/bin/bwrap", "/usr/local/bin/bwrap", "/bin/bwrap"];
 const SYSTEM_CONFIG: &[&str] = &["/etc/ld.so.cache", "/etc/fonts", "/etc/localtime"];
@@ -126,6 +129,7 @@ pub fn validate_config(
     config: &LaunchConfig,
     policy_directory: &Path,
 ) -> Result<LaunchConfig, String> {
+    launch_options::validate(config)?;
     let paths = config
         .permissions
         .paths
@@ -146,6 +150,8 @@ pub fn validate_config(
         return Err("folder grants must not contain duplicate paths".into());
     }
     Ok(LaunchConfig {
+        arguments: config.arguments.clone(),
+        environment: config.environment.clone(),
         mode: config.mode.clone(),
         permissions: SandboxPermissions {
             paths,
@@ -184,6 +190,7 @@ fn validate_grant(path: &Path, policy_directory: &Path) -> Result<PathBuf, Strin
 
 #[derive(Debug)]
 pub struct LaunchPlan {
+    pub environment: std::collections::BTreeMap<String, String>,
     pub program: String,
     pub arguments: Vec<String>,
     pub clear_environment: bool,
@@ -199,11 +206,18 @@ pub fn plan(
         .launch_config
         .as_ref()
         .ok_or("Review and confirm launch permissions before the first launch")?;
+    launch_options::validate(config)?;
     let mut file = open_appimage(Path::new(&app.file_path))?;
     if config.mode == LaunchMode::Direct {
         return Ok(LaunchPlan {
             program: app.file_path.clone(),
-            arguments: uri_arguments.to_vec(),
+            arguments: config
+                .arguments
+                .iter()
+                .chain(uri_arguments)
+                .cloned()
+                .collect(),
+            environment: config.environment.clone(),
             clear_environment: false,
         });
     }
@@ -318,6 +332,9 @@ pub fn plan(
         &app.file_path,
         "/app/application.AppImage",
     );
+    for (name, value) in &config.environment {
+        arguments.extend(["--setenv".into(), name.clone(), value.clone()]);
+    }
     arguments.extend(
         [
             "--chdir",
@@ -329,11 +346,13 @@ pub fn plan(
         .into_iter()
         .map(str::to_owned),
     );
+    arguments.extend_from_slice(&config.arguments);
     arguments.extend_from_slice(uri_arguments);
     Ok(LaunchPlan {
         program: bwrap_program().into(),
         arguments,
         clear_environment: true,
+        environment: Default::default(),
     })
 }
 

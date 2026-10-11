@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { RefreshCw, Settings2, ShieldCheck, X, type LucideIcon } from "lucide-react";
+import { RefreshCw, Terminal, Settings2, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, UpdateConfig } from "@/lib/types";
 import { validateSandboxPaths } from "@/lib/sandbox";
 import { configFromDraft, draftFromConfig, isDraftChanged, isDraftComplete } from "@/lib/update-draft";
+import { launchDraftFromConfig, parseLaunchDraft } from "@/lib/launch-draft";
+import { LaunchPage } from "./app-settings/launch-page";
 import { cn } from "@/lib/utils";
 import { AppIcon } from "../app-icon";
 import { versionLabel } from "../app-status";
@@ -13,7 +15,7 @@ import { GeneralPage } from "./app-settings/general-page";
 import { PermissionsPage, initialLaunchConfig, useSandboxStatus } from "./app-settings/permissions-page";
 import { UpdatesPage } from "./app-settings/updates-page";
 
-type Page = "general" | "permissions" | "updates";
+type Page = "general" | "permissions" | "launch" | "updates";
 
 /** Where the dialog opens; "icon" is the General page with the icon editor already open. */
 export type SettingsTarget = Page | "icon";
@@ -21,6 +23,7 @@ export type SettingsTarget = Page | "icon";
 const PAGES: { page: Page; label: string; icon: LucideIcon; description: string }[] = [
   { page: "general", label: "General", icon: Settings2, description: "How this app appears in your library." },
   { page: "permissions", label: "Permissions", icon: ShieldCheck, description: "What this app can access when it runs." },
+  { page: "launch", label: "Launch", icon: Terminal, description: "Arguments and environment variables used every time this app launches." },
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
@@ -44,6 +47,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const [isEditingIcon, setIsEditingIcon] = useState(openTo === "icon");
   const [name, setName] = useState(app.name);
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(() => initialLaunchConfig(app));
+  const [launchDraft, setLaunchDraft] = useState(() => launchDraftFromConfig(initialLaunchConfig(app)));
   const [updateDraft, setUpdateDraft] = useState(() => draftFromConfig(app.update_config));
   const [localError, setLocalError] = useState<string | null>(null);
   const sandbox = useSandboxStatus(backend);
@@ -52,10 +56,12 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const hasNameChange = name.trim() !== app.name;
   // An app without a saved launch config always needs one, even if the defaults were left untouched.
   const hasPermissionChange = isReview || JSON.stringify(launchConfig) !== JSON.stringify(app.launch_config);
+  const hasLaunchChange = JSON.stringify(launchDraft) !== JSON.stringify(launchDraftFromConfig(initialLaunchConfig(app)));
+  const hasConfigChange = hasPermissionChange || hasLaunchChange;
   const hasUpdateChange = isDraftChanged(updateDraft, app.update_config);
-  const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, updates: hasUpdateChange };
-  const isPermissionsBlocked = hasPermissionChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
-  const canSave = !isSaving && !!name.trim() && (hasNameChange || hasPermissionChange || hasUpdateChange)
+  const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange };
+  const isPermissionsBlocked = hasConfigChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
+  const canSave = !isSaving && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
     && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft));
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
@@ -64,10 +70,21 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
     setLocalError(pathError);
     if (pathError || !canSave) return;
 
+    const config = (() => {
+      try {
+        return hasLaunchChange ? { ...launchConfig, ...parseLaunchDraft(launchDraft) } : launchConfig;
+      } catch (failure) {
+        setLocalError(failure instanceof Error ? failure.message : String(failure));
+        setPage("launch");
+        return null;
+      }
+    })();
+    if (!config) return;
+
     if (hasNameChange) onSaveName(name.trim());
     if (hasUpdateChange && !await onSaveUpdates(configFromDraft(updateDraft))) return;
     // Permissions go last because saving them can also launch the app.
-    if (hasPermissionChange && !await onSavePermissions(launchConfig, launchAfterSave)) return;
+    if (hasConfigChange && !await onSavePermissions(config, launchAfterSave)) return;
     onSaved();
   };
 
@@ -112,6 +129,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
               isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isSaving} /> : null}
             {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
               isReview={isReview} isSaving={isSaving} onError={setLocalError} /> : null}
+            {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isSaving} /> : null}
             {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving} /> : null}
           </div>
 

@@ -127,6 +127,10 @@ pub enum LaunchMode {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LaunchConfig {
+    #[serde(default)]
+    pub arguments: Vec<String>,
+    #[serde(default)]
+    pub environment: std::collections::BTreeMap<String, String>,
     pub mode: LaunchMode,
     #[serde(default)]
     pub permissions: SandboxPermissions,
