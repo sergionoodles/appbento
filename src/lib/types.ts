@@ -23,8 +23,6 @@ export interface SandboxStatus {
   error: string | null;
 }
 
-export type UpdateStrategy = "github-release" | "manual";
-
 export type ReleaseUpdateStrategy = "github-release" | "gitlab-release";
 
 export interface ReleaseUpdateConfig {
@@ -39,48 +37,9 @@ export interface ReleaseUpdateConfig {
 
 export type UpdateConfig = ReleaseUpdateConfig | { strategy: "direct-url"; url: string };
 
-export interface CatalogEntry {
-  sandbox?: SandboxPermissions | null;
-  app: {
-    id: string;
-    name: string;
-    summary: string;
-    description: string;
-    website: string;
-    docs_url: string | null;
-    repo: string | null;
-    license: string | null;
-    categories: string[];
-    verified: boolean;
-  };
-  branding: {
-    logo: string;
-    logo_dark: string | null;
-    cover: string | null;
-    screenshots: string[];
-    accent: string | null;
-  };
-  update: {
-    strategy: UpdateStrategy | null;
-    github: {
-      repo: string;
-      asset_regex: string;
-      prerelease: boolean;
-      channel: string;
-      architecture: string;
-      tag_regex: string;
-    } | null;
-  };
-  desktop: { categories: string | null; terminal: boolean; mime_type: string | null };
-  version_regex: string;
-  match_filenames: string[];
-  match_binaries: string[];
-}
-
 export interface InstalledApp {
   launch_config?: LaunchConfig | null;
   update_config?: UpdateConfig | null;
-  permission_defaults?: SandboxPermissions | null;
   id: string;
   name: string;
   file_path: string;
@@ -89,7 +48,6 @@ export interface InstalledApp {
   size_bytes: number;
   executable: boolean;
   integrated: boolean;
-  catalog_id: string | null;
   version_current: string | null;
   icon_path: string | null;
   desktop_id: string | null;

@@ -8,9 +8,9 @@ export function createPreviewApp(name: string, version: string | null): Installe
   const fileName = `${name}${version ? `-${version}` : ""}.AppImage`;
   const path = `/preview/Applications/${fileName}`;
   return {
-    launch_config: null, update_config: null, permission_defaults: null,
+    launch_config: null, update_config: null,
     id: path, name, file_path: path, source_path: null, file_name: fileName, size_bytes: 180_000_000,
-    executable: true, integrated: true, catalog_id: name.toLowerCase(),
+    executable: true, integrated: true,
     version_current: version, icon_path: null, desktop_id: null,
     launch_count: 0, last_launched: null, added_at: PREVIEW_DATE, file_created_at: PREVIEW_DATE,
   };
@@ -74,14 +74,6 @@ export function createPreviewApi(): AppApi {
       findApp(id);
       apps = apps.filter((app) => app.id !== id);
     },
-    async catalogList() { return [{
-      app: { id: "obsidian", name: "Obsidian", summary: "A private knowledge workspace", description: "Organize notes in local vaults.", website: "https://obsidian.md", docs_url: null, repo: null, license: null, categories: ["Productivity"], verified: true },
-      branding: { logo: "", logo_dark: null, cover: null, screenshots: [], accent: null },
-      update: { strategy: "manual", github: null },
-      desktop: { categories: null, terminal: false, mime_type: null },
-      version_regex: "", match_filenames: [], match_binaries: [],
-      sandbox: { ...restrictedPermissions(), display: true },
-    }]; },
     async settingsGet() { return structuredClone(settings); },
     async settingsSet(patch) {
       settings = { ...settings, ...patch };

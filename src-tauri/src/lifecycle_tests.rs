@@ -9,7 +9,6 @@ fn fixture() -> (TemporaryDirectory, Lifecycle, PathBuf) {
         library_path: directory.0.join("library.json"),
         managed_dir: directory.0.join("managed"),
         desktop_dir: directory.0.join("desktop"),
-        catalog: Vec::new(),
     };
     let source = directory.0.join("Example.AppImage");
     let mut header = [0; ELF_HEADER_LENGTH];
@@ -25,6 +24,18 @@ fn fixture() -> (TemporaryDirectory, Lifecycle, PathBuf) {
     header[18..20].copy_from_slice(&architecture.to_le_bytes());
     fs::write(&source, header).unwrap();
     (directory, service, source)
+}
+
+#[test]
+fn missing_appimage_reports_its_path_and_recovery_action() {
+    let (_directory, _service, source) = fixture();
+    fs::remove_file(&source).unwrap();
+
+    let error = open_appimage(&source).unwrap_err();
+
+    assert!(error.contains(source.to_str().unwrap()), "{error}");
+    assert!(error.contains("scan"), "{error}");
+    assert!(error.contains("remove the old library entry"), "{error}");
 }
 
 #[test]
@@ -188,15 +199,18 @@ fn rejects_deleting_portable_files() {
 }
 
 #[test]
-fn catalog_desktop_hints_are_applied() {
-    let (_directory, mut service, source) = fixture();
+fn integration_uses_generic_desktop_metadata() {
+    let (_directory, service, source) = fixture();
     let renamed = source.with_file_name("Neovim-0.10.0.AppImage");
     fs::rename(&source, &renamed).unwrap();
-    service.catalog = catalog::load_catalog().unwrap();
     let app = service.integrate(&renamed).unwrap();
+    assert_eq!(app.name, "Neovim 0.10.0");
+    assert!(app.version_current.is_none());
+    assert!(app.update_config.is_none());
     let desktop = fs::read_to_string(service.desktop_dir.join(app.desktop_id.unwrap())).unwrap();
-    assert!(desktop.contains("Terminal=true\n"));
-    assert!(desktop.contains("Categories=Development;\n"));
+    assert!(desktop.contains("Terminal=false\n"));
+    assert!(desktop.contains("Categories=Utility;\n"));
+    assert!(!desktop.contains("MimeType="));
     service.remove(&app.id, false).unwrap();
 }
 
@@ -247,8 +261,7 @@ fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_pr
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
     let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
-    let legacy =
-        desktop::legacy_desktop_content(Path::new(&app.file_path), &app.name, &Default::default());
+    let legacy = desktop::legacy_desktop_content(Path::new(&app.file_path), &app.name);
     fs::write(&desktop_path, legacy).unwrap();
     service.list().unwrap();
     let content = fs::read_to_string(&desktop_path).unwrap();
@@ -304,24 +317,18 @@ fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
 }
 
 #[test]
-fn matching_catalog_sandbox_profile_still_requires_review() {
-    let (directory, mut service, source) = fixture();
+fn imports_require_review_without_app_specific_presets() {
+    let (directory, service, source) = fixture();
     let matched = directory.0.join("Obsidian-1.2.3.AppImage");
     fs::rename(&source, &matched).unwrap();
-    service.catalog = crate::catalog::load_catalog().unwrap();
     let app = service
         .scan(vec![directory.0.clone()])
         .unwrap()
         .apps
         .remove(0);
-    assert_eq!(app.catalog_id.as_deref(), Some("obsidian"));
-    assert!(service
-        .catalog
-        .iter()
-        .find(|entry| entry.app.id == "obsidian")
-        .unwrap()
-        .sandbox
-        .is_some());
+    assert_eq!(app.name, "Obsidian 1.2.3");
+    assert!(app.version_current.is_none());
+    assert!(app.update_config.is_none());
     assert!(app.launch_config.is_none());
     assert!(app.reviewed_digest.is_none());
 }
@@ -423,23 +430,41 @@ fn update_rejects_invalid_download_changed_config_and_changed_file() {
 }
 
 #[test]
-fn initial_catalog_defaults_are_snapshotted_and_rescan_does_not_replace_them() {
-    let (directory, mut service, source) = fixture();
-    let matched = directory.0.join("Obsidian-1.2.3.AppImage");
-    fs::rename(&source, &matched).unwrap();
-    service.catalog = catalog::load_catalog().unwrap();
+fn old_library_records_keep_saved_settings_and_discard_removed_metadata() {
+    let (directory, service, _source) = fixture();
     let imported = service
         .scan(vec![directory.0.clone()])
         .unwrap()
         .apps
         .remove(0);
-    assert!(imported.update_config.is_some());
-    assert!(imported.permission_defaults.is_some());
-    service.catalog.clear();
+    let config = crate::models::LaunchConfig {
+        mode: crate::models::LaunchMode::Direct,
+        permissions: crate::models::SandboxPermissions::default(),
+    };
+    let configured = service.configure(&imported.id, &config).unwrap();
+    let mut record = serde_json::to_value(&configured).unwrap();
+    record["update_config"] =
+        serde_json::json!({ "strategy": "direct-url", "url": "https://example.com/app.AppImage" });
+    record["catalog_id"] = serde_json::json!("obsidian");
+    record["permission_defaults"] = serde_json::json!({ "network": true });
+    let library = serde_json::json!({ configured.id.clone(): record });
+    fs::write(&service.library_path, serde_json::to_vec(&library).unwrap()).unwrap();
+    let rescanned = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    assert_eq!(rescanned.launch_config, Some(config));
     assert_eq!(
-        service.scan(vec![directory.0.clone()]).unwrap().apps,
-        vec![imported]
+        rescanned.update_config,
+        Some(crate::models::UpdateConfig::DirectUrl {
+            url: "https://example.com/app.AppImage".into()
+        })
     );
+    assert_eq!(rescanned.name, configured.name);
+    let saved = serde_json::to_value(&rescanned).unwrap();
+    assert!(saved.get("catalog_id").is_none());
+    assert!(saved.get("permission_defaults").is_none());
 }
 
 #[test]

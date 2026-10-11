@@ -246,7 +246,6 @@ mod tests {
             size_bytes: 0,
             executable: true,
             integrated: false,
-            catalog_id: None,
             version_current: current.map(str::to_string),
             icon_path: None,
             desktop_id: None,
@@ -257,7 +256,6 @@ mod tests {
             launch_config: None,
             reviewed_digest: None,
             update_config: None,
-            permission_defaults: None,
         }
     }
 
@@ -294,8 +292,7 @@ mod tests {
 
     #[tokio::test]
     async fn unmatched_apps_report_unsupported_without_network() {
-        let mut installed = app(None);
-        installed.catalog_id = Some("obsidian".into());
+        let installed = app(None);
         let result = check_app(&installed).await;
         assert_eq!(result.status, UpdateStatus::Unsupported);
         assert!(result.update.is_none());

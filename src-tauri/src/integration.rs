@@ -4,7 +4,7 @@ use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
-use super::desktop::desktop_content_with_hints;
+use super::desktop::desktop_content_for_app;
 use super::recovery::{self, Artifact, Journal, Operation, OriginalMode};
 use super::{desktop_id, discovered_app, open_appimage, path_id, Lifecycle};
 use crate::models::InstalledApp;
@@ -85,7 +85,7 @@ impl Lifecycle {
             .get(&destination_id)
             .or_else(|| library.get(&source_id))
             .or_else(|| library.values().find(|app| app.file_path == source_id));
-        let mut app = discovered_app(&source, source_file, &self.catalog, existing)?;
+        let mut app = discovered_app(&source, source_file, existing)?;
         app.id = existing.map_or_else(|| destination_id.clone(), |app| app.id.clone());
         app.file_path = destination_id.clone();
         app.integrated = true;
@@ -97,24 +97,10 @@ impl Lifecycle {
         let desktop_path = self
             .desktop_dir
             .join(app.desktop_id.as_ref().ok_or("desktop id unavailable")?);
-        let hints = app
-            .catalog_id
-            .as_deref()
-            .and_then(|id| self.catalog.iter().find(|entry| entry.app.id == id))
-            .map(|entry| entry.desktop.clone())
-            .unwrap_or_default();
-        if hints
-            .categories
-            .iter()
-            .chain(hints.mime_type.iter())
-            .any(|value| value.chars().any(char::is_control))
-        {
-            return Err("desktop hints contain control characters".into());
-        }
         if let Some(existing) = existing.filter(|app| app.integrated) {
             super::desktop::migrate(&desktop_path, existing)?;
         }
-        let content = desktop_content_with_hints(&destination, &app.id, &app.name, &hints)?;
+        let content = desktop_content_for_app(&destination, &app.id, &app.name)?;
         let is_idempotent = source == destination
             && existing.is_some_and(|app| app.integrated)
             && desktop_path.exists();

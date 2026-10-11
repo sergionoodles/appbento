@@ -127,9 +127,9 @@ describe("AppImage permission review", () => {
     expect(libraryLaunch).not.toHaveBeenCalled();
   });
 
-  it("requires explicit import defaults and preserves editable grants when saving fails", async () => {
+  it("preserves editable grants when saving fails", async () => {
     const libraryConfigure = vi.fn<(id: string, config: LaunchConfig) => Promise<InstalledApp>>(async () => { throw new Error("Cannot save configuration"); });
-    const imported = { ...createPreviewApp("Obsidian", "1"), permission_defaults: { network: false, display: true, audio: false, gpu: false, persistent_data: true, paths: [] } };
+    const imported = createPreviewApp("Obsidian", "1");
     const { backend, libraryLaunch } = unreviewedBackend({ libraryConfigure, async libraryList() { return [imported]; } });
     const user = userEvent.setup();
     render(<App backend={backend} />);
@@ -142,7 +142,7 @@ describe("AppImage permission review", () => {
     expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
     await user.click(within(dialog).getByRole("checkbox", { name: /Display/ }));
     expect(within(dialog).getByRole("checkbox", { name: /Display/ })).not.toBeChecked();
-    await user.click(within(dialog).getByRole("button", { name: "Use import defaults" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: /Display/ }));
     expect(within(dialog).getByRole("checkbox", { name: /Display/ })).toBeChecked();
     expect(libraryConfigure).not.toHaveBeenCalled();
     await user.type(within(dialog).getByRole("textbox", { name: "Absolute path" }), "/home/me/Notes");
@@ -181,7 +181,7 @@ describe("AppImage permission review", () => {
 });
 
 
-it("permission defaults come from the import snapshot when the catalog changes", async () => {
+it("ignores old import suggestions and starts with generic permissions", async () => {
   const permissions = { network: true, display: true, audio: false, gpu: false, persistent_data: true, paths: [] };
   const imported = { ...createPreviewApp("Obsidian", "1"), permission_defaults: permissions };
   const preview = createPreviewApi();
@@ -193,6 +193,5 @@ it("permission defaults come from the import snapshot when the catalog changes",
   await user.click(within(dialog).getByRole("button", { name: "Permissions" }));
   await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
   expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
-  await user.click(within(dialog).getByRole("button", { name: "Use import defaults" }));
-  expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).toBeChecked();
+  expect(within(dialog).queryByRole("button", { name: "Use import defaults" })).not.toBeInTheDocument();
 });

@@ -16,7 +16,7 @@ pub fn open_appimage(path: &Path) -> Result<File, String> {
         return Err("AppImage path must be absolute UTF-8 without control characters".into());
     }
     if !std::fs::symlink_metadata(path)
-        .map_err(|error| error.to_string())?
+        .map_err(|error| file_access_error(path, error))?
         .file_type()
         .is_file()
     {
@@ -26,7 +26,7 @@ pub fn open_appimage(path: &Path) -> Result<File, String> {
         .read(true)
         .custom_flags(NO_FOLLOW | NONBLOCKING)
         .open(path)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| file_access_error(path, error))?;
     if !file
         .metadata()
         .map_err(|error| error.to_string())?
@@ -60,4 +60,15 @@ pub fn open_appimage(path: &Path) -> Result<File, String> {
     use std::io::Seek;
     file.rewind().map_err(|error| error.to_string())?;
     Ok(file)
+}
+
+fn file_access_error(path: &Path, error: std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        return format!(
+            "AppImage file is missing: {}. If it was moved or replaced, scan its current folder and remove the old library entry.",
+            path.display()
+        );
+    }
+
+    format!("cannot access AppImage {}: {error}", path.display())
 }

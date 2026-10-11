@@ -1,12 +1,11 @@
 //! Thin Tauri adapters for filesystem lifecycle services.
 use std::path::PathBuf;
 
-use crate::catalog;
 use crate::lifecycle::Lifecycle;
 use crate::models::{InstalledApp, LaunchConfig, ScanReport};
 use crate::{icons, persistence, settings};
 
-pub(crate) fn lifecycle(with_import_defaults: bool) -> Result<Lifecycle, String> {
+pub(crate) fn lifecycle() -> Result<Lifecycle, String> {
     let stored = settings::load()?;
     Ok(Lifecycle {
         library_path: persistence::data_path("library.json")?,
@@ -14,18 +13,13 @@ pub(crate) fn lifecycle(with_import_defaults: bool) -> Result<Lifecycle, String>
         desktop_dir: dirs::data_dir()
             .ok_or("data directory unavailable")?
             .join("applications"),
-        catalog: if with_import_defaults {
-            catalog::load_catalog()?
-        } else {
-            Vec::new()
-        },
     })
 }
 
 #[tauri::command]
 pub async fn library_list() -> Result<Vec<InstalledApp>, String> {
     tokio::task::spawn_blocking(|| {
-        let mut apps = lifecycle(false)?.list()?;
+        let mut apps = lifecycle()?.list()?;
         let arguments = std::env::args().skip(1).collect::<Vec<_>>();
         if arguments
             .first()
@@ -55,7 +49,7 @@ pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport,
         ];
         let directories =
             settings::merge_scan_dirs(defaults, extra_dirs.unwrap_or_default(), stored.scan_dirs)?;
-        lifecycle(true)?.scan(directories)
+        lifecycle()?.scan(directories)
     })
     .await
     .map_err(|error| error.to_string())??;
@@ -73,11 +67,10 @@ pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport,
 
 #[tauri::command]
 pub async fn library_integrate(source_path: String) -> Result<InstalledApp, String> {
-    let app = tokio::task::spawn_blocking(move || {
-        lifecycle(true)?.integrate(&PathBuf::from(source_path))
-    })
-    .await
-    .map_err(|error| error.to_string())??;
+    let app =
+        tokio::task::spawn_blocking(move || lifecycle()?.integrate(&PathBuf::from(source_path)))
+            .await
+            .map_err(|error| error.to_string())??;
     match discover_icon(&app).await {
         Ok(discovered) => Ok(discovered),
         Err(error) => {
@@ -96,7 +89,7 @@ pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
 
 #[tauri::command]
 pub async fn library_remove(id: String, delete_file: bool) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || lifecycle(false)?.remove(&id, delete_file))
+    tokio::task::spawn_blocking(move || lifecycle()?.remove(&id, delete_file))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -110,7 +103,7 @@ pub async fn sandbox_status() -> Result<crate::sandbox::SandboxStatus, String> {
 
 #[tauri::command]
 pub async fn library_configure(id: String, config: LaunchConfig) -> Result<InstalledApp, String> {
-    tokio::task::spawn_blocking(move || lifecycle(false)?.configure(&id, &config))
+    tokio::task::spawn_blocking(move || lifecycle()?.configure(&id, &config))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -123,9 +116,6 @@ async fn discover_icon(app: &InstalledApp) -> Result<InstalledApp, String> {
     let embedded = tokio::task::spawn_blocking(move || crate::embedded_icon::discover(&path))
         .await
         .map_err(|error| error.to_string())?;
-    let entry = catalog::load_catalog()?
-        .into_iter()
-        .find(|entry| Some(entry.app.id.as_str()) == app.catalog_id.as_deref());
     let (embedded_icon, website, extraction_error) = match embedded {
         Ok(metadata) => (metadata.icon, metadata.website, None),
         Err(error) => (None, None, Some(error)),
@@ -133,17 +123,17 @@ async fn discover_icon(app: &InstalledApp) -> Result<InstalledApp, String> {
     let bytes = match embedded_icon.filter(|bytes| icons::image_format(bytes).is_ok()) {
         Some(bytes) => bytes,
         None => {
-            let website = website
-                .as_deref()
-                .or_else(|| entry.as_ref().map(|entry| entry.app.website.as_str()));
-            let logo = entry.as_ref().map(|entry| entry.branding.logo.as_str());
-            if website.is_none() && logo.is_none() {
+            if website.is_none() {
                 return match extraction_error {
                     Some(error) => Err(error),
                     None => Ok(app.clone()),
                 };
             }
-            icons::discover(&icons::client()?, website, logo).await?
+            icons::discover(
+                &icons::client()?,
+                website.as_deref().ok_or("website unavailable")?,
+            )
+            .await?
         }
     };
     let id = app.id.clone();

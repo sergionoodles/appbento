@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 
-use crate::catalog;
-use crate::models::{CatalogEntry, InstalledApp, ScanReport, ScanWarning};
+use crate::models::{InstalledApp, ScanReport, ScanWarning};
 use crate::persistence;
 use crate::store::Library;
 
@@ -30,7 +29,6 @@ pub struct Lifecycle {
     pub library_path: PathBuf,
     pub managed_dir: PathBuf,
     pub desktop_dir: PathBuf,
-    pub catalog: Vec<CatalogEntry>,
 }
 
 fn path_id(path: &Path) -> Result<String, String> {
@@ -42,7 +40,6 @@ fn path_id(path: &Path) -> Result<String, String> {
 fn discovered_app(
     path: &Path,
     file: &File,
-    entries: &[CatalogEntry],
     existing: Option<&InstalledApp>,
 ) -> Result<InstalledApp, String> {
     let file_name = path
@@ -72,47 +69,19 @@ fn discovered_app(
             ..existing.clone()
         });
     }
-    let catalog_id = catalog::match_catalog(entries, &file_name);
-    let entry = catalog_id
-        .as_ref()
-        .and_then(|id| entries.iter().find(|entry| &entry.app.id == id));
-    let version = catalog_id
-        .as_deref()
-        .and_then(|id| catalog::version_from_filename(entries, id, &file_name));
     Ok(InstalledApp {
-        update_config: entry.and_then(|entry| {
-            if matches!(
-                entry.update.strategy,
-                Some(crate::models::UpdateStrategy::GithubRelease)
-            ) {
-                entry
-                    .update
-                    .github
-                    .clone()
-                    .map(crate::models::UpdateConfig::GithubRelease)
-            } else {
-                None
-            }
-        }),
-        permission_defaults: entry.and_then(|entry| entry.sandbox.clone()),
+        update_config: None,
         id: path_id(path)?,
-        name: catalog_id
-            .as_ref()
-            .and_then(|id| entries.iter().find(|entry| &entry.app.id == id))
-            .map(|entry| entry.app.name.clone())
-            .unwrap_or_else(|| {
-                file_name
-                    .trim_end_matches(".AppImage")
-                    .replace(['-', '_'], " ")
-            }),
+        name: file_name
+            .trim_end_matches(".AppImage")
+            .replace(['-', '_'], " "),
         file_path: path_id(path)?,
         file_name,
         size_bytes: metadata.len(),
         file_created_at: file_created_at(&metadata),
         executable: metadata.permissions().mode() & 0o111 != 0,
         integrated: false,
-        catalog_id,
-        version_current: version,
+        version_current: None,
         icon_path: None,
         desktop_id: None,
         source_path: None,
@@ -243,7 +212,7 @@ impl Lifecycle {
                         let existing = library
                             .get(&id)
                             .or_else(|| library.values().find(|app| app.file_path == id));
-                        let app = discovered_app(&path, &file, &self.catalog, existing)?;
+                        let app = discovered_app(&path, &file, existing)?;
                         library.insert(app.id.clone(), app.clone());
                         if !found
                             .iter()
@@ -287,12 +256,8 @@ impl Lifecycle {
                     let desktop = self.desktop_dir.join(&expected_desktop_id);
                     match fs::read_to_string(&desktop) {
                         Ok(content) => {
-                            let expected = desktop::desktop_content_with_hints(
-                                &path,
-                                &app.id,
-                                &app.name,
-                                &Default::default(),
-                            )?;
+                            let expected =
+                                desktop::desktop_content_for_app(&path, &app.id, &app.name)?;
                             let expected_exec = expected
                                 .lines()
                                 .find(|line| line.starts_with("Exec="))

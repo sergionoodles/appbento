@@ -325,3 +325,12 @@ describe("app settings", () => {
     expect(await screen.findByRole("button", { name: "Open Joplin" })).toBeInTheDocument();
   });
 });
+
+
+it("shows only the local library and its update tools", async () => {
+  render(<App backend={createPreviewApi()} />);
+  await screen.findByRole("heading", { name: "All apps" });
+  expect(screen.queryByRole("button", { name: "Discover" })).not.toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Filter applications" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Updates" })).toBeInTheDocument();
+});

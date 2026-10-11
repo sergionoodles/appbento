@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pencil, RotateCcw } from "lucide-react";
 import type { AppApi } from "@/lib/api";
-import type { CatalogEntry, InstalledApp } from "@/lib/types";
+import type { InstalledApp } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { AppIcon } from "../../app-icon";
 import { versionLabel } from "../../app-status";
@@ -11,9 +11,8 @@ import { Field, FieldGroup } from "../../ui/field";
 
 const BYTES_PER_MEGABYTE = 1e6;
 
-export function GeneralPage({ app, entry, backend, name, originalName, onNameChange, isEditingIcon, onEditIcon, onSaveIcon, isSaving }: {
+export function GeneralPage({ app, backend, name, originalName, onNameChange, isEditingIcon, onEditIcon, onSaveIcon, isSaving }: {
   app: InstalledApp;
-  entry?: CatalogEntry;
   backend: AppApi;
   name: string;
   originalName: string;
@@ -35,7 +34,7 @@ export function GeneralPage({ app, entry, backend, name, originalName, onNameCha
     <div className="flex flex-col gap-7">
       <div className="flex items-start gap-5">
         <div className="relative shrink-0">
-          <AppIcon app={app} name={name || originalName} entry={entry} className="size-20 rounded-xl" />
+          <AppIcon app={app} name={name || originalName} className="size-20 rounded-xl" />
           <button type="button" aria-label="Change icon" aria-expanded={isEditingIcon} disabled={isSaving} onClick={() => onEditIcon(!isEditingIcon)}
             className="absolute -bottom-1.5 -right-1.5 grid size-7 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] shadow-md ring-[3px] ring-[var(--panel)] transition-transform hover:scale-110 disabled:opacity-45 disabled:cursor-not-allowed">
             <Pencil size={13} />

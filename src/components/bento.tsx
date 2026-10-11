@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { PackageOpen } from "lucide-react";
 import { UNGROUPED_ID, moveApp, type AppGroup, type AppLayout } from "@/lib/app-layout";
 import type { TileDrag } from "@/lib/use-tile-drag";
-import type { CatalogEntry, InstalledApp, UpdateInfo } from "@/lib/types";
+import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AppTile, TileGhost, type TileActions, type TilePlacement } from "./app-tile";
 import { GroupHeader, SectionTitle, type GroupActions } from "./group-header";
@@ -54,11 +54,10 @@ function EmptyGroup({ sectionId }: { sectionId: string }) {
   );
 }
 
-export function Bento({ layout, apps, catalog, updates, activeGroupId, isFiltering, drag, editingGroupId, isAnimated, onEntered, tileActions, groupActions, disabled }: {
+export function Bento({ layout, apps, updates, activeGroupId, isFiltering, drag, editingGroupId, isAnimated, onEntered, tileActions, groupActions, disabled }: {
   layout: AppLayout;
   /** Apps to show, already filtered by the search query. */
   apps: InstalledApp[];
-  catalog: CatalogEntry[];
   updates: UpdateInfo[];
   activeGroupId: string | null;
   isFiltering: boolean;
@@ -85,7 +84,6 @@ export function Bento({ layout, apps, catalog, updates, activeGroupId, isFilteri
     return !isFiltering || section.apps.length > 0;
   });
   const updatesById = new Map(updates.map((update) => [update.app_id, update]));
-  const entryOf = (app: InstalledApp) => catalog.find((entry) => entry.app.id === app.catalog_id);
   const draggedApp = drag ? apps.find((app) => app.id === drag.appId) : undefined;
 
   return (
@@ -103,7 +101,7 @@ export function Bento({ layout, apps, catalog, updates, activeGroupId, isFilteri
             {isCollapsed ? null : section.apps.length ? (
               <div className={cn("bento", isAnimated && "intro")}>
                 {section.apps.map((app, index) => (
-                  <AppTile key={app.id} app={app} index={index} entry={entryOf(app)} update={updatesById.get(app.id)} placement={placementOf(sections, section, index)}
+                  <AppTile key={app.id} app={app} index={index} update={updatesById.get(app.id)} placement={placementOf(sections, section, index)}
                     actions={tileActions} isPlaceholder={drag?.appId === app.id} disabled={disabled} />
                 ))}
               </div>
@@ -115,7 +113,7 @@ export function Bento({ layout, apps, catalog, updates, activeGroupId, isFilteri
         <p className="flex items-center gap-2 text-[var(--muted)]"><PackageOpen size={16} />{isFiltering ? "No apps match your search." : "No apps yet. Add an AppImage or scan your folders from the + menu."}</p>
       ) : null}
       {drag && draggedApp ? (
-        <TileGhost app={draggedApp} entry={entryOf(draggedApp)} update={updatesById.get(draggedApp.id)}
+        <TileGhost app={draggedApp} update={updatesById.get(draggedApp.id)}
           isShrunk={drag.isOverZone} style={{ left: drag.x - drag.offsetX, top: drag.y - drag.offsetY, width: drag.width, height: drag.height, transformOrigin: `${drag.offsetX}px ${drag.offsetY}px` }} />
       ) : null}
     </div>

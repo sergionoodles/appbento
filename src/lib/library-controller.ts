@@ -1,12 +1,11 @@
 import type { AppApi } from "./api.ts";
 import { createLibraryActions } from "./library-actions.ts";
-import type { CatalogEntry, InstalledApp, ScanWarning, Settings, UpdateReport } from "./types";
+import type { InstalledApp, ScanWarning, Settings, UpdateReport } from "./types";
 
 export interface LibraryState {
   reviewIds: string[];
   launchAfterReview: boolean;
   apps: InstalledApp[];
-  catalog: CatalogEntry[];
   settings: Settings | null;
   updateReport: UpdateReport | null;
   scanWarnings: ScanWarning[];
@@ -23,7 +22,7 @@ function errorMessage(error: unknown): string {
 export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
     reviewIds: [], launchAfterReview: false,
-    apps: [], catalog: [], settings: null, updateReport: null, scanWarnings: [],
+    apps: [], settings: null, updateReport: null, scanWarnings: [],
     isLoading: true, isCheckingUpdates: false, operation: null, error: null,
   };
   let hasInitialized = false;
@@ -36,12 +35,11 @@ export function createLibraryController(backend: AppApi) {
   };
 
   const loadLocal = async () => {
-    const results = await Promise.allSettled([backend.libraryList(), backend.catalogList(), backend.settingsGet()]);
-    const [apps, catalog, settings] = results;
+    const results = await Promise.allSettled([backend.libraryList(), backend.settingsGet()]);
+    const [apps, settings] = results;
     const errors = results.filter((result) => result.status === "rejected").map((result) => errorMessage(result.reason));
     publish({
       apps: apps.status === "fulfilled" ? apps.value : state.apps,
-      catalog: catalog.status === "fulfilled" ? catalog.value : state.catalog,
       settings: settings.status === "fulfilled" ? settings.value : state.settings,
       isLoading: false,
       ...(errors.length ? { error: errors.join("; ") } : {}),

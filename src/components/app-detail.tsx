@@ -1,7 +1,8 @@
-import { ExternalLink, Globe, HardDrive, Monitor, MoreHorizontal, Play, RefreshCw, Settings, Image, Trash2, TriangleAlert, Volume2, Cpu, Database, type LucideIcon } from "lucide-react";
-import type { CatalogEntry, InstalledApp, SandboxPermissions, UpdateInfo } from "@/lib/types";
+import { useAppAppearance } from "./use-app-appearance";
+import { Globe, HardDrive, Monitor, MoreHorizontal, Play, RefreshCw, Settings, Image, Trash2, TriangleAlert, Volume2, Cpu, Database, type LucideIcon } from "lucide-react";
+import type { InstalledApp, SandboxPermissions, UpdateInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AppIcon, accentOf } from "./app-icon";
+import { AppIcon } from "./app-icon";
 import { accessLabel, updateLabel, versionLabel } from "./app-status";
 import { formatAge } from "@/lib/relative-time";
 import { StageHeader } from "./stage";
@@ -48,9 +49,8 @@ function AccessTile({ app }: { app: InstalledApp }) {
   );
 }
 
-export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, onLaunch, onSettings, onIcon, onRemove, onOpenUrl, onUpdateSource, onCheckUpdate, onInstallUpdate, isCheckingUpdates }: {
+export function AppDetail({ app, update, isLaunching, disabled, onBack, onLaunch, onSettings, onIcon, onRemove, onUpdateSource, onCheckUpdate, onInstallUpdate, isCheckingUpdates }: {
   app: InstalledApp;
-  entry?: CatalogEntry;
   update?: UpdateInfo;
   isLaunching: boolean;
   disabled: boolean;
@@ -63,16 +63,15 @@ export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, o
   onSettings: (id: string) => void;
   onIcon: (id: string) => void;
   onRemove: (id: string) => void;
-  onOpenUrl: (url: string) => void;
 }) {
+  const appearance = useAppAppearance(app.name, app);
   const updateText = updateLabel(update);
   const fileAge = formatAge(app.file_created_at);
   return (
-    <div style={{ "--tile-accent": accentOf(entry) } as React.CSSProperties}>
+    <div style={appearance.style}>
       <StageHeader title={app.name} onBack={onBack}>
         <Button variant="soft" size="icon" aria-label={`Settings for ${app.name}`} disabled={disabled} onClick={() => onSettings(app.id)}><Settings size={16} /></Button>
         <Menu label={`More options for ${app.name}`} variant="soft" icon={<MoreHorizontal size={17} />} disabled={disabled}>
-          {entry ? <MenuItem icon={<ExternalLink size={15} />} onSelect={() => onOpenUrl(entry.app.website)}>Website</MenuItem> : null}
           <MenuItem icon={<RefreshCw size={15} />} onSelect={() => onUpdateSource(app.id)}>Update source</MenuItem>
           <MenuItem icon={<Image size={15} />} onSelect={() => onIcon(app.id)}>Change icon</MenuItem>
           <MenuItem icon={<Trash2 size={15} />} onSelect={() => onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
@@ -82,9 +81,9 @@ export function AppDetail({ app, entry, update, isLaunching, disabled, onBack, o
       <div className="grid gap-3.5 md:grid-cols-3 md:grid-rows-[auto_auto]">
         <section data-stage aria-label={`${app.name} launcher`} className="tile md:col-span-2 md:row-span-2 min-h-[380px] p-9 flex flex-col justify-between">
           <div className="settle flex flex-col gap-6">
-            <AppIcon app={app} name={app.name} entry={entry} className="size-36" />
+            <AppIcon app={app} name={app.name} className="size-36" />
             <div>
-              <p className="text-[var(--muted)] max-w-[40ch] text-[17px] leading-snug">{entry?.app.summary ?? "A portable app, ready to launch."}</p>
+              <p className="text-[var(--muted)] max-w-[40ch] text-[17px] leading-snug">A portable app, ready to launch.</p>
               <p className="mt-3 text-[14px] text-[var(--muted)]">{versionLabel(app)} · {accessLabel(app)}</p>
             </div>
           </div>

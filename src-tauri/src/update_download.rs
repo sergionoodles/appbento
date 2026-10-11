@@ -210,7 +210,6 @@ async fn install_download(
         library_path: lifecycle.library_path.clone(),
         managed_dir: lifecycle.managed_dir.clone(),
         desktop_dir: lifecycle.desktop_dir.clone(),
-        catalog: Vec::new(),
     };
     tokio::task::spawn_blocking(move || {
         lifecycle.replace_update(&app, &path, latest.as_deref(), &expected_digest)

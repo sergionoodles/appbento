@@ -108,28 +108,8 @@ fn read_image(path: &Path) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-pub async fn discover(
-    client: &Client,
-    website: Option<&str>,
-    catalog_logo: Option<&str>,
-) -> Result<Vec<u8>, String> {
-    let mut errors = Vec::new();
-    if let Some(website) = website.filter(|website| !website.trim().is_empty()) {
-        match discover_website(client, website).await {
-            Ok(bytes) => return Ok(bytes),
-            Err(error) => errors.push(format!("website favicon failed: {error}")),
-        }
-    }
-    if let Some(logo) = catalog_logo.filter(|logo| !logo.trim().is_empty()) {
-        match acquire(client, logo).await {
-            Ok(bytes) => return Ok(bytes),
-            Err(error) => errors.push(format!("catalog icon failed: {error}")),
-        }
-    }
-    if errors.is_empty() {
-        return Err("no website or catalog icon metadata available".into());
-    }
-    Err(errors.join("; "))
+pub async fn discover(client: &Client, website: &str) -> Result<Vec<u8>, String> {
+    discover_website(client, website).await
 }
 
 async fn discover_website(client: &Client, website: &str) -> Result<Vec<u8>, String> {
@@ -306,7 +286,11 @@ pub fn data_url(directory: &Path, path: &str) -> Result<String, String> {
     }
     let bytes = read_image(&path)?;
     let (_, mime) = image_format(&bytes)?;
-    Ok(format!("data:{mime};base64,{}", base64(&bytes)))
+    Ok(encode_data_url(mime, &bytes))
+}
+
+pub(crate) fn encode_data_url(mime: &str, bytes: &[u8]) -> String {
+    format!("data:{mime};base64,{}", base64(bytes))
 }
 
 fn base64(bytes: &[u8]) -> String {

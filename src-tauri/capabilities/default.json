@@ -25,8 +25,6 @@
     "allow-library-configure",
     "allow-sandbox-status",
     "allow-library-remove",
-    "allow-catalog-list",
-    "allow-catalog-get",
     "allow-updates-check",
     "allow-updates-check-all",
     "allow-updates-configure",

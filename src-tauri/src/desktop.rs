@@ -1,5 +1,4 @@
 //! Safe desktop-entry identities and serialization.
-use crate::models::DesktopHints;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
@@ -12,25 +11,19 @@ pub fn desktop_id(path: &Path) -> String {
 
 #[cfg(test)]
 pub fn desktop_content(path: &Path, name: &str) -> Result<String, String> {
-    desktop_content_with_hints(
-        path,
-        &path.to_string_lossy(),
-        name,
-        &DesktopHints::default(),
-    )
+    desktop_content_for_app(path, &path.to_string_lossy(), name)
 }
 
-pub(super) fn desktop_content_with_hints(
+pub(super) fn desktop_content_for_app(
     path: &Path,
     app_id: &str,
     name: &str,
-    hints: &DesktopHints,
 ) -> Result<String, String> {
     let executable = resolve_launcher(
         &std::env::current_exe().map_err(|error| error.to_string())?,
         std::env::var_os("APPIMAGE").as_deref().map(Path::new),
     )?;
-    let old = legacy_desktop_content(path, name, hints);
+    let old = legacy_desktop_content(path, name);
     let executable = escape_exec(&executable.to_string_lossy());
     let id = escape_exec(app_id);
     Ok(old
@@ -56,7 +49,7 @@ fn escape_exec(value: &str) -> String {
         .replace('%', "%%")
 }
 
-pub(super) fn legacy_desktop_content(path: &Path, name: &str, hints: &DesktopHints) -> String {
+pub(super) fn legacy_desktop_content(path: &Path, name: &str) -> String {
     let display_name = name
         .replace('\\', "\\\\")
         .replace('\n', "\\n")
@@ -68,14 +61,7 @@ pub(super) fn legacy_desktop_content(path: &Path, name: &str, hints: &DesktopHin
         .replace('`', "\\\\`")
         .replace('$', "\\\\$")
         .replace('%', "%%");
-    let terminal = hints.terminal;
-    let categories = hints.categories.as_deref().unwrap_or("Utility;");
-    let mime_type = hints
-        .mime_type
-        .as_ref()
-        .map(|value| format!("MimeType={value}\n"))
-        .unwrap_or_default();
-    format!("[Desktop Entry]\nType=Application\nName={display_name}\nExec=\"{escaped_path}\" %U\nTerminal={terminal}\nCategories={categories}\n{mime_type}X-AppBento-Managed=true\n")
+    format!("[Desktop Entry]\nType=Application\nName={display_name}\nExec=\"{escaped_path}\" %U\nTerminal=false\nCategories=Utility;\nX-AppBento-Managed=true\n")
 }
 
 pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<(), String> {
@@ -85,9 +71,8 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         Err(error) => return Err(error.to_string()),
     };
     let app_path = Path::new(&app.file_path);
-    let current =
-        desktop_content_with_hints(app_path, &app.id, &app.name, &DesktopHints::default())?;
-    let legacy = legacy_desktop_content(app_path, &app.name, &DesktopHints::default());
+    let current = desktop_content_for_app(app_path, &app.id, &app.name)?;
+    let legacy = legacy_desktop_content(app_path, &app.name);
     let expected_exec = current
         .lines()
         .find(|line| line.starts_with("Exec="))

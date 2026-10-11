@@ -1,8 +1,9 @@
+import { useAppAppearance } from "./use-app-appearance";
 import { ArrowLeft, ArrowRight, FolderInput, FolderPlus, Image, MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
-import type { CatalogEntry, InstalledApp, UpdateInfo } from "@/lib/types";
+import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
-import { AppIcon, accentOf } from "./app-icon";
+import { AppIcon } from "./app-icon";
 import { accessLabel, updateLabel, versionLabel } from "./app-status";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 
@@ -25,19 +26,14 @@ export interface TilePlacement {
   destinations: { id: string; name: string }[];
 }
 
-function tileStyle(entry: CatalogEntry | undefined, index: number) {
-  return { "--tile-accent": accentOf(entry), "--i": index } as React.CSSProperties;
-}
-
 function statusText(app: InstalledApp, update?: UpdateInfo) {
   const fileAge = formatAge(app.file_created_at);
   const baseStatus = app.launch_config ? `${accessLabel(app)} · ${versionLabel(app)}` : accessLabel(app);
   return [updateLabel(update), baseStatus, fileAge].filter(Boolean).join(" · ");
 }
 
-function TileFace({ app, entry, update, menu, launch }: {
+function TileFace({ app, update, menu, launch }: {
   app: InstalledApp;
-  entry?: CatalogEntry;
   update?: UpdateInfo;
   menu?: React.ReactNode;
   launch?: React.ReactNode;
@@ -45,7 +41,7 @@ function TileFace({ app, entry, update, menu, launch }: {
   return (
     <div className="pointer-events-none relative h-full flex flex-col justify-between p-4">
       <div className="flex items-start justify-between">
-        <AppIcon app={app} name={app.name} entry={entry} className="size-12" />
+        <AppIcon app={app} name={app.name} className="size-12" />
         {menu}
       </div>
       <div className="flex items-end justify-between gap-3">
@@ -60,16 +56,16 @@ function TileFace({ app, entry, update, menu, launch }: {
 }
 
 /** The floating copy of a tile that follows the pointer while it is dragged. */
-export function TileGhost({ app, entry, update, isShrunk, style }: {
+export function TileGhost({ app, update, isShrunk, style }: {
   app: InstalledApp;
-  entry?: CatalogEntry;
   update?: UpdateInfo;
   isShrunk: boolean;
   style: React.CSSProperties;
 }) {
+  const appearance = useAppAppearance(app.name, app);
   return (
-    <div aria-hidden="true" className={cn("tile tile-ghost", isShrunk && "tile-ghost-shrunk")} style={{ ...tileStyle(entry, 0), ...style }}>
-      <TileFace app={app} entry={entry} update={update} />
+    <div aria-hidden="true" className={cn("tile tile-ghost", isShrunk && "tile-ghost-shrunk")} style={{ ...appearance.style, "--i": 0, ...style } as React.CSSProperties}>
+      <TileFace app={app} update={update} />
     </div>
   );
 }
@@ -95,9 +91,8 @@ function openTileMenu(event: React.MouseEvent<HTMLElement>) {
   if (trigger.getAttribute("aria-expanded") !== "true") trigger.click();
 }
 
-export function AppTile({ app, entry, update, index, placement, actions, isPlaceholder, disabled }: {
+export function AppTile({ app, update, index, placement, actions, isPlaceholder, disabled }: {
   app: InstalledApp;
-  entry?: CatalogEntry;
   update?: UpdateInfo;
   index: number;
   placement: TilePlacement;
@@ -105,6 +100,7 @@ export function AppTile({ app, entry, update, index, placement, actions, isPlace
   isPlaceholder: boolean;
   disabled: boolean;
 }) {
+  const appearance = useAppAppearance(app.name, app);
   const menu = (
     <div className="pointer-events-auto tile-action -mr-1.5 -mt-1.5">
       <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={17} />} disabled={disabled}>
@@ -126,10 +122,10 @@ export function AppTile({ app, entry, update, index, placement, actions, isPlace
   );
 
   return (
-    <article className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={tileStyle(entry, index)}
+    <article className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={{ ...appearance.style, "--i": index } as React.CSSProperties}
       onPointerDown={(event) => actions.onDragStart(event, app.id)} onContextMenu={openTileMenu}>
       <button type="button" className="tile-hit" aria-label={`Open ${app.name}`} onClick={() => actions.onOpen(app.id)} />
-      <TileFace app={app} entry={entry} update={update} menu={menu} launch={launch} />
+      <TileFace app={app} update={update} menu={menu} launch={launch} />
     </article>
   );
 }

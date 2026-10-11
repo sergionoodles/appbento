@@ -64,7 +64,6 @@ fn rescan_backfills_existing_missing_icons_and_preserves_custom_icons() {
         library_path: library_path.clone(),
         managed_dir: apps.clone(),
         desktop_dir: data.join("applications"),
-        catalog: Vec::new(),
     };
     let original = service.scan(vec![apps.clone()]).unwrap();
     assert_eq!(original.apps.len(), 2);

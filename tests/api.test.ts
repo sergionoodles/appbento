@@ -18,7 +18,7 @@ import { createPreviewApi } from "../src/lib/preview.ts";
 
 test("all native read failures propagate without fabricating state", async () => {
   const backend = createNativeApi(async () => { throw new Error("IPC unavailable"); });
-  for (const read of [backend.libraryList, backend.catalogList, backend.settingsGet, backend.updatesCheckAll]) {
+  for (const read of [backend.libraryList, backend.settingsGet, backend.updatesCheckAll]) {
     await assert.rejects(read(), /IPC unavailable/);
   }
 });

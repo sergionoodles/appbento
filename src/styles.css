@@ -77,6 +77,7 @@ html { color-scheme: var(--scheme, dark); }
 
 /* A desktop window: the content area scrolls, not the page, and interface text is not selectable. */
 body {
+  --tile-accent: var(--accent);
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
@@ -132,7 +133,6 @@ option { background-color: var(--panel2); color: var(--fg); }
 }
 
 .tile {
-  --tile-accent: var(--accent);
   position: relative;
   border-radius: 10px;
   border: 1px solid color-mix(in oklab, var(--tile-accent) 5%, var(--hairline));

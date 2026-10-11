@@ -1,5 +1,4 @@
 mod apps;
-mod catalog;
 mod embedded_icon;
 mod github;
 mod icons;
@@ -13,19 +12,7 @@ mod update_download;
 mod update_sources;
 mod updates;
 
-use models::{CatalogEntry, UpdateCheckResult, UpdateReport};
-
-#[tauri::command]
-fn catalog_list() -> Result<Vec<CatalogEntry>, String> {
-    catalog::load_catalog()
-}
-
-#[tauri::command]
-fn catalog_get(id: String) -> Result<Option<CatalogEntry>, String> {
-    Ok(catalog::load_catalog()?
-        .into_iter()
-        .find(|entry| entry.app.id == id))
-}
+use models::{UpdateCheckResult, UpdateReport};
 
 async fn update_snapshot() -> Result<Vec<models::InstalledApp>, String> {
     tokio::task::spawn_blocking(|| Ok(store::load_all()?.into_values().collect()))
@@ -74,7 +61,7 @@ async fn updates_install(app_id: String) -> Result<models::InstalledApp, String>
         .into_iter()
         .find(|app| app.id == app_id)
         .ok_or("app not found")?;
-    let lifecycle = tokio::task::spawn_blocking(|| apps::lifecycle(false))
+    let lifecycle = tokio::task::spawn_blocking(|| apps::lifecycle())
         .await
         .map_err(|error| error.to_string())??;
     update_download::install(app, lifecycle).await
@@ -120,8 +107,6 @@ pub fn run() {
             apps::library_icon,
             apps::sandbox_status,
             apps::library_remove,
-            catalog_list,
-            catalog_get,
             updates_check,
             updates_check_all,
             updates_configure,

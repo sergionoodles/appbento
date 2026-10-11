@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RefreshCw, Settings2, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import type { AppApi } from "@/lib/api";
-import type { CatalogEntry, InstalledApp, LaunchConfig, UpdateConfig } from "@/lib/types";
+import type { InstalledApp, LaunchConfig, UpdateConfig } from "@/lib/types";
 import { validateSandboxPaths } from "@/lib/sandbox";
 import { configFromDraft, draftFromConfig, isDraftChanged, isDraftComplete } from "@/lib/update-draft";
 import { cn } from "@/lib/utils";
@@ -24,9 +24,8 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, catalogEntry, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, isSaving, error, returnFocusElement }: {
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, isSaving, error, returnFocusElement }: {
   app: InstalledApp;
-  catalogEntry?: CatalogEntry;
   backend: AppApi;
   openTo: SettingsTarget;
   originalName: string;
@@ -78,7 +77,7 @@ export function AppSettingsDialog({ app, catalogEntry, backend, openTo, original
       <div className="grid h-full min-h-0 grid-cols-[232px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col gap-5 border-r border-[var(--border)] bg-[color-mix(in_oklab,var(--panel2)_55%,var(--panel))] px-3 py-5">
           <div className="flex items-center gap-3 px-2">
-            <AppIcon app={app} name={app.name} entry={catalogEntry} className="size-10" />
+            <AppIcon app={app} name={app.name} className="size-10" />
             <div className="min-w-0">
               <p className="truncate text-[15px] font-semibold leading-tight">{app.name}</p>
               <p className="truncate text-[12px] text-[var(--muted)]">{versionLabel(app)}</p>
@@ -109,9 +108,9 @@ export function AppSettingsDialog({ app, catalogEntry, backend, openTo, original
           </header>
 
           <div key={page} className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
-            {page === "general" ? <GeneralPage app={app} entry={catalogEntry} backend={backend} name={name} originalName={originalName} onNameChange={setName}
+            {page === "general" ? <GeneralPage app={app} backend={backend} name={name} originalName={originalName} onNameChange={setName}
               isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isSaving} /> : null}
-            {page === "permissions" ? <PermissionsPage app={app} backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
+            {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
               isReview={isReview} isSaving={isSaving} onError={setLocalError} /> : null}
             {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving} /> : null}
           </div>

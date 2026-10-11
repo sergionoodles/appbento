@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CircleCheck, FolderOpen, Folder, Loader2, ShieldCheck, ShieldOff, Sparkles, TriangleAlert, X } from "lucide-react";
+import { CircleCheck, FolderOpen, Folder, Loader2, ShieldCheck, ShieldOff, TriangleAlert, X } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, SandboxPath, SandboxPermissions, SandboxStatus } from "@/lib/types";
 import { restrictedPermissions, validateSandboxPaths } from "@/lib/sandbox";
@@ -58,8 +58,7 @@ export function useSandboxStatus(backend: AppApi) {
   return { status, isChecking, isReady, recheck };
 }
 
-export function PermissionsPage({ app, backend, config, onChange, sandbox, isReview, isSaving, onError }: {
-  app: InstalledApp;
+export function PermissionsPage({ backend, config, onChange, sandbox, isReview, isSaving, onError }: {
   backend: AppApi;
   config: LaunchConfig;
   onChange: (config: LaunchConfig) => void;
@@ -68,9 +67,7 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
   isSaving: boolean;
   onError: (error: string | null) => void;
 }) {
-  const [hasUsedDefaults, setHasUsedDefaults] = useState(false);
   const setPermissions = (permissions: SandboxPermissions) => onChange({ ...config, permissions });
-  const defaults = app.permission_defaults;
 
   return (
     <div className="flex flex-col gap-7">
@@ -99,13 +96,6 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
         ? <Notice tone="warn" icon={<TriangleAlert size={16} />}>This app will run with your normal account access, including your files, network, and devices.</Notice>
         : <>
           <BubblewrapStatus status={sandbox.status} isChecking={sandbox.isChecking} isSaving={isSaving} onRecheck={() => void sandbox.recheck()} />
-          {defaults ? <Notice icon={<Sparkles size={16} />} action={
-            <Button size="sm" variant="outline" disabled={isSaving} onClick={() => {
-              onChange({ mode: "bubblewrap", permissions: structuredClone(defaults) });
-              setHasUsedDefaults(true);
-              onError(null);
-            }}>Use import defaults</Button>
-          }>{hasUsedDefaults ? "Defaults applied. Review every permission and folder below before saving." : "Permissions were suggested when this app was imported. They are not applied until you choose them."}</Notice> : null}
           <PermissionToggles permissions={config.permissions} isSaving={isSaving} onChange={setPermissions} />
           <SharedFolders permissions={config.permissions} backend={backend} isSaving={isSaving} onChange={setPermissions} onError={onError} />
         </>}

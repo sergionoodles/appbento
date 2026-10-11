@@ -50,20 +50,16 @@ fn server(responses: Vec<(&'static str, u16, Vec<u8>)>) -> (String, thread::Join
 }
 
 #[tokio::test]
-async fn website_icon_wins_without_requesting_catalog_logo() {
+async fn website_icon_is_discovered() {
     let html = b"<link rel='icon' href='/app.gif'>";
     let (url, handle) = server(vec![
         ("/website", 200, html.to_vec()),
         ("/app.gif", 200, GIF.to_vec()),
     ]);
     assert_eq!(
-        discover(
-            &client().unwrap(),
-            Some(&format!("{url}/website")),
-            Some(&format!("{url}/logo"))
-        )
-        .await
-        .unwrap(),
+        discover(&client().unwrap(), &format!("{url}/website"))
+            .await
+            .unwrap(),
         GIF
     );
     handle.join().unwrap();
@@ -78,7 +74,7 @@ async fn website_uses_relative_favicon_after_invalid_candidate() {
         ("/project/icons/app.gif?x=1&y=2", 200, GIF.to_vec()),
     ]);
     assert_eq!(
-        discover(&client().unwrap(), Some(&format!("{url}/project/")), None)
+        discover(&client().unwrap(), &format!("{url}/project/"))
             .await
             .unwrap(),
         GIF
@@ -87,22 +83,14 @@ async fn website_uses_relative_favicon_after_invalid_candidate() {
 }
 
 #[tokio::test]
-async fn failed_website_falls_back_to_catalog_logo() {
+async fn failed_website_reports_an_error() {
     let (url, handle) = server(vec![
         ("/website", 404, Vec::new()),
         ("/favicon.ico", 404, Vec::new()),
-        ("/logo", 200, GIF.to_vec()),
     ]);
-    assert_eq!(
-        discover(
-            &client().unwrap(),
-            Some(&format!("{url}/website")),
-            Some(&format!("{url}/logo"))
-        )
+    assert!(discover(&client().unwrap(), &format!("{url}/website"))
         .await
-        .unwrap(),
-        GIF
-    );
+        .is_err());
     handle.join().unwrap();
 }
 
@@ -202,7 +190,6 @@ fn custom_icon_replaces_default_and_later_discovery_preserves_override() {
         size_bytes: 20,
         executable: true,
         integrated: false,
-        catalog_id: None,
         version_current: None,
         icon_path: None,
         desktop_id: None,
@@ -213,7 +200,6 @@ fn custom_icon_replaces_default_and_later_discovery_preserves_override() {
         launch_config: None,
         reviewed_digest: None,
         update_config: None,
-        permission_defaults: None,
     };
     persistence::mutate(&library_path, |library: &mut crate::store::Library| {
         library.insert(app.id.clone(), app.clone());

@@ -1,4 +1,4 @@
-import type { CatalogEntry, InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
+import type { InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 
 export interface Commands {
@@ -11,8 +11,6 @@ export interface Commands {
   library_integrate: { args: { sourcePath: string }; result: InstalledApp };
   library_launch: { args: { id: string }; result: InstalledApp };
   library_remove: { args: { id: string; deleteFile: boolean }; result: null };
-  catalog_list: { args: undefined; result: CatalogEntry[] };
-  catalog_get: { args: { id: string }; result: CatalogEntry | null };
   settings_get: { args: undefined; result: Settings };
   settings_set: { args: { scanDirs: string[] | null; managedDir: string | null }; result: Settings };
   updates_configure: { args: { appId: string; config: UpdateConfig | null }; result: InstalledApp };
@@ -38,7 +36,6 @@ export interface AppApi {
   libraryIntegrate(sourcePath: string): Promise<InstalledApp>;
   libraryLaunch(id: string): Promise<InstalledApp>;
   libraryRemove(id: string, deleteFile: boolean): Promise<void>;
-  catalogList(): Promise<CatalogEntry[]>;
   settingsGet(): Promise<Settings>;
   settingsSet(patch: Partial<Settings>): Promise<Settings>;
   updatesConfigure(appId: string, config: UpdateConfig | null): Promise<InstalledApp>;
@@ -77,7 +74,6 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     libraryRemove: async (id, deleteFile) => {
       await transport("library_remove", { id, deleteFile });
     },
-    catalogList: () => transport("catalog_list", undefined),
     settingsGet: () => transport("settings_get", undefined),
     settingsSet: (patch) => transport("settings_set", {
       scanDirs: patch.scan_dirs ?? null,

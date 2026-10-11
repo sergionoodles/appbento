@@ -33,7 +33,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
     <header className="h-[52px] shrink-0 flex items-center gap-2 px-4 border-b border-[var(--hairline)]">
       <div className="relative min-w-0 w-72">
         <Search size={15} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-        <Input ref={search} aria-label="Filter applications and catalog" placeholder="Search apps (Ctrl+F)" value={query} onChange={(event) => onQuery(event.target.value)} className="h-8 pl-8 text-[13px]" />
+        <Input ref={search} aria-label="Filter applications" placeholder="Search apps (Ctrl+F)" value={query} onChange={(event) => onQuery(event.target.value)} className="h-8 pl-8 text-[13px]" />
       </div>
       {!isNative ? <span className="text-[12px] text-[var(--warn)]" title="Launch and file management run in the desktop app.">sample data</span> : null}
       <div className="ml-auto flex items-center gap-1">

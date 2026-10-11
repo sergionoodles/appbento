@@ -12,17 +12,16 @@ import { StatusBar } from "@/components/status-bar";
 import type { TileActions } from "@/components/app-tile";
 import type { GroupActions } from "@/components/group-header";
 import { AppDetail, STAGE_SELECTOR } from "@/components/app-detail";
-import { CatalogView } from "@/components/catalog-view";
 import { UpdatesView } from "@/components/updates-view";
 import { FoldersDialog } from "@/components/dialogs/folders-dialog";
 import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app-settings-dialog";
-import { IconBackendContext } from "@/components/app-icon";
+import { IconBackendContext } from "@/components/icon-backend-context";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** The app view remembers which group it was opened from so going back returns there. */
-type View = { name: "home"; groupId: string | null } | { name: "app"; id: string; groupId: string | null } | { name: "discover" } | { name: "updates" };
+type View = { name: "home"; groupId: string | null } | { name: "app"; id: string; groupId: string | null } | { name: "updates" };
 
 const HOME: View = { name: "home", groupId: null };
 const LAUNCH_OPERATION = "Launch app";
@@ -60,7 +59,7 @@ function Shell({ backend }: { backend: AppApi }) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const { apps, catalog, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
+  const { apps, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
   const installedIds = [...apps].sort((first, second) => first.name.localeCompare(second.name)).map((app) => app.id);
   const { layout, error: layoutError, actions: layoutActions } = useAppLayout(installedIds);
@@ -69,7 +68,6 @@ function Shell({ backend }: { backend: AppApi }) {
   const filter = query.toLowerCase();
   const displayApps = apps.map((app) => ({ ...app, name: displayNames[app.id] || app.name }));
   const filteredApps = displayApps.filter((app) => app.name.toLowerCase().includes(filter));
-  const filteredCatalog = catalog.filter((entry) => `${entry.app.name} ${entry.app.summary}`.toLowerCase().includes(filter));
   const updates = updateReport?.updates ?? [];
   const confirmedUpdateCount = updates.filter((update) => update.status === "available").length;
   const disabled = isLoading || operation !== null;
@@ -103,7 +101,6 @@ function Shell({ backend }: { backend: AppApi }) {
     controller.dismissError();
     setRemovingId(id);
   };
-  const onOpenUrl = (url: string) => { void controller.openExternal(url); };
   const activeGroupId = view.name === "home" && layout.groups.some((group) => group.id === view.groupId) ? view.groupId : null;
   const goHome = () => {
     if (view.name !== "app") {
@@ -140,7 +137,7 @@ function Shell({ backend }: { backend: AppApi }) {
         <div className="flex-1 min-h-0 flex">
           <Sidebar page={sidebarPage(view)} appCount={apps.length} groups={layout.groups} updateCount={confirmedUpdateCount} dropSectionId={drag?.target.sectionId ?? null}
             onHome={() => goTo(HOME)} onGroup={(groupId) => goTo({ name: "home", groupId })} onNewGroup={() => createGroup()}
-            onDiscover={() => goTo({ name: "discover" })} onUpdates={() => goTo({ name: "updates" })} />
+            onUpdates={() => goTo({ name: "updates" })} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}
               onFolders={() => {
@@ -160,12 +157,11 @@ function Shell({ backend }: { backend: AppApi }) {
                 </section> : null}
                 {isLoading ? <BentoSkeleton /> : (
                   <>
-                    {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento layout={layout} apps={filteredApps} catalog={catalog} updates={updates} activeGroupId={activeGroupId}
+                    {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento layout={layout} apps={filteredApps} updates={updates} activeGroupId={activeGroupId}
                       isFiltering={filter.length > 0} drag={drag} editingGroupId={editingGroupId} isAnimated={!hasEntered} onEntered={markEntered}
                       tileActions={tileActions} groupActions={groupActions} disabled={disabled} /> : null}
-                    {detailApp ? <AppDetail app={detailApp} entry={catalog.find((entry) => entry.app.id === detailApp.catalog_id)} update={updates.find((update) => update.app_id === detailApp.id)}
-                      isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onOpenUrl={onOpenUrl} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
-                    {view.name === "discover" ? <CatalogView catalog={filteredCatalog} apps={apps} isPreview={!backend.isTauri} onBack={goHome} onOpen={onOpenUrl} /> : null}
+                    {detailApp ? <AppDetail app={detailApp} update={updates.find((update) => update.app_id === detailApp.id)}
+                      isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
                     {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
                   </>
                 )}
@@ -176,7 +172,6 @@ function Shell({ backend }: { backend: AppApi }) {
         <StatusBar status={statusText} appCount={apps.length} groupCount={layout.groups.length} warning={layoutError} />
       </div>
       {configuringApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
-        catalogEntry={catalog.find((entry) => entry.app.id === configuringApp.catalog_id)}
         openTo={settingsApp ? settingsTarget : "permissions"} originalName={configuringOriginalName} launchAfterSave={launchAfterReview}
         onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}

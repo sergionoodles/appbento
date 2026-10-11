@@ -1,13 +1,6 @@
-//! Shared models: catalog entries (pre-filled metadata) + local library state.
+//! Shared models for local library state.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum UpdateStrategy {
-    GithubRelease,
-    Manual,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -29,7 +22,7 @@ fn default_channel() -> String {
     "stable".to_string()
 }
 
-/// Saved with the installed app; catalog defaults are copied only during import.
+/// Update source saved with the installed app.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "strategy", rename_all = "kebab-case")]
 pub enum UpdateConfig {
@@ -38,83 +31,11 @@ pub enum UpdateConfig {
     DirectUrl { url: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct UpdateDefaults {
-    pub strategy: Option<UpdateStrategy>,
-    #[serde(default)]
-    pub github: Option<GithubUpdateConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Branding {
-    /// Optional HTTPS artwork URL; otherwise the website favicon is used.
-    #[serde(default)]
-    pub logo: String,
-    pub logo_dark: Option<String>,
-    pub cover: Option<String>,
-    #[serde(default)]
-    pub screenshots: Vec<String>,
-    pub accent: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct AppIdentity {
-    pub id: String,
-    pub name: String,
-    pub summary: String,
-    #[serde(default)]
-    pub description: String,
-    pub website: String,
-    pub docs_url: Option<String>,
-    pub repo: Option<String>,
-    pub license: Option<String>,
-    #[serde(default)]
-    pub categories: Vec<String>,
-    #[serde(default)]
-    pub verified: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct DesktopHints {
-    #[serde(default)]
-    pub categories: Option<String>,
-    #[serde(default)]
-    pub terminal: bool,
-    #[serde(default)]
-    pub mime_type: Option<String>,
-}
-
-/// One file in `catalog/apps/<id>.toml`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CatalogEntry {
-    pub app: AppIdentity,
-    pub branding: Branding,
-    #[serde(default)]
-    pub update: UpdateDefaults,
-    #[serde(default)]
-    pub desktop: DesktopHints,
-    /// Filename patterns used to auto-match scattered AppImages, e.g. `["Obsidian-*.AppImage"]`.
-    #[serde(default)]
-    pub match_filenames: Vec<String>,
-    #[serde(default)]
-    pub match_binaries: Vec<String>,
-    pub version_regex: String,
-    #[serde(default)]
-    pub sandbox: Option<SandboxPermissions>,
-}
-
 /// Local library state for AppImages actually on disk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InstalledApp {
     #[serde(default)]
     pub update_config: Option<UpdateConfig>,
-    #[serde(default)]
-    pub permission_defaults: Option<SandboxPermissions>,
     pub id: String,
     pub name: String,
     pub file_path: String,
@@ -124,7 +45,6 @@ pub struct InstalledApp {
     pub size_bytes: u64,
     pub executable: bool,
     pub integrated: bool,
-    pub catalog_id: Option<String>,
     pub version_current: Option<String>,
     pub icon_path: Option<String>,
     pub desktop_id: Option<String>,

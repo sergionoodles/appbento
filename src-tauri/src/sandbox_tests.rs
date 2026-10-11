@@ -21,7 +21,6 @@ fn fixture() -> (TemporaryDirectory, InstalledApp) {
         library_path: directory.0.join("policy/library.json"),
         managed_dir: directory.0.join("managed"),
         desktop_dir: directory.0.join("desktop"),
-        catalog: Vec::new(),
     };
     let app = lifecycle
         .scan(vec![directory.0.clone()])
@@ -163,9 +162,7 @@ fn actual_bubblewrap_isolates_home_files_environment_and_network() {
 }
 
 #[test]
-fn catalog_profiles_are_suggestions_and_reject_unknown_fields() {
-    let entries = crate::catalog::load_catalog().unwrap();
-    assert!(entries.iter().any(|entry| entry.sandbox.is_some()));
+fn generic_permissions_reject_unknown_fields() {
     assert!(serde_json::from_str::<SandboxPermissions>("{\"unrestricted\":true}").is_err());
     let permissions: SandboxPermissions = serde_json::from_str("{}").unwrap();
     assert!(permissions.display && permissions.persistent_data);

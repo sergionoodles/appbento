@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Compass, Folder, LayoutGrid, Plus, Sparkles } from "lucide-react";
+import { Folder, LayoutGrid, Plus, Sparkles } from "lucide-react";
 import type { AppGroup } from "@/lib/app-layout";
 import { Wordmark } from "./logo";
 
-export type SidebarPage = { name: "all" } | { name: "group"; id: string } | { name: "discover" } | { name: "updates" } | { name: "other" };
+export type SidebarPage = { name: "all" } | { name: "group"; id: string } | { name: "updates" } | { name: "other" };
 
 function NavItem({ icon, label, ariaLabel, count, isCurrent, isDropActive, dropSection, onClick }: {
   icon: ReactNode;
@@ -34,7 +34,7 @@ function Count({ value, isHighlighted = false }: { value: number; isHighlighted?
   return <span className="text-[12px] tabular-nums text-[var(--muted)]">{value}</span>;
 }
 
-export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, onHome, onGroup, onNewGroup, onDiscover, onUpdates }: {
+export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, onHome, onGroup, onNewGroup, onUpdates }: {
   page: SidebarPage;
   appCount: number;
   groups: AppGroup[];
@@ -44,7 +44,6 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, on
   onHome: () => void;
   onGroup: (id: string) => void;
   onNewGroup: () => void;
-  onDiscover: () => void;
   onUpdates: () => void;
 }) {
   return (
@@ -63,8 +62,7 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, on
           <NavItem icon={<Plus size={16} />} label="New group" isCurrent={false} onClick={onNewGroup} />
         </div>
         <div className="flex flex-col gap-0.5">
-          <SidebarHeading>Get apps</SidebarHeading>
-          <NavItem icon={<Compass size={16} />} label="Discover" isCurrent={page.name === "discover"} onClick={onDiscover} />
+          <SidebarHeading>Maintenance</SidebarHeading>
           <NavItem icon={<Sparkles size={16} />} label="Updates" ariaLabel="Updates" isCurrent={page.name === "updates"}
             count={updateCount > 0 ? <Count value={updateCount} isHighlighted /> : null} onClick={onUpdates} />
         </div>
