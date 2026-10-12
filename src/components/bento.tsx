@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { AppTile, TileGhost, type TileActions } from "./app-tile";
 import { GroupHeader, SectionTitle, type GroupActions } from "./group-header";
 
-export const tileSelector = (id: string) => `[data-tile-id="${CSS.escape(id)}"]`;
 
 const UNGROUPED_NAME = "Ungrouped";
 const ENTRANCE_DURATION_MS = 900;

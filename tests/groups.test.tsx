@@ -14,7 +14,7 @@ async function openHome() {
 }
 
 function appOrder(container: HTMLElement = document.body) {
-  return within(container).getAllByRole("button", { name: /^Open / }).map((button) => button.getAttribute("aria-label"));
+  return within(container).getAllByRole("article").map((button) => button.getAttribute("aria-label"));
 }
 
 function sidebar() {
@@ -37,15 +37,15 @@ describe("arranging apps", () => {
 
   it("starts alphabetical and keeps a custom order after reopening the app", async () => {
     const { view } = await openHome();
-    expect(appOrder()).toEqual(["Open Joplin", "Open Obsidian"]);
+    expect(appOrder()).toEqual(["Joplin", "Obsidian"]);
     expect(screen.queryByText("Most used")).not.toBeInTheDocument();
 
     dragTile("Obsidian", tileOf("Joplin"));
-    expect(appOrder()).toEqual(["Open Obsidian", "Open Joplin"]);
+    expect(appOrder()).toEqual(["Obsidian", "Joplin"]);
 
     view.unmount();
     await openHome();
-    expect(appOrder()).toEqual(["Open Obsidian", "Open Joplin"]);
+    expect(appOrder()).toEqual(["Obsidian", "Joplin"]);
   });
 
   it("drags apps onto a group header to move them into the group", async () => {
@@ -55,10 +55,10 @@ describe("arranging apps", () => {
 
     dragTile("Joplin", dropZoneOf("Notes"));
     const notes = screen.getByRole("region", { name: "Notes" });
-    expect(appOrder(notes)).toEqual(["Open Joplin"]);
+    expect(appOrder(notes)).toEqual(["Joplin"]);
 
     dragTile("Obsidian", dropZoneOf("Notes"));
-    expect(appOrder(notes)).toEqual(["Open Joplin", "Open Obsidian"]);
+    expect(appOrder(notes)).toEqual(["Joplin", "Obsidian"]);
     expect(screen.queryByRole("region", { name: "Ungrouped" })).not.toBeInTheDocument();
   });
 
@@ -67,7 +67,7 @@ describe("arranging apps", () => {
     await addGroup(user, "Notes");
     await user.click(screen.getByRole("button", { name: "More options for Obsidian" }));
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(items).toEqual(["Settings", "Change icon", "Remove"]);
+    expect(items).toEqual(["Settings", "Remove"]);
   });
 
   it("filters to one group from the sidebar and deleting it keeps its apps", async () => {
@@ -77,11 +77,11 @@ describe("arranging apps", () => {
 
     await user.click(within(sidebar()).getByRole("button", { name: /Video tools/ }));
     expect(screen.getByRole("heading", { level: 1, name: "Video tools" })).toBeInTheDocument();
-    expect(appOrder()).toEqual(["Open Obsidian"]);
+    expect(appOrder()).toEqual(["Obsidian"]);
 
     await chooseFromMenu(user, "Options for Video tools group", "Delete Video tools group");
     expect(await screen.findByRole("heading", { name: "All apps" })).toBeInTheDocument();
-    expect(appOrder()).toEqual(["Open Joplin", "Open Obsidian"]);
+    expect(appOrder()).toEqual(["Joplin", "Obsidian"]);
     expect(within(sidebar()).queryByRole("button", { name: /Video tools/ })).not.toBeInTheDocument();
   });
 

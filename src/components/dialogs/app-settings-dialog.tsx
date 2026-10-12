@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RefreshCw, Terminal, Settings2, ShieldCheck, X, type LucideIcon } from "lucide-react";
 import type { AppApi } from "@/lib/api";
-import type { InstalledApp, LaunchConfig, UpdateConfig } from "@/lib/types";
+import type { InstalledApp, LaunchConfig, UpdateConfig, UpdateInfo } from "@/lib/types";
 import { validateSandboxPaths } from "@/lib/sandbox";
 import { configFromDraft, draftFromConfig, isDraftChanged, isDraftComplete } from "@/lib/update-draft";
 import { launchDraftFromConfig, parseLaunchDraft } from "@/lib/launch-draft";
@@ -27,8 +27,12 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, isSaving, error, returnFocusElement }: {
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, isSaving, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   app: InstalledApp;
+  update?: UpdateInfo;
+  isCheckingUpdates: boolean;
+  onCheckUpdate: () => void;
+  onInstallUpdate: () => void;
   backend: AppApi;
   openTo: SettingsTarget;
   originalName: string;
@@ -130,7 +134,9 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
             {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
               isReview={isReview} isSaving={isSaving} onError={setLocalError} /> : null}
             {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isSaving} /> : null}
-            {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving} /> : null}
+            {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving}
+              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} isCheckingUpdates={isCheckingUpdates}
+              onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}
           </div>
 
           <footer className="flex items-center gap-3 border-t border-[var(--border)] px-8 py-4">

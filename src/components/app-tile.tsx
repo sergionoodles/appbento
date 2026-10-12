@@ -1,5 +1,5 @@
 import { useAppAppearance } from "./use-app-appearance";
-import { Image, MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
+import { MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -8,10 +8,8 @@ import { accessLabel, updateLabel, versionLabel } from "./app-status";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 
 export interface TileActions {
-  onOpen: (id: string) => void;
   onLaunch: (id: string) => void;
   onSettings: (id: string) => void;
-  onIcon: (id: string) => void;
   onRemove: (id: string) => void;
   onDragStart: (event: React.PointerEvent<HTMLElement>, id: string) => void;
 }
@@ -81,7 +79,6 @@ export function AppTile({ app, update, index, actions, isPlaceholder, disabled }
     <div className="tile-menu tile-action pointer-events-auto shrink-0">
       <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={16} />} disabled={disabled}>
         <MenuItem icon={<Settings size={15} />} onSelect={() => actions.onSettings(app.id)}>Settings</MenuItem>
-        <MenuItem icon={<Image size={15} />} onSelect={() => actions.onIcon(app.id)}>Change icon</MenuItem>
         <MenuSeparator />
         <MenuItem icon={<Trash2 size={15} />} onSelect={() => actions.onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
       </Menu>
@@ -96,9 +93,8 @@ export function AppTile({ app, update, index, actions, isPlaceholder, disabled }
   );
 
   return (
-    <article className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={{ ...appearance.style, "--i": index } as React.CSSProperties}
+    <article aria-label={app.name} className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={{ ...appearance.style, "--i": index } as React.CSSProperties}
       onPointerDown={(event) => actions.onDragStart(event, app.id)} onContextMenu={openTileMenu}>
-      <button type="button" className="tile-hit" aria-label={`Open ${app.name}`} onClick={() => actions.onOpen(app.id)} />
       <TileFace app={app} update={update} menu={menu} launch={launch} />
     </article>
   );

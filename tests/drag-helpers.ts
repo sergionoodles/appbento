@@ -18,7 +18,5 @@ export function dragTile(appName: string, target: Element) {
 }
 
 export function tileOf(appName: string) {
-  const tile = screen.getByRole("button", { name: `Open ${appName}` }).closest("[data-tile-id]");
-  if (!tile) throw new Error(`No tile for ${appName}`);
-  return tile;
+  return screen.getByRole("article", { name: appName });
 }

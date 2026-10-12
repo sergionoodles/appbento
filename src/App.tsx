@@ -6,12 +6,11 @@ import { useTileDrag } from "@/lib/use-tile-drag";
 import { transitionTo } from "@/lib/view-transition";
 import { ThemeProvider } from "@/components/theme";
 import { Header } from "@/components/header";
-import { Bento, BentoSkeleton, tileSelector } from "@/components/bento";
+import { Bento, BentoSkeleton } from "@/components/bento";
 import { Sidebar, type SidebarPage } from "@/components/sidebar";
 import { StatusBar } from "@/components/status-bar";
 import type { TileActions } from "@/components/app-tile";
 import type { GroupActions } from "@/components/group-header";
-import { AppDetail, STAGE_SELECTOR } from "@/components/app-detail";
 import { UpdatesView } from "@/components/updates-view";
 import { ConfigurationDialog } from "@/components/dialogs/configuration-dialog";
 import { restoreConfigurationPreferences, type ConfigurationPreferences } from "@/lib/configuration";
@@ -25,16 +24,13 @@ import { cn } from "@/lib/utils";
 import { useSelfUpdate } from "@/lib/use-self-update";
 import { SelfUpdateDialog } from "@/components/dialogs/self-update-dialog";
 
-/** The app view remembers which group it was opened from so going back returns there. */
-type View = { name: "home"; groupId: string | null } | { name: "app"; id: string; groupId: string | null } | { name: "updates" };
+type View = { name: "home"; groupId: string | null } | { name: "updates" };
 
 const HOME: View = { name: "home", groupId: null };
-const LAUNCH_OPERATION = "Launch app";
 const DISPLAY_NAMES_KEY = "appbento-display-names";
 
 function sidebarPage(view: View): SidebarPage {
   if (view.name === "home") return view.groupId ? { name: "group", id: view.groupId } : { name: "all" };
-  if (view.name === "app") return { name: "other" };
   return { name: view.name };
 }
 
@@ -82,7 +78,6 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const disabled = isLoading || operation !== null || selfUpdate.progress !== null;
   const removingApp = apps.find((app) => app.id === removingId);
   const reviewingApp = apps.find((app) => app.id === reviewIds[0]);
-  const detailApp = view.name === "app" ? displayApps.find((app) => app.id === view.id) : undefined;
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
@@ -96,8 +91,6 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
     setSettingsId(id);
   };
   const onSettings = (id: string) => openSettings(id, "general");
-  const onIcon = (id: string) => openSettings(id, "icon");
-  const onUpdateSource = (id: string) => openSettings(id, "updates");
   const saveDisplayName = (id: string, originalName: string, name: string) => {
     const next = { ...displayNames };
     if (name === originalName) delete next[id];
@@ -111,21 +104,14 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
     setRemovingId(id);
   };
   const activeGroupId = view.name === "home" && layout.groups.some((group) => group.id === view.groupId) ? view.groupId : null;
-  const goHome = () => {
-    if (view.name !== "app") {
-      transitionTo(() => setView(HOME));
-      return;
-    }
-    transitionTo(() => setView({ name: "home", groupId: view.groupId }), { fromSelector: STAGE_SELECTOR, toSelector: tileSelector(view.id) });
-  };
+  const goHome = () => transitionTo(() => setView(HOME));
   const goTo = (next: View) => transitionTo(() => setView(next));
-  const openApp = (id: string) => transitionTo(() => setView({ name: "app", id, groupId: activeGroupId }), { fromSelector: tileSelector(id), toSelector: STAGE_SELECTOR });
   const createGroup = () => {
     setEditingGroupId(layoutActions.addGroup());
     setView(HOME);
   };
   const tileActions: TileActions = {
-    onOpen: openApp, onLaunch, onSettings, onIcon, onRemove,
+    onLaunch, onSettings, onRemove,
     onDragStart: startDrag,
   };
   const groupActions: GroupActions = {
@@ -168,11 +154,9 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
                 </section> : null}
                 {isLoading ? <BentoSkeleton /> : (
                   <>
-                    {view.name === "home" || (view.name === "app" && !detailApp) ? <Bento layout={layout} apps={filteredApps} updates={updates} activeGroupId={activeGroupId}
+                    {view.name === "home" ? <Bento layout={layout} apps={filteredApps} updates={updates} activeGroupId={activeGroupId}
                       isFiltering={filter.length > 0} drag={drag} editingGroupId={editingGroupId} isAnimated={!hasEntered} onEntered={markEntered}
                       tileActions={tileActions} groupActions={groupActions} disabled={disabled} /> : null}
-                    {detailApp ? <AppDetail app={detailApp} update={updates.find((update) => update.app_id === detailApp.id)}
-                      isLaunching={operation === LAUNCH_OPERATION} disabled={disabled} onBack={goHome} onLaunch={onLaunch} onSettings={onSettings} onIcon={onIcon} onRemove={onRemove} onUpdateSource={onUpdateSource} onCheckUpdate={(id) => void controller.checkAppUpdates(id)} onInstallUpdate={(id) => void controller.installUpdate(id)} isCheckingUpdates={isCheckingUpdates} /> : null}
                     {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
                   </>
                 )}
@@ -187,7 +171,9 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
         onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
-        isSaving={operation !== null} error={error} returnFocusElement={returnFocusElement} /> : null}
+        update={updates.find((update) => update.app_id === configuringApp.id)} isCheckingUpdates={isCheckingUpdates}
+        onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
+        isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
       {showConfiguration ? <ConfigurationDialog backend={backend} onClose={() => setShowConfiguration(false)} onRestored={onRestored} returnFocusElement={returnFocusElement} /> : null}
       {showSelfUpdate ? <SelfUpdateDialog state={selfUpdate} isBlocked={isLoading || operation !== null || isCheckingUpdates}
         onCheck={() => { void selfUpdate.controller.check(); }}

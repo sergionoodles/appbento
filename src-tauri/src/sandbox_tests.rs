@@ -78,6 +78,72 @@ fn default_plan_denies_host_access_and_preserves_uri_arguments() {
 }
 
 #[test]
+fn sandbox_plan_creates_xdg_directories_after_mounting_home() {
+    let (directory, mut app) = fixture();
+    for persistent_data in [false, true] {
+        app.launch_config = Some(LaunchConfig {
+            arguments: Vec::new(),
+            environment: Default::default(),
+            mode: LaunchMode::Bubblewrap,
+            permissions: SandboxPermissions {
+                persistent_data,
+                ..Default::default()
+            },
+        });
+        let planned = plan(&app, &[], &directory.0.join("policy"), &Runtime::default()).unwrap();
+        let home_mount = planned
+            .arguments
+            .windows(3)
+            .position(|arguments| arguments[0] == "--bind" && arguments[2] == "/home/app");
+        for path in [
+            "/home/app/.config",
+            "/home/app/.local/share",
+            "/home/app/.cache",
+        ] {
+            let creation = planned
+                .arguments
+                .windows(2)
+                .position(|arguments| arguments == ["--dir", path])
+                .unwrap_or_else(|| panic!("missing sandbox directory: {path}"));
+            if let Some(mount) = home_mount {
+                assert!(
+                    creation > mount + 2,
+                    "{path} would be hidden by the home mount"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn sandbox_plan_exposes_system_font_cache_read_only() {
+    if !Path::new("/var/cache/fontconfig").exists() {
+        return;
+    }
+    let (directory, mut app) = fixture();
+    app.launch_config = Some(LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
+        mode: LaunchMode::Bubblewrap,
+        permissions: SandboxPermissions::default(),
+    });
+    let planned = plan(&app, &[], &directory.0.join("policy"), &Runtime::default()).unwrap();
+    assert!(planned.arguments.windows(3).any(|arguments| {
+        arguments
+            == [
+                "--ro-bind",
+                "/var/cache/fontconfig",
+                "/var/cache/fontconfig",
+            ]
+    }));
+    assert!(validate_grant(
+        Path::new("/var/cache/fontconfig"),
+        &directory.0.join("policy")
+    )
+    .is_err());
+}
+
+#[test]
 fn grants_are_explicit_and_protected_paths_and_traversal_are_rejected() {
     let (directory, mut app) = fixture();
     let documents = directory.0.join("documents");
@@ -165,6 +231,60 @@ fn actual_bubblewrap_isolates_home_files_environment_and_network() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn actual_bubblewrap_supports_app_directories_in_fresh_and_existing_homes() {
+    let status = status();
+    if !status.available {
+        eprintln!("Bubblewrap XDG test skipped: {:?}", status.error);
+        return;
+    }
+    let (directory, mut app) = fixture();
+    let policy = directory.0.join("policy");
+    let home = private_home_path(&policy, &app.id);
+    fs::create_dir_all(&home).unwrap();
+    for persistent_data in [false, true] {
+        app.launch_config = Some(LaunchConfig {
+            arguments: Vec::new(),
+            environment: Default::default(),
+            mode: LaunchMode::Bubblewrap,
+            permissions: SandboxPermissions {
+                persistent_data,
+                ..Default::default()
+            },
+        });
+        for _ in 0..2 {
+            let mut planned = plan(&app, &[], &policy, &Runtime::default()).unwrap();
+            let command_index = planned
+                .arguments
+                .iter()
+                .position(|argument| argument == "--")
+                .unwrap();
+            planned.arguments.truncate(command_index + 1);
+            planned.arguments.extend([
+                "/bin/sh".into(),
+                "-c".into(),
+                "for directory in \"$XDG_CONFIG_HOME\" \"$XDG_DATA_HOME\" \"$XDG_CACHE_HOME\"; do test -d \"$directory\" && mkdir -p \"$directory/OrcaSlicer\" && touch \"$directory/OrcaSlicer/settings\" || exit 1; done".into(),
+            ]);
+            let output = Command::new(planned.program)
+                .args(planned.arguments)
+                .env_clear()
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            for path in [".config", ".local/share", ".cache"] {
+                assert_eq!(
+                    home.join(path).join("OrcaSlicer/settings").exists(),
+                    persistent_data
+                );
+            }
+        }
+    }
 }
 
 #[test]

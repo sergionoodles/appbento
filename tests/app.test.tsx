@@ -23,8 +23,8 @@ describe("library management", () => {
     expect(screen.getByText("Obsidian")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add apps" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
-    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-    expect(await screen.findByText("Launched once")).toBeInTheDocument();
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    expect(screen.getByText("Launch count").nextElementSibling).toHaveTextContent("1");
   });
 
   it("keeps failed removal open and displays the error", async () => {
@@ -142,20 +142,34 @@ it("restores the actual app trigger after inert clears focus during dialog commi
   expect(remove).toHaveFocus();
 });
 
-it("opens an app into its launch view and returns to the grid", async () => {
+it("leaves card body clicks inactive while keeping launch and settings accessible", async () => {
   const user = await openHome(createPreviewApi());
-  await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-  expect(await screen.findByRole("heading", { name: "Obsidian" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Launch" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Settings for Obsidian" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Back to all apps" }));
-  expect(await screen.findByRole("button", { name: "Open Obsidian" })).toBeInTheDocument();
+  const tile = screen.getByRole("article", { name: "Obsidian" });
+  expect(within(tile).queryByRole("button", { name: "Open Obsidian" })).not.toBeInTheDocument();
+  await user.click(within(tile).getByRole("heading", { name: "Obsidian" }));
+  expect(screen.getByRole("heading", { name: "All apps" })).toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await chooseFromMenu(user, "More options for Obsidian", "Settings");
+  expect(screen.getByText("Launch count").nextElementSibling).toHaveTextContent("0");
 });
+
+it("shows portable app status and launch count in General settings", async () => {
+  const app = { ...createPreviewApp("Portable", "1.0"), integrated: false, launch_count: 3 };
+  const user = await openHome({ ...createPreviewApi(), async libraryList() { return [app]; }, async updatesCheckAll() { return emptyReport; } });
+  await chooseFromMenu(user, "More options for Portable", "Settings");
+  expect(screen.getByText("Portable, not in the app menu")).toBeInTheDocument();
+  expect(screen.getByText("Launch count").nextElementSibling).toHaveTextContent("3");
+});
+
+async function openAppUpdates(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await chooseFromMenu(user, `More options for ${name}`, "Settings");
+  await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Updates" }));
+}
 
 describe("custom app icons", () => {
   const imageUrl = "data:image/png;base64,iVBORw0KGgo=";
 
-  it("saves a pasted URL and displays the stored image in the tile and detail view", async () => {
+  it("saves a pasted URL and displays the stored image in the tile and settings", async () => {
     const preview = createPreviewApi();
     const sources: string[] = [];
     const user = await openHome({
@@ -168,7 +182,8 @@ describe("custom app icons", () => {
       },
       async libraryIcon() { return imageUrl; },
     });
-    await chooseFromMenu(user, "More options for Obsidian", "Change icon");
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    await user.click(screen.getByRole("button", { name: "Change icon" }));
     await user.type(screen.getByRole("textbox", { name: "Image URL" }), "https://example.com/icon.png");
     await user.click(screen.getByRole("button", { name: "Save icon" }));
     await waitFor(() => expect(screen.queryByRole("form", { name: "Change icon" })).not.toBeInTheDocument());
@@ -176,8 +191,8 @@ describe("custom app icons", () => {
     await waitFor(() => expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute("src", imageUrl));
     await user.click(screen.getByRole("button", { name: "Close settings" }));
     await waitFor(() => expect(document.querySelector("[data-tile-id] img")).toHaveAttribute("src", imageUrl));
-    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-    await waitFor(() => expect(document.querySelector("[data-stage] img")).toHaveAttribute("src", imageUrl));
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    await waitFor(() => expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute("src", imageUrl));
   });
 
   it("uses the selected local file and leaves the dialog open on save failure", async () => {
@@ -190,8 +205,8 @@ describe("custom app icons", () => {
         throw new Error("Invalid image");
       },
     });
-    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-    await chooseFromMenu(user, "More options for Obsidian", "Change icon");
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    await user.click(screen.getByRole("button", { name: "Change icon" }));
     await user.type(screen.getByRole("textbox", { name: "Image URL" }), "https://example.com/unused.png");
     await user.click(screen.getByRole("button", { name: "Choose local image" }));
     expect(await screen.findByText("Selected: /home/user/Pictures/icon.png")).toBeInTheDocument();
@@ -211,7 +226,8 @@ describe("custom app icons", () => {
         return null;
       },
     });
-    await chooseFromMenu(user, "More options for Obsidian", "Change icon");
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    await user.click(screen.getByRole("button", { name: "Change icon" }));
     const input = screen.getByRole("textbox", { name: "Image URL" });
     await user.type(input, "https://example.com/icon.png");
     await user.click(screen.getByRole("button", { name: "Choose local image" }));
@@ -228,13 +244,13 @@ describe("app update sources", () => {
     const preview = createPreviewApi();
     const app = (await preview.libraryList())[1];
     const user = await openHome(preview);
-    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
+    await openAppUpdates(user, "Joplin");
     expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Configure updates" }));
     await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "Direct HTTPS download");
     await user.type(screen.getByRole("textbox", { name: "Download URL" }), "https://example.org/Joplin.AppImage");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await openAppUpdates(user, "Joplin");
     await user.click(screen.getByRole("button", { name: "Check for updates" }));
     await user.click(await screen.findByRole("button", { name: "Install update" }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument());
@@ -244,17 +260,52 @@ describe("app update sources", () => {
     expect(installed?.file_path).toEqual(app.file_path);
     expect(installed?.version_current).toEqual(app.version_current);
     expect((await preview.updatesCheck(app.id)).status).toEqual("up-to-date");
-    expect(await screen.findByRole("heading", { name: "Joplin" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Settings for Joplin" })).toBeInTheDocument();
+  });
+
+  it("blocks update actions until source edits are saved or reverted", async () => {
+    const user = await openHome(createPreviewApi());
+    await openAppUpdates(user, "Obsidian");
+    const repository = screen.getByRole("textbox", { name: "Repository" });
+    const original = "obsidianmd/obsidian-releases";
+    await user.clear(repository);
+    await user.type(repository, "owner/other");
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Install update" })).toBeDisabled();
+    expect(screen.getByText("Save your source changes before checking or installing updates.")).toBeInTheDocument();
+    await user.clear(repository);
+    await user.type(repository, original);
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Install update" })).toBeEnabled();
+  });
+
+  it("reports per-app check failures in settings and allows retry", async () => {
+    const user = await openHome({ ...createPreviewApi(), async updatesCheck() { throw new Error("Release server unavailable"); } });
+    await openAppUpdates(user, "Obsidian");
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Release server unavailable");
+    expect(within(dialog).getByRole("button", { name: "Check for updates" })).toBeEnabled();
+  });
+
+  it("offers Install latest in settings when the installed version is unknown", async () => {
+    const preview = createPreviewApi();
+    const report = await preview.updatesCheckAll();
+    report.updates[0] = { ...report.updates[0], current: null, status: "unknown-current" };
+    const user = await openHome({ ...preview, async updatesCheckAll() { return report; } });
+    await openAppUpdates(user, "Obsidian");
+    expect(screen.getByRole("button", { name: "Install latest" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
   });
 
   it("disables updates and excludes the app from release checks", async () => {
     const preview = createPreviewApi();
     const user = await openHome(preview);
-    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-    await chooseFromMenu(user, "More options for Obsidian", "Update source");
+    await openAppUpdates(user, "Obsidian");
     await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "Disabled");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await openAppUpdates(user, "Obsidian");
     expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Check for updates" })).not.toBeInTheDocument();
     expect((await preview.updatesCheckAll()).checked_count).toBe(0);
@@ -263,8 +314,7 @@ describe("app update sources", () => {
   it("extracts a pasted GitHub release URL and saves its repository", async () => {
     const preview = createPreviewApi();
     const user = await openHome(preview);
-    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
-    await user.click(screen.getByRole("button", { name: "Configure updates" }));
+    await openAppUpdates(user, "Joplin");
     await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "GitHub releases");
     const repository = screen.getByRole("textbox", { name: "Repository" });
     await user.click(repository);
@@ -277,8 +327,7 @@ describe("app update sources", () => {
 
   it("retains source inputs and reports a configuration error", async () => {
     const user = await openHome({ ...createPreviewApi(), async updatesConfigure() { throw new Error("Invalid filename matcher"); } });
-    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
-    await user.click(screen.getByRole("button", { name: "Configure updates" }));
+    await openAppUpdates(user, "Joplin");
     await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "GitHub releases");
     await user.type(screen.getByRole("textbox", { name: "Repository" }), "owner/app");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -293,9 +342,9 @@ it("failed update installation keeps the installed version visible and reports t
   const preview = createPreviewApi();
   const original = (await preview.libraryList())[0];
   const user = await openHome({ ...preview, async updatesInstall() { throw new Error("Download interrupted"); } });
-  await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
+  await openAppUpdates(user, "Obsidian");
   await user.click(await screen.findByRole("button", { name: "Install update" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+  expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent("Download interrupted");
   expect((await preview.libraryList())[0]).toEqual(original);
   expect(screen.getByRole("button", { name: "Install update" })).toBeEnabled();
 });
@@ -321,7 +370,7 @@ describe("app settings", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Open Notes" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Notes" })).toBeInTheDocument();
     const joplin = (await preview.libraryList()).find((app) => app.name === "Joplin");
     expect(joplin?.update_config).toEqual({ strategy: "direct-url", url: "https://example.org/Joplin.AppImage" });
   });
@@ -337,7 +386,7 @@ describe("app settings", () => {
     await user.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Joplin");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    expect(await screen.findByRole("button", { name: "Open Joplin" })).toBeInTheDocument();
+    expect(await screen.findByRole("article", { name: "Joplin" })).toBeInTheDocument();
   });
 });
 

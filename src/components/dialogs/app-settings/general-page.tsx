@@ -26,6 +26,8 @@ export function GeneralPage({ app, backend, name, originalName, onNameChange, is
   const details = [
     ["Version", versionLabel(app)],
     ["File", app.file_path],
+    ["Launch count", String(app.launch_count)],
+    ...(!app.integrated ? [["Integration", "Portable, not in the app menu"]] : []),
     ["Size", `${(app.size_bytes / BYTES_PER_MEGABYTE).toFixed(0)} MB`],
     ...(fileAge ? [["Downloaded", fileAge]] : []),
   ];
@@ -40,7 +42,7 @@ export function GeneralPage({ app, backend, name, originalName, onNameChange, is
             <Pencil size={13} />
           </button>
         </div>
-        <Field label="Name" htmlFor="app-display-name" className="flex-1" hint={name.trim() === originalName ? "Shown in your library and on the app page." : <>
+        <Field label="Name" htmlFor="app-display-name" className="flex-1" hint={name.trim() === originalName ? "Shown in your library." : <>
           Original name: {originalName}.{" "}
           <button type="button" className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline" onClick={() => onNameChange(originalName)}><RotateCcw size={11} />Reset</button>
         </>}>

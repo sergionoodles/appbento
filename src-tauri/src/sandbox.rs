@@ -24,7 +24,13 @@ mod launch_options;
 
 const SYSTEM_RUNTIME: &[&str] = &["/usr", "/bin", "/sbin", "/lib", "/lib64"];
 const BWRAP_CANDIDATES: &[&str] = &["/usr/bin/bwrap", "/usr/local/bin/bwrap", "/bin/bwrap"];
-const SYSTEM_CONFIG: &[&str] = &["/etc/ld.so.cache", "/etc/fonts", "/etc/localtime"];
+const SYSTEM_CONFIG: &[&str] = &[
+    "/etc/ld.so.cache",
+    "/etc/fonts",
+    "/etc/localtime",
+    // Rebuilding font caches can crash apps that bundle a conflicting FreeType version.
+    "/var/cache/fontconfig",
+];
 const RESERVED: &[&str] = &[
     "/usr",
     "/bin",
@@ -38,6 +44,7 @@ const RESERVED: &[&str] = &[
     "/run",
     "/app",
     "/home/app",
+    "/var/cache/fontconfig",
     "/tmp/.X11-unix",
 ];
 
@@ -312,6 +319,14 @@ pub fn plan(
             home.to_str().ok_or("private home path must be UTF-8")?,
             "/home/app",
         );
+    }
+    // Create these after the persistent home mount so they remain visible to the app.
+    for path in [
+        "/home/app/.config",
+        "/home/app/.local/share",
+        "/home/app/.cache",
+    ] {
+        arguments.extend(["--dir".into(), path.into()]);
     }
     add_devices(&mut arguments, &config.permissions, runtime)?;
     for grant in &config.permissions.paths {

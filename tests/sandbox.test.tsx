@@ -108,8 +108,8 @@ describe("AppImage permission review", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(libraryConfigure.mock.calls[0][1].mode).toBe("direct");
     expect(libraryLaunch).toHaveBeenCalledOnce();
-    await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
-    expect(await screen.findByText("Launched once")).toBeInTheDocument();
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    expect(screen.getByText("Launch count").nextElementSibling).toHaveTextContent("1");
   });
 
   it("blocks unavailable bubblewrap until a successful recheck, then saves restricted permissions without launching", async () => {

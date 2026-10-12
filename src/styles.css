@@ -143,9 +143,6 @@ img { -webkit-user-drag: none; }
 .tile:hover { border-color: color-mix(in oklab, var(--tile-accent) 22%, var(--border)); }
 .tile:has([aria-expanded="true"]) { z-index: 20; }
 
-/* The whole tile is one big button; secondary actions sit above it. */
-.tile-hit { position: absolute; inset: 0; border-radius: inherit; }
-.tile-hit:focus-visible { outline-offset: -3px; }
 .tile-action { position: relative; z-index: 1; }
 .tile-action:has([aria-expanded="true"]) { z-index: 2; }
 

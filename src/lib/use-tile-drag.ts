@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { dropIndex, sectionAppIds, sectionOf, type AppLayout } from "./app-layout";
 
-/** Pixels the pointer must travel before a press becomes a drag, so plain clicks still open the app. */
+/** Pixels the pointer must travel before a press becomes a drag, to avoid dragging on a plain click. */
 const DRAG_THRESHOLD = 6;
 const SCROLL_EDGE = 56;
 const SCROLL_STEP = 16;
