@@ -12,7 +12,7 @@ use crate::store::Library;
 #[path = "appimage.rs"]
 mod appimage;
 #[path = "desktop.rs"]
-mod desktop;
+pub(crate) mod desktop;
 #[path = "integration.rs"]
 mod integration;
 #[path = "recovery.rs"]
@@ -53,11 +53,7 @@ fn discovered_app(
             || existing.reviewed_digest.as_deref()
                 == Some(crate::sandbox::appimage_digest(path)?.as_str());
         return Ok(InstalledApp {
-            launch_config: if has_current_review {
-                existing.launch_config.clone()
-            } else {
-                None
-            },
+            launch_config: existing.launch_config.clone(),
             reviewed_digest: if has_current_review {
                 existing.reviewed_digest.clone()
             } else {

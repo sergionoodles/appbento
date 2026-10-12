@@ -14,7 +14,7 @@ pub fn desktop_content(path: &Path, name: &str) -> Result<String, String> {
     desktop_content_for_app(path, &path.to_string_lossy(), name)
 }
 
-pub(super) fn desktop_content_for_app(
+pub(crate) fn desktop_content_for_app(
     path: &Path,
     app_id: &str,
     name: &str,

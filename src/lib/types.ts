@@ -40,6 +40,7 @@ export interface ReleaseUpdateConfig {
 export type UpdateConfig = ReleaseUpdateConfig | { strategy: "direct-url"; url: string };
 
 export interface InstalledApp {
+  reviewed_digest?: string | null;
   launch_config?: LaunchConfig | null;
   update_config?: UpdateConfig | null;
   id: string;

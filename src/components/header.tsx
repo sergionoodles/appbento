@@ -1,16 +1,17 @@
 import { useEffect, useRef } from "react";
-import { FolderCog, Plus, ScanSearch, Search, Settings, Upload } from "lucide-react";
+import { FolderCog, Plus, ScanSearch, Search, Settings, Upload, Archive } from "lucide-react";
 import { Input } from "./ui/card";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 import { ThemeSwatches } from "./theme";
 
-export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onAdd, onScan }: {
+export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onScan }: {
   isNative: boolean;
   query: string;
   onQuery: (query: string) => void;
   disabled: boolean;
   canEditFolders: boolean;
   onFolders: () => void;
+  onConfiguration: () => void;
   onAdd: () => void;
   onScan: () => void;
 }) {
@@ -43,6 +44,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
         </Menu>
         <Menu label="Settings" icon={<Settings size={16} />}>
           <MenuItem icon={<FolderCog size={15} />} onSelect={onFolders} disabled={!canEditFolders || disabled}>Folders</MenuItem>
+          <MenuItem icon={<Archive size={15} />} onSelect={onConfiguration} disabled={!isNative || disabled}>Export / restore settings</MenuItem>
           <MenuSeparator />
           <ThemeSwatches />
         </Menu>

@@ -13,6 +13,8 @@ import type { TileActions } from "@/components/app-tile";
 import type { GroupActions } from "@/components/group-header";
 import { AppDetail, STAGE_SELECTOR } from "@/components/app-detail";
 import { UpdatesView } from "@/components/updates-view";
+import { ConfigurationDialog } from "@/components/dialogs/configuration-dialog";
+import { restoreConfigurationPreferences, type ConfigurationPreferences } from "@/lib/configuration";
 import { FoldersDialog } from "@/components/dialogs/folders-dialog";
 import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app-settings-dialog";
 import { IconBackendContext } from "@/components/icon-backend-context";
@@ -46,9 +48,10 @@ function useNativeContextMenu(isNative: boolean) {
   }, [isNative]);
 }
 
-function Shell({ backend }: { backend: AppApi }) {
+function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferences: ConfigurationPreferences) => Promise<void> }) {
   const [view, setView] = useState<View>(HOME);
   const [query, setQuery] = useState("");
+  const [showConfiguration, setShowConfiguration] = useState(false);
   const [showFolders, setShowFolders] = useState(false);
   const [returnFocusElement, setReturnFocusElement] = useState<HTMLElement | null>(null);
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -77,7 +80,7 @@ function Shell({ backend }: { backend: AppApi }) {
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasModal = !!settingsApp || showFolders || !!removingApp || !!reviewingApp;
+  const hasModal = !!settingsApp || showFolders || showConfiguration || !!removingApp || !!reviewingApp;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const onLaunch = (id: string) => { captureFocus(); void controller.launch(id); };
   const openSettings = (id: string, target: SettingsTarget) => {
@@ -140,6 +143,7 @@ function Shell({ backend }: { backend: AppApi }) {
             onUpdates={() => goTo({ name: "updates" })} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}
+              onConfiguration={() => { captureFocus(); setShowConfiguration(true); }}
               onFolders={() => {
                 captureFocus();
                 controller.dismissError();
@@ -177,6 +181,7 @@ function Shell({ backend }: { backend: AppApi }) {
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
         onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
         isSaving={operation !== null} error={error} returnFocusElement={returnFocusElement} /> : null}
+      {showConfiguration ? <ConfigurationDialog backend={backend} onClose={() => setShowConfiguration(false)} onRestored={onRestored} returnFocusElement={returnFocusElement} /> : null}
       {showFolders && settings ? <FoldersDialog returnFocusElement={returnFocusElement} pickFolder={backend.pickFolder} isNative={backend.isTauri} initial={settings} onClose={() => setShowFolders(false)} onSaved={controller.saveFolders} isSaving={operation !== null} error={error} /> : null}
       {removingApp ? <RemoveDialog returnFocusElement={returnFocusElement} app={removingApp} onClose={() => setRemovingId(null)} onRemove={(deleteFile) => controller.remove(removingApp.id, deleteFile)} isRemoving={operation !== null} error={error} /> : null}
     </>
@@ -184,5 +189,25 @@ function Shell({ backend }: { backend: AppApi }) {
 }
 
 export default function App({ backend = api }: { backend?: AppApi }) {
-  return <ThemeProvider><IconBackendContext.Provider value={backend}><Shell backend={backend} /></IconBackendContext.Provider></ThemeProvider>;
+  const [restoration, setRestoration] = useState({ revision: 0, error: null as string | null });
+  const onRestored = useCallback(async (preferences: ConfigurationPreferences) => {
+    restoreConfigurationPreferences(preferences);
+    await backend.configurationPreferences(true);
+    setRestoration((current) => ({ revision: current.revision + 1, error: null }));
+  }, [backend]);
+
+  useEffect(() => {
+    let isActive = true;
+    void backend.configurationPreferences(false).then(async (preferences) => {
+      if (isActive && preferences) await onRestored(preferences);
+    }).catch((error: unknown) => {
+      if (isActive) setRestoration((current) => ({ ...current, error: `Restoring interface settings: ${error instanceof Error ? error.message : String(error)}. Reload to retry.` }));
+    });
+    return () => { isActive = false; };
+  }, [backend, onRestored]);
+
+  return <ThemeProvider key={restoration.revision}><IconBackendContext.Provider value={backend}>
+    {restoration.error ? <p role="alert" className="text-[var(--bad)]">{restoration.error}</p> : null}
+    <Shell backend={backend} onRestored={onRestored} />
+  </IconBackendContext.Provider></ThemeProvider>;
 }

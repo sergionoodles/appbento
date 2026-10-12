@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
@@ -29,6 +30,10 @@
     "allow-updates-check-all",
     "allow-updates-configure",
     "allow-updates-install",
+    "allow-configuration-export",
+    "allow-configuration-read",
+    "allow-configuration-restore",
+    "allow-configuration-preferences",
     "allow-settings-get",
     "allow-settings-set"
   ]

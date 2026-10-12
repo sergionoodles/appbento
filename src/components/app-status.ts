@@ -1,7 +1,7 @@
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 
 export function accessLabel(app: InstalledApp) {
-  if (!app.launch_config) return "Needs setup";
+  if (!app.launch_config || app.reviewed_digest === null) return "Needs setup";
   return app.launch_config.mode === "bubblewrap" ? "Bubblewrap" : "Runs as is";
 }
 

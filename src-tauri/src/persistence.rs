@@ -7,7 +7,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+const NO_FOLLOW: i32 = 0x20000;
+const NONBLOCKING: i32 = 0x800;
 
 static TRANSACTIONS: Mutex<()> = Mutex::new(());
 static TEMPORARY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -22,10 +25,14 @@ pub fn data_path(name: &str) -> Result<PathBuf, String> {
 pub fn load<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
     let _guard = TRANSACTIONS.lock().map_err(|error| error.to_string())?;
     let _file_lock = lock_file(path)?;
+    recover_file_batch(
+        path.parent()
+            .ok_or_else(|| "persistence path has no parent".to_string())?,
+    )?;
     read(path)
 }
 
-fn read<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
+pub(crate) fn read<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(T::default()),
@@ -79,6 +86,10 @@ pub fn with_repository<T: DeserializeOwned + Default, R>(
 ) -> Result<R, String> {
     let _guard = TRANSACTIONS.lock().map_err(|error| error.to_string())?;
     let _file_lock = lock_file(path)?;
+    recover_file_batch(
+        path.parent()
+            .ok_or_else(|| "persistence path has no parent".to_string())?,
+    )?;
     let mut repository = Repository {
         path: path.to_owned(),
         state: read(path)?,
@@ -95,6 +106,10 @@ where
 {
     let _guard = TRANSACTIONS.lock().map_err(|error| error.to_string())?;
     let _file_lock = lock_file(path)?;
+    recover_file_batch(
+        path.parent()
+            .ok_or_else(|| "persistence path has no parent".to_string())?,
+    )?;
     let mut repository = Repository {
         path: path.to_owned(),
         state: read(path)?,
@@ -104,10 +119,65 @@ where
     Ok(result)
 }
 
+/// A durable restore is replayed before any subsequent state read after interruption.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) enum FileChange {
+    Write { path: PathBuf, bytes: Vec<u8> },
+    SetPermissions { path: PathBuf, mode: u32 },
+}
+
+pub(crate) fn commit_file_batch(parent: &Path, changes: Vec<FileChange>) -> Result<(), String> {
+    let journal = parent.join("configuration-restore.json");
+    write_atomic(
+        &journal,
+        &serde_json::to_vec(&changes).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.message)?;
+    recover_file_batch(parent)
+        .map_err(|error| format!("Restore is pending and will resume on reload: {error}"))
+}
+
+fn recover_file_batch(parent: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let journal = parent.join("configuration-restore.json");
+    if !journal.exists() {
+        return Ok(());
+    }
+    let changes: Vec<FileChange> = read(&journal)?;
+    for change in changes {
+        match change {
+            FileChange::Write { path, bytes } => {
+                write_atomic(&path, &bytes).map_err(|error| error.message)?;
+            }
+            FileChange::SetPermissions { path, mode } => {
+                let file = OpenOptions::new()
+                    .read(true)
+                    .custom_flags(NO_FOLLOW | NONBLOCKING)
+                    .open(path)
+                    .map_err(|error| error.to_string())?;
+                if !file
+                    .metadata()
+                    .map_err(|error| error.to_string())?
+                    .is_file()
+                {
+                    return Err("restore target must be a regular file".into());
+                }
+                file.set_permissions(fs::Permissions::from_mode(mode))
+                    .map_err(|error| error.to_string())?;
+                file.sync_all().map_err(|error| error.to_string())?;
+            }
+        }
+    }
+    fs::remove_file(journal).map_err(|error| error.to_string())?;
+    sync_committed_directory(parent).map_err(|error| error.message)
+}
+
 fn lock_file(path: &Path) -> Result<fs::File, String> {
-    let parent = path.parent().ok_or("persistence path has no parent")?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "persistence path has no parent".to_string())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let lock_path = path.with_extension("lock");
+    let lock_path = parent.join(".appbento-state.lock");
     let file = OpenOptions::new()
         .read(true)
         .write(true)

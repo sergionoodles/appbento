@@ -21,7 +21,7 @@ export function createLibraryActions(
       try {
         const apps = await backend.libraryList();
         publishApps(apps);
-        if (apps.some((app) => app.id === id && !app.launch_config)) {
+        if (apps.some((app) => app.id === id && (!app.launch_config || app.reviewed_digest === null))) {
           publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: true });
         }
       } catch (refreshError) {
@@ -87,7 +87,8 @@ export function createLibraryActions(
       publishState({ reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), launchAfterReview: false });
     }),
     launch: (id: string) => {
-      if (!getState().apps.find((app) => app.id === id)?.launch_config) {
+      const app = getState().apps.find((entry) => entry.id === id);
+      if (!app?.launch_config || app.reviewed_digest === null) {
         publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: true, error: null });
         return Promise.resolve(false);
       }

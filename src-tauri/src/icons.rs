@@ -78,7 +78,7 @@ pub async fn acquire(client: &Client, source: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-fn read_image(path: &Path) -> Result<Vec<u8>, String> {
+pub(crate) fn read_image(path: &Path) -> Result<Vec<u8>, String> {
     if !fs::metadata(path)
         .map_err(|error| error.to_string())?
         .is_file()

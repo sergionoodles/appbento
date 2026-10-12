@@ -51,6 +51,10 @@ export function createPreviewApi(): AppApi {
 
   return {
     isTauri: false,
+    async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },
+    async configurationRead() { throw new Error("Importing settings requires the desktop app."); },
+    async configurationRestore() { throw new Error("Restoring settings requires the desktop app."); },
+    async configurationPreferences() { return null; },
     async librarySetIcon() { throw new Error("Saving icons requires the desktop app."); },
     async libraryIcon() { return null; },
     async pickIcon() { return null; },

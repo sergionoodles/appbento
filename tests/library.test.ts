@@ -222,3 +222,18 @@ test("failed per-app checks clear stale releases and show the source error", asy
   assert.equal(controller.getState().updateReport?.updates.length, 0);
   assert.match(controller.getState().error ?? "", /Repository unavailable/);
 });
+
+test("restored launch settings awaiting review are retained and shown before launch", async () => {
+  const preview = createPreviewApi();
+  const [configured] = await preview.libraryList();
+  const app = { ...configured, reviewed_digest: null };
+  const controller = createLibraryController({ ...preview,
+    async libraryList() { return [app]; },
+    async libraryLaunch() { throw new Error("AppImage changed since review"); },
+  });
+  await controller.initialize();
+  assert.equal(await controller.launch(app.id), false);
+  assert.deepEqual(controller.getState().reviewIds, [app.id]);
+  assert.deepEqual(controller.getState().apps[0].launch_config, configured.launch_config);
+  assert.equal(controller.getState().error, null);
+});

@@ -1,7 +1,12 @@
+import type { ConfigurationPreferences, ConfigurationPreview, ConfigurationRestoreRequest } from "./configuration";
 import type { InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 
 export interface Commands {
+  configuration_export: { args: { path: string; preferences: ConfigurationPreferences }; result: null };
+  configuration_read: { args: { path: string }; result: ConfigurationPreview };
+  configuration_restore: { args: { request: ConfigurationRestoreRequest }; result: ConfigurationPreferences };
+  configuration_preferences: { args: { completed: boolean }; result: ConfigurationPreferences | null };
   library_set_icon: { args: { id: string; source: string }; result: InstalledApp };
   library_icon: { args: { id: string }; result: string | null };
   sandbox_status: { args: undefined; result: SandboxStatus };
@@ -26,6 +31,10 @@ export type CommandTransport = <Command extends keyof Commands>(
 
 export interface AppApi {
   readonly isTauri: boolean;
+  configurationExport(preferences: ConfigurationPreferences): Promise<boolean>;
+  configurationRead(): Promise<ConfigurationPreview | null>;
+  configurationRestore(request: ConfigurationRestoreRequest): Promise<ConfigurationPreferences>;
+  configurationPreferences(completed: boolean): Promise<ConfigurationPreferences | null>;
   librarySetIcon(id: string, source: string): Promise<InstalledApp>;
   libraryIcon(id: string): Promise<string | null>;
   pickIcon(): Promise<string | null>;
@@ -58,6 +67,20 @@ export function validateExternalUrl(value: string): string {
 export function createNativeApi(transport: CommandTransport): AppApi {
   return {
     isTauri: true,
+    async configurationExport(preferences) {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const path = await save({ defaultPath: "appbento-settings.json", filters: [{ name: "AppBento configuration", extensions: ["json"] }] });
+      if (!path) return false;
+      await transport("configuration_export", { path, preferences });
+      return true;
+    },
+    async configurationRead() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const path = await open({ multiple: false, filters: [{ name: "AppBento configuration", extensions: ["json"] }] });
+      return typeof path === "string" ? transport("configuration_read", { path }) : null;
+    },
+    configurationRestore: (request) => transport("configuration_restore", { request }),
+    configurationPreferences: (completed) => transport("configuration_preferences", { completed }),
     librarySetIcon: (id, source) => transport("library_set_icon", { id, source }),
     libraryIcon: (id) => transport("library_icon", { id }),
     async pickIcon() {

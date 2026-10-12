@@ -1,4 +1,5 @@
 mod apps;
+mod configuration;
 mod embedded_icon;
 mod github;
 mod icons;
@@ -78,7 +79,7 @@ pub fn run() {
             match store::load_all()
                 .and_then(|mut library| library.remove(id).ok_or("app not found".into()))
             {
-                Ok(app) if app.launch_config.is_some() => {
+                Ok(app) if app.launch_config.is_some() && app.reviewed_digest.is_some() => {
                     if let Err(error) = sandbox::launch_with_wait(id, &arguments[2..], true) {
                         eprintln!("{error}");
                         std::process::exit(1);
@@ -111,6 +112,10 @@ pub fn run() {
             updates_check_all,
             updates_configure,
             updates_install,
+            configuration::configuration_export,
+            configuration::configuration_read,
+            configuration::configuration_restore,
+            configuration::configuration_preferences,
             settings::settings_get,
             settings::settings_set,
         ])

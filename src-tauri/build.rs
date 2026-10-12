@@ -12,6 +12,10 @@ const COMMANDS: &[&str] = &[
     "updates_check_all",
     "updates_configure",
     "updates_install",
+    "configuration_export",
+    "configuration_read",
+    "configuration_restore",
+    "configuration_preferences",
     "settings_get",
     "settings_set",
 ];

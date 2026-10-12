@@ -74,7 +74,7 @@ pub fn normalize_directory(raw: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn validate(settings: Settings) -> Result<Settings, String> {
+pub(crate) fn validate(settings: Settings) -> Result<Settings, String> {
     Ok(Settings {
         managed_dir: normalize_directory(&settings.managed_dir)?
             .to_str()

@@ -255,7 +255,8 @@ fn replacing_reviewed_appimage_requires_new_review() {
     bytes.extend_from_slice(b"changed executable");
     fs::write(&source, bytes).unwrap();
     let apps = service.scan(vec![directory.0.clone()]).unwrap().apps;
-    assert!(apps[0].launch_config.is_none());
+    assert!(apps[0].launch_config.is_some());
+    assert!(apps[0].reviewed_digest.is_none());
 }
 
 #[test]

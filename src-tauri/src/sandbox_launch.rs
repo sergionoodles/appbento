@@ -37,7 +37,6 @@ pub fn launch_with_wait(
     {
         crate::store::mutate_library(|library| {
             let app = library.get_mut(id).ok_or("app not found")?;
-            app.launch_config = None;
             app.reviewed_digest = None;
             Ok(())
         })?;

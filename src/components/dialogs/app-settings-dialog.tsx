@@ -52,9 +52,9 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const [localError, setLocalError] = useState<string | null>(null);
   const sandbox = useSandboxStatus(backend);
 
-  const isReview = !app.launch_config;
+  const isReview = !app.launch_config || app.reviewed_digest === null;
   const hasNameChange = name.trim() !== app.name;
-  // An app without a saved launch config always needs one, even if the defaults were left untouched.
+  // A restored policy awaiting review needs confirmation even if its settings are unchanged.
   const hasPermissionChange = isReview || JSON.stringify(launchConfig) !== JSON.stringify(app.launch_config);
   const hasLaunchChange = JSON.stringify(launchDraft) !== JSON.stringify(launchDraftFromConfig(initialLaunchConfig(app)));
   const hasConfigChange = hasPermissionChange || hasLaunchChange;
@@ -137,7 +137,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
             <div className="flex-1 min-w-0 text-[13px]">
               {localError || error
                 ? <p role="alert" className="text-[var(--bad)]">{localError ?? error}</p>
-                : <p className="text-[var(--muted)]">{isReview ? "Permissions need a review before the first launch." : canSave ? "You have unsaved changes." : null}</p>}
+                : <p className="text-[var(--muted)]">{isReview ? "Confirm permissions before launching this AppImage." : canSave ? "You have unsaved changes." : null}</p>}
             </div>
             <Button variant="ghost" disabled={isSaving} onClick={onClose}>Cancel</Button>
             <Button variant="accent" disabled={!canSave} onClick={() => void save()}>{isSaving ? "Saving…" : launchAfterSave ? "Save and launch" : "Save changes"}</Button>
