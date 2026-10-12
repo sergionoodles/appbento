@@ -14,7 +14,7 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 const DIRECT_UPDATE_LABEL: &str = "Updated file";
 
-async fn transfer(
+pub(crate) async fn transfer(
     url: &str,
     destination: Option<&mut tokio::fs::File>,
     expected_size: Option<u64>,

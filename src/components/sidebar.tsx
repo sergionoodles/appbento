@@ -1,22 +1,23 @@
 import type { ReactNode } from "react";
-import { Folder, LayoutGrid, Plus, Sparkles } from "lucide-react";
+import { Download, Folder, LayoutGrid, PackagePlus, Plus, Sparkles } from "lucide-react";
 import type { AppGroup } from "@/lib/app-layout";
 import { Wordmark } from "./logo";
 
 export type SidebarPage = { name: "all" } | { name: "group"; id: string } | { name: "updates" } | { name: "other" };
 
-function NavItem({ icon, label, ariaLabel, count, isCurrent, isDropActive, dropSection, onClick }: {
+function NavItem({ icon, label, ariaLabel, count, isCurrent, isDisabled = false, isDropActive, dropSection, onClick }: {
   icon: ReactNode;
   label: string;
   ariaLabel?: string;
   count?: ReactNode;
   isCurrent: boolean;
+  isDisabled?: boolean;
   isDropActive?: boolean;
   dropSection?: string;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="nav-item w-full" aria-label={ariaLabel} aria-current={isCurrent ? "page" : undefined}
+    <button type="button" className="nav-item w-full" aria-label={ariaLabel} aria-current={isCurrent ? "page" : undefined} disabled={isDisabled}
       data-drop-section={dropSection} data-drop-active={isDropActive || undefined} onClick={onClick}>
       <span className="shrink-0 opacity-80">{icon}</span>
       <span className="flex-1 truncate">{label}</span>
@@ -34,17 +35,21 @@ function Count({ value, isHighlighted = false }: { value: number; isHighlighted?
   return <span className="text-[12px] tabular-nums text-[var(--muted)]">{value}</span>;
 }
 
-export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, onHome, onGroup, onNewGroup, onUpdates }: {
+export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, canAdd, onHome, onGroup, onNewGroup, onUpdates, onAdd, onAddUrl }: {
   page: SidebarPage;
   appCount: number;
   groups: AppGroup[];
   updateCount: number;
   /** The group a dragged tile would land in, highlighted when the pointer is over its entry. */
   dropSectionId: string | null;
+  /** Adding needs the desktop backend and no operation in progress. */
+  canAdd: boolean;
   onHome: () => void;
   onGroup: (id: string) => void;
   onNewGroup: () => void;
   onUpdates: () => void;
+  onAdd: () => void;
+  onAddUrl: () => void;
 }) {
   return (
     <aside className="w-[220px] shrink-0 flex flex-col bg-[var(--chrome)] border-r border-[var(--hairline)]">
@@ -62,9 +67,11 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, on
           <NavItem icon={<Plus size={16} />} label="New group" isCurrent={false} onClick={onNewGroup} />
         </div>
         <div className="flex flex-col gap-0.5">
-          <SidebarHeading>Maintenance</SidebarHeading>
+          <SidebarHeading>Manage</SidebarHeading>
           <NavItem icon={<Sparkles size={16} />} label="Updates" ariaLabel="Updates" isCurrent={page.name === "updates"}
             count={updateCount > 0 ? <Count value={updateCount} isHighlighted /> : null} onClick={onUpdates} />
+          <NavItem icon={<PackagePlus size={16} />} label="Add an AppImage" isCurrent={false} isDisabled={!canAdd} onClick={onAdd} />
+          <NavItem icon={<Download size={16} />} label="Download from URL" isCurrent={false} isDisabled={!canAdd} onClick={onAddUrl} />
         </div>
       </nav>
     </aside>

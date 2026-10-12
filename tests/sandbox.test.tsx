@@ -63,6 +63,12 @@ describe("AppImage permission review", () => {
     expect(screen.getAllByText(/^Needs setup/)).toHaveLength(2);
   });
 
+  it("shows the version of an app that still needs setup", async () => {
+    const { backend } = unreviewedBackend();
+    render(<App backend={backend} />);
+    expect(await screen.findByText(/^Needs setup · v1/)).toBeInTheDocument();
+  });
+
   it.each([["Add apps", "Scan folders"], ["Add apps", "Add an AppImage"]])("does not open a review for an app discovered by %s > %s", async (menu, item) => {
     const preview = createPreviewApi();
     const app = createPreviewApp("Imported", null);

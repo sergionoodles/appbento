@@ -119,7 +119,8 @@ option { background-color: var(--panel2); color: var(--fg); }
   text-align: left;
   transition: background-color 0.15s, color 0.15s;
 }
-.nav-item:hover { background: color-mix(in oklab, var(--fg) 6%, transparent); color: var(--fg); }
+.nav-item:hover:not(:disabled) { background: color-mix(in oklab, var(--fg) 6%, transparent); color: var(--fg); }
+.nav-item:disabled { opacity: 0.45; cursor: default; }
 .nav-item[aria-current="page"] { background: color-mix(in oklab, var(--fg) 9%, transparent); color: var(--fg); }
 .nav-item[data-drop-active] { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--fg); }
 

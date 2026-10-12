@@ -24,12 +24,24 @@ struct IntegrationPlan {
 
 impl Lifecycle {
     pub fn integrate(&self, source: &Path) -> Result<InstalledApp, String> {
+        self.integrate_source(source, true)
+    }
+
+    pub fn integrate_download(&self, source: &Path) -> Result<InstalledApp, String> {
+        self.integrate_source(source, false)
+    }
+
+    fn integrate_source(&self, source: &Path, retain_source: bool) -> Result<InstalledApp, String> {
         persistence::with_repository(
             &self.library_path,
             |repository: &mut Repository<Library>| {
                 recovery::recover(repository)?;
                 let mut source_file = open_appimage(source)?;
-                let plan = self.prepare_integration(source, &source_file, &repository.state)?;
+                let mut plan = self.prepare_integration(source, &source_file, &repository.state)?;
+                if !retain_source {
+                    plan.app.source_path = None;
+                    plan.journal.installed_app = Some(plan.app.clone());
+                }
                 if let Err(error) = recovery::write(&self.library_path, &plan.journal) {
                     recovery::finish(&self.library_path, &plan.journal, false)
                         .map_err(|cleanup| format!("{error}; recovery required: {cleanup}"))?;

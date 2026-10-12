@@ -204,8 +204,8 @@ fn integration_uses_generic_desktop_metadata() {
     let renamed = source.with_file_name("Neovim-0.10.0.AppImage");
     fs::rename(&source, &renamed).unwrap();
     let app = service.integrate(&renamed).unwrap();
-    assert_eq!(app.name, "Neovim 0.10.0");
-    assert!(app.version_current.is_none());
+    assert_eq!(app.name, "Neovim");
+    assert_eq!(app.version_current.as_deref(), Some("0.10.0"));
     assert!(app.update_config.is_none());
     let desktop = fs::read_to_string(service.desktop_dir.join(app.desktop_id.unwrap())).unwrap();
     assert!(desktop.contains("Terminal=false\n"));
@@ -276,6 +276,65 @@ fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_pr
 }
 
 #[test]
+fn rescan_replaces_filename_defaults_and_renames_the_desktop_entry() {
+    let (_directory, service, source) = fixture();
+    let renamed = source.with_file_name("Tool-linux-2.1.0-x86_64.AppImage");
+    fs::rename(&source, &renamed).unwrap();
+    let app = service.integrate(&renamed).unwrap();
+    let managed_dir = Path::new(&app.file_path).parent().unwrap().to_owned();
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        let stored = library.get_mut(&app.id).unwrap();
+        stored.name = "Tool linux 2.1.0 x86 64".into();
+        stored.version_current = None;
+        Ok(())
+    })
+    .unwrap();
+    let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
+    let original = fs::read_to_string(&desktop_path).unwrap();
+    fs::write(
+        &desktop_path,
+        original.replace("\nName=Tool\n", "\nName=Tool linux 2.1.0 x86 64\n"),
+    )
+    .unwrap();
+
+    let rescanned = service.scan(vec![managed_dir]).unwrap().apps.remove(0);
+    service.list().unwrap();
+
+    assert_eq!(rescanned.name, "Tool");
+    assert_eq!(rescanned.version_current.as_deref(), Some("2.1.0"));
+    let desktop = fs::read_to_string(&desktop_path).unwrap();
+    assert!(desktop.contains("\nName=Tool\n"), "{desktop}");
+}
+
+#[test]
+fn rescan_keeps_names_and_versions_that_differ_from_filename_defaults() {
+    let (directory, service, source) = fixture();
+    let renamed = source.with_file_name("Tool-2.1.0.AppImage");
+    fs::rename(&source, &renamed).unwrap();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        let stored = library.get_mut(&app.id).unwrap();
+        stored.name = "My Tool".into();
+        stored.version_current = Some("3.0.0".into());
+        Ok(())
+    })
+    .unwrap();
+
+    let rescanned = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+
+    assert_eq!(rescanned.name, "My Tool");
+    assert_eq!(rescanned.version_current.as_deref(), Some("3.0.0"));
+}
+
+#[test]
 fn packaged_launcher_uses_stable_outer_appimage_path() {
     let directory = TemporaryDirectory::new();
     let stable = directory.0.join("AppBento.AppImage");
@@ -331,8 +390,8 @@ fn imports_require_review_without_app_specific_presets() {
         .unwrap()
         .apps
         .remove(0);
-    assert_eq!(app.name, "Obsidian 1.2.3");
-    assert!(app.version_current.is_none());
+    assert_eq!(app.name, "Obsidian");
+    assert_eq!(app.version_current.as_deref(), Some("1.2.3"));
     assert!(app.update_config.is_none());
     assert!(app.launch_config.is_none());
     assert!(app.reviewed_digest.is_none());
@@ -556,5 +615,49 @@ fn integrating_updated_portable_preserves_identity_configuration_and_private_hom
     assert_eq!(service.list().unwrap()[0].id, updated.id);
     service.remove(&integrated.id, true).unwrap();
     assert!(source.exists());
+    assert!(service.list().unwrap().is_empty());
+}
+
+#[test]
+fn downloaded_appimage_is_managed_without_a_temporary_source_reference() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate_download(&source).unwrap();
+
+    assert_eq!(
+        app.file_path,
+        service
+            .managed_dir
+            .join("Example.AppImage")
+            .to_str()
+            .unwrap()
+    );
+    assert!(app.integrated);
+    assert!(app.executable);
+    assert!(app.source_path.is_none());
+    assert!(app.launch_config.is_none());
+    assert_eq!(
+        fs::read(&app.file_path).unwrap(),
+        fs::read(&source).unwrap()
+    );
+    assert_eq!(service.list().unwrap()[0].source_path, None);
+    assert!(service.desktop_dir.join(app.desktop_id.unwrap()).exists());
+}
+
+#[test]
+fn downloaded_appimage_cannot_overwrite_existing_files_or_import_invalid_content() {
+    let (_directory, service, source) = fixture();
+    fs::create_dir_all(&service.managed_dir).unwrap();
+    let destination = service.managed_dir.join("Example.AppImage");
+    fs::write(&destination, b"existing file").unwrap();
+
+    assert!(service
+        .integrate_download(&source)
+        .unwrap_err()
+        .contains("destination already exists"));
+    assert_eq!(fs::read(&destination).unwrap(), b"existing file");
+    assert!(service.list().unwrap().is_empty());
+
+    fs::write(&source, b"<html>not an AppImage</html>").unwrap();
+    assert!(service.integrate_download(&source).is_err());
     assert!(service.list().unwrap().is_empty());
 }

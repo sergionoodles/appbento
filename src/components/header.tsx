@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { FolderCog, Plus, ScanSearch, Search, Settings, Upload, Archive } from "lucide-react";
+import { FolderCog, PackagePlus, Plus, ScanSearch, Search, Settings, Archive, Download } from "lucide-react";
 import { Input } from "./ui/card";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 import { ThemeSwatches } from "./theme";
 
-export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onScan }: {
+export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate }: {
   isNative: boolean;
   query: string;
   onQuery: (query: string) => void;
@@ -13,7 +13,10 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
   onFolders: () => void;
   onConfiguration: () => void;
   onAdd: () => void;
+  onAddUrl: () => void;
   onScan: () => void;
+  updateVersion?: string;
+  onSelfUpdate: () => void;
 }) {
   const search = useRef<HTMLInputElement>(null);
 
@@ -39,12 +42,14 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
       {!isNative ? <span className="text-[12px] text-[var(--warn)]" title="Launch and file management run in the desktop app.">sample data</span> : null}
       <div className="ml-auto flex items-center gap-1">
         <Menu label="Add apps" icon={<Plus size={17} />} disabled={disabled}>
-          <MenuItem icon={<Upload size={15} />} onSelect={onAdd} disabled={!isNative}>Add an AppImage</MenuItem>
+          <MenuItem icon={<PackagePlus size={15} />} onSelect={onAdd} disabled={!isNative}>Add an AppImage</MenuItem>
+          <MenuItem icon={<Download size={15} />} onSelect={onAddUrl} disabled={!isNative}>Download from URL</MenuItem>
           <MenuItem icon={<ScanSearch size={15} />} onSelect={onScan}>Scan folders</MenuItem>
         </Menu>
-        <Menu label="Settings" icon={<Settings size={16} />}>
+        <Menu label="Settings" icon={<span className="relative"><Settings size={16} />{updateVersion ? <span role="status" aria-label={`AppBento ${updateVersion} update available`} className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--accent)] ring-2 ring-[var(--panel)]" /> : null}</span>}>
           <MenuItem icon={<FolderCog size={15} />} onSelect={onFolders} disabled={!canEditFolders || disabled}>Folders</MenuItem>
           <MenuItem icon={<Archive size={15} />} onSelect={onConfiguration} disabled={!isNative || disabled}>Export / restore settings</MenuItem>
+          <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>
           <MenuSeparator />
           <ThemeSwatches />
         </Menu>

@@ -1,9 +1,12 @@
 const COMMANDS: &[&str] = &[
+    "self_update_check",
+    "self_update_install",
     "library_list",
     "library_icon",
     "library_set_icon",
     "library_scan",
     "library_integrate",
+    "library_add_url",
     "library_launch",
     "library_configure",
     "sandbox_status",

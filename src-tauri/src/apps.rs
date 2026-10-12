@@ -66,6 +66,21 @@ pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport,
 }
 
 #[tauri::command]
+pub async fn library_add_url(url: String) -> Result<InstalledApp, String> {
+    let service = tokio::task::spawn_blocking(lifecycle)
+        .await
+        .map_err(|error| error.to_string())??;
+    let app = crate::import_download::install(&url, service).await?;
+    match discover_icon(&app).await {
+        Ok(discovered) => Ok(discovered),
+        Err(error) => {
+            eprintln!("icon discovery failed for {}: {error}", app.id);
+            Ok(app)
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn library_integrate(source_path: String) -> Result<InstalledApp, String> {
     let app =
         tokio::task::spawn_blocking(move || lifecycle()?.integrate(&PathBuf::from(source_path)))

@@ -1,6 +1,6 @@
 import { Profiler } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import { createPreviewApi, createPreviewApp } from "../src/lib/preview";
@@ -333,4 +333,69 @@ it("shows only the local library and its update tools", async () => {
   expect(screen.queryByRole("button", { name: "Discover" })).not.toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "Filter applications" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Updates" })).toBeInTheDocument();
+});
+
+it("offers add shortcuts in the sidebar only in the desktop app", async () => {
+  const user = await openHome({ ...createPreviewApi(), isTauri: true });
+  const sidebar = screen.getByRole("navigation", { name: "Library" });
+  await user.click(within(sidebar).getByRole("button", { name: "Download from URL" }));
+  expect(screen.getByRole("dialog", { name: "Download from URL" })).toBeInTheDocument();
+  cleanup();
+
+  await openHome(createPreviewApi());
+  const browserSidebar = screen.getByRole("navigation", { name: "Library" });
+  expect(within(browserSidebar).getByRole("button", { name: "Add an AppImage" })).toBeDisabled();
+  expect(within(browserSidebar).getByRole("button", { name: "Download from URL" })).toBeDisabled();
+});
+
+it("downloads an AppImage from the add menu and refreshes the library", async () => {
+  const preview = createPreviewApi();
+  const imported = createPreviewApp("Downloaded", null);
+  const urls: string[] = [];
+  let hasImported = false;
+  let finishDownload: (() => void) | undefined;
+  const user = await openHome({
+    ...preview, isTauri: true,
+    async libraryAddUrl(url) {
+      urls.push(url);
+      await new Promise<void>((resolve) => { finishDownload = resolve; });
+      hasImported = true;
+      return imported;
+    },
+    async libraryList() { return [...await preview.libraryList(), ...(hasImported ? [imported] : [])]; },
+  });
+  await chooseFromMenu(user, "Add apps", "Download from URL");
+  const dialog = screen.getByRole("dialog", { name: "Download from URL" });
+  expect(within(dialog).getByText(/\/preview\/Applications/)).toBeInTheDocument();
+  await user.type(within(dialog).getByRole("textbox", { name: "AppImage URL" }), "https://example.org/Downloaded.AppImage");
+  await user.click(within(dialog).getByRole("button", { name: "download + add" }));
+  expect(within(dialog).getByRole("status")).toHaveTextContent("Downloading");
+  expect(within(dialog).getByRole("button", { name: "cancel" })).toBeDisabled();
+  await user.keyboard("{Escape}");
+  expect(dialog).toBeInTheDocument();
+  finishDownload?.();
+  await screen.findByText("Downloaded");
+  expect(screen.queryByRole("dialog", { name: "Download from URL" })).not.toBeInTheDocument();
+  expect(urls).toEqual(["https://example.org/Downloaded.AppImage"]);
+});
+
+it("validates URL imports and preserves the URL after a failed download", async () => {
+  const urls: string[] = [];
+  const user = await openHome({ ...createPreviewApi(), isTauri: true, async libraryAddUrl(url) {
+    urls.push(url);
+    throw new Error("Download failed: 404");
+  } });
+  await chooseFromMenu(user, "Add apps", "Download from URL");
+  const dialog = screen.getByRole("dialog", { name: "Download from URL" });
+  const input = within(dialog).getByRole("textbox", { name: "AppImage URL" });
+  await user.type(input, "http://example.org/App.AppImage");
+  await user.click(within(dialog).getByRole("button", { name: "download + add" }));
+  expect(within(dialog).getByRole("alert")).toHaveTextContent("HTTPS");
+  expect(urls).toEqual([]);
+  await user.clear(input);
+  await user.type(input, "https://example.org/App.AppImage");
+  await user.click(within(dialog).getByRole("button", { name: "download + add" }));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Download failed: 404");
+  expect(input).toHaveValue("https://example.org/App.AppImage");
+  expect(within(dialog).getByRole("button", { name: "download + add" })).toBeEnabled();
 });

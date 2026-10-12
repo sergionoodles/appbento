@@ -4,17 +4,31 @@ use std::io::{Read, Seek, SeekFrom};
 use std::os::fd::AsRawFd;
 use std::path::{Component, Path};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, LazyLock};
 use std::time::{Duration, Instant};
+
+use regex::Regex;
 
 const RUNTIME_LIMIT: usize = 16 * 1024 * 1024;
 const LIST_LIMIT: usize = 1024 * 1024;
 const DESKTOP_LIMIT: usize = 64 * 1024;
+const APPSTREAM_LIMIT: usize = 256 * 1024;
 const ICON_LIMIT: usize = 5 * 1024 * 1024;
 const CANDIDATE_LIMIT: usize = 8;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const LIST_PREFIX: &str = "squashfs-root/";
+/// Directories below the AppImage root that hold icons and AppStream metadata. Listing only
+/// these keeps large AppImages (thousands of bundled files) within `LIST_LIMIT`.
+const METADATA_DIRECTORIES: [&str; 7] = [
+    "usr/share/icons",
+    "usr/share/pixmaps",
+    "usr/share/metainfo",
+    "usr/share/appdata",
+    "share/icons",
+    "share/metainfo",
+    "share/appdata",
+];
 
 #[derive(Debug, Default)]
 pub struct EmbeddedMetadata {
@@ -22,56 +36,135 @@ pub struct EmbeddedMetadata {
     pub website: Option<String>,
 }
 
-pub fn discover(path: &Path) -> Result<EmbeddedMetadata, String> {
-    let mut file = crate::lifecycle::open_appimage(path)?;
-    let offset = squashfs_offset(&mut file)?;
+/// Name and version as the AppImage declares them, before any cleanup.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct EmbeddedIdentity {
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct DesktopEntry {
+    icon: Option<String>,
+    website: Option<String>,
+    name: Option<String>,
+    version: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AppStreamComponent {
+    name: Option<String>,
+    version: Option<String>,
+}
+
+struct SquashfsImage {
     // Keep the validated inode open so a concurrent path replacement cannot change the input.
-    let source = format!("/proc/{}/fd/{}", std::process::id(), file.as_raw_fd());
-    let deadline = Instant::now() + DISCOVERY_TIMEOUT;
-    let listing = run_unsquashfs(&source, offset, &["-ls"], LIST_LIMIT, deadline)?;
-    let paths = parse_listing(&String::from_utf8_lossy(&listing));
-    let mut metadata = EmbeddedMetadata::default();
-    let mut icon_names = Vec::new();
-    for desktop in paths
-        .iter()
-        .filter(|path| !path.contains('/') && path.ends_with(".desktop"))
-        .take(CANDIDATE_LIMIT)
-    {
-        let bytes = run_unsquashfs(
+    _file: File,
+    source: String,
+    offset: u64,
+    paths: Vec<String>,
+    deadline: Instant,
+}
+
+impl SquashfsImage {
+    fn open(path: &Path) -> Result<Self, String> {
+        let mut file = crate::lifecycle::open_appimage(path)?;
+        let offset = squashfs_offset(&mut file)?;
+        let source = format!("/proc/{}/fd/{}", std::process::id(), file.as_raw_fd());
+        let deadline = Instant::now() + DISCOVERY_TIMEOUT;
+        let root = run_unsquashfs(
             &source,
             offset,
-            &["-cat", "-follow", desktop],
-            DESKTOP_LIMIT,
+            &["-ls", "-max-depth", "1"],
+            &[],
+            LIST_LIMIT,
             deadline,
-        );
-        let bytes = match bytes {
-            Ok(bytes) => bytes,
-            Err(error) if Instant::now() >= deadline => return Err(error),
-            Err(_) => continue,
-        };
-        let (icon, website) = desktop_metadata(&String::from_utf8_lossy(&bytes));
-        metadata.website = metadata.website.or(website);
-        if let Some(icon) = icon {
+        )?;
+        let nested = run_unsquashfs(
+            &source,
+            offset,
+            &["-ls"],
+            &METADATA_DIRECTORIES,
+            LIST_LIMIT,
+            deadline,
+        )?;
+        let mut paths = parse_listing(&String::from_utf8_lossy(&root));
+        paths.extend(parse_listing(&String::from_utf8_lossy(&nested)));
+        Ok(Self {
+            _file: file,
+            source,
+            offset,
+            paths,
+            deadline,
+        })
+    }
+
+    /// Reads an entry, skipping unreadable ones unless the overall deadline has passed.
+    fn read(&self, entry: &str, limit: usize) -> Result<Option<Vec<u8>>, String> {
+        match run_unsquashfs(
+            &self.source,
+            self.offset,
+            &["-cat", "-follow"],
+            &[entry],
+            limit,
+            self.deadline,
+        ) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if Instant::now() >= self.deadline => Err(error),
+            Err(_) => Ok(None),
+        }
+    }
+
+    fn desktop_entries(&self) -> Result<Vec<DesktopEntry>, String> {
+        let mut entries = Vec::new();
+        for desktop in self
+            .paths
+            .iter()
+            .filter(|path| !path.contains('/') && path.ends_with(".desktop"))
+            .take(CANDIDATE_LIMIT)
+        {
+            if let Some(bytes) = self.read(desktop, DESKTOP_LIMIT)? {
+                entries.push(desktop_metadata(&String::from_utf8_lossy(&bytes)));
+            }
+        }
+        Ok(entries)
+    }
+
+    fn appstream_components(&self) -> Result<Vec<AppStreamComponent>, String> {
+        let mut components = Vec::new();
+        for metadata in self
+            .paths
+            .iter()
+            .filter(|path| is_appstream_path(path))
+            .take(CANDIDATE_LIMIT)
+        {
+            if let Some(bytes) = self.read(metadata, APPSTREAM_LIMIT)? {
+                components.push(appstream_metadata(&String::from_utf8_lossy(&bytes)));
+            }
+        }
+        Ok(components)
+    }
+}
+
+pub fn discover(path: &Path) -> Result<EmbeddedMetadata, String> {
+    let image = SquashfsImage::open(path)?;
+    let mut metadata = EmbeddedMetadata::default();
+    let mut icon_names = Vec::new();
+    for entry in image.desktop_entries()? {
+        metadata.website = metadata.website.or(entry.website);
+        if let Some(icon) = entry.icon {
             icon_names.push(icon);
         }
     }
-    let mut candidates = icon_candidates(&paths, &icon_names);
+    let mut candidates = icon_candidates(&image.paths, &icon_names);
     candidates.sort_by_key(|path| path.contains('/'));
-    if paths.iter().any(|path| path == ".DirIcon") {
+    if image.paths.iter().any(|path| path == ".DirIcon") {
         candidates.truncate(CANDIDATE_LIMIT - 1);
         candidates.push(".DirIcon".into());
     }
     for candidate in candidates.into_iter().take(CANDIDATE_LIMIT) {
-        let bytes = match run_unsquashfs(
-            &source,
-            offset,
-            &["-cat", "-follow", &candidate],
-            ICON_LIMIT,
-            deadline,
-        ) {
-            Ok(bytes) => bytes,
-            Err(error) if Instant::now() >= deadline => return Err(error),
-            Err(_) => continue,
+        let Some(bytes) = image.read(&candidate, ICON_LIMIT)? else {
+            continue;
         };
         if crate::icons::image_format(&bytes).is_ok() {
             metadata.icon = Some(bytes);
@@ -79,6 +172,27 @@ pub fn discover(path: &Path) -> Result<EmbeddedMetadata, String> {
         }
     }
     Ok(metadata)
+}
+
+/// Prefers the AppStream name (the canonical product name; desktop entries often add
+/// qualifiers such as "Portable") and the explicit AppImage version over release history.
+pub fn discover_identity(path: &Path) -> Result<EmbeddedIdentity, String> {
+    let image = SquashfsImage::open(path)?;
+    let desktop_entries = image.desktop_entries()?;
+    let components = image.appstream_components()?;
+    let name = components
+        .iter()
+        .find_map(|component| component.name.clone())
+        .or_else(|| desktop_entries.iter().find_map(|entry| entry.name.clone()));
+    let version = desktop_entries
+        .iter()
+        .find_map(|entry| entry.version.clone())
+        .or_else(|| {
+            components
+                .iter()
+                .find_map(|component| component.version.clone())
+        });
+    Ok(EmbeddedIdentity { name, version })
 }
 
 fn squashfs_offset(file: &mut File) -> Result<u64, String> {
@@ -121,7 +235,8 @@ fn squashfs_offset(file: &mut File) -> Result<u64, String> {
 fn run_unsquashfs(
     source: &str,
     offset: u64,
-    arguments: &[&str],
+    options: &[&str],
+    paths: &[&str],
     limit: usize,
     deadline: Instant,
 ) -> Result<Vec<u8>, String> {
@@ -129,10 +244,6 @@ fn run_unsquashfs(
         return Err("embedded icon discovery timed out".into());
     }
     let offset = offset.to_string();
-    let (options, paths): (Vec<&str>, Vec<&str>) = arguments
-        .iter()
-        .copied()
-        .partition(|value| value.starts_with('-'));
     let mut child = Command::new("/usr/bin/unsquashfs")
         .args([
             "-no-wildcards",
@@ -227,10 +338,9 @@ fn parse_listing(listing: &str) -> Vec<String> {
         .collect()
 }
 
-fn desktop_metadata(desktop: &str) -> (Option<String>, Option<String>) {
+fn desktop_metadata(desktop: &str) -> DesktopEntry {
     let mut in_entry = false;
-    let mut icon = None;
-    let mut website = None;
+    let mut entry = DesktopEntry::default();
     for line in desktop.lines().map(str::trim) {
         if line.starts_with('[') {
             in_entry = line == "[Desktop Entry]";
@@ -243,18 +353,61 @@ fn desktop_metadata(desktop: &str) -> (Option<String>, Option<String>) {
             continue;
         };
         let value = value.trim();
-        if key == "Icon" && is_safe_path(value) {
-            icon = Some(value.to_owned());
-        }
-        if matches!(
-            key,
+        match key.trim() {
+            "Icon" if is_safe_path(value) => entry.icon = Some(value.to_owned()),
             "URL" | "Website" | "X-AppImage-URL" | "X-AppImage-Website"
-        ) && (value.starts_with("https://") || value.starts_with("http://"))
-        {
-            website = Some(value.to_owned());
+                if value.starts_with("https://") || value.starts_with("http://") =>
+            {
+                entry.website = Some(value.to_owned())
+            }
+            // `Version` is the Desktop Entry specification version, not the app version.
+            "Name" if !value.is_empty() => entry.name = Some(value.to_owned()),
+            "X-AppImage-Version" if !value.is_empty() => entry.version = Some(value.to_owned()),
+            _ => {}
         }
     }
-    (icon, website)
+    entry
+}
+
+fn is_appstream_path(path: &str) -> bool {
+    let is_metadata_directory = ["metainfo/", "appdata/"].iter().any(|directory| {
+        path.starts_with(&format!("usr/share/{directory}"))
+            || path.starts_with(&format!("share/{directory}"))
+    });
+    is_metadata_directory && path.ends_with(".xml")
+}
+
+static APPSTREAM_DEVELOPER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)<developer\b.*?</developer>").expect("valid regex"));
+// Only the untranslated `<name>` has no attributes; translations carry `xml:lang`.
+static APPSTREAM_NAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<name>\s*([^<]+?)\s*</name>").expect("valid regex"));
+// AppStream lists releases newest first.
+static APPSTREAM_RELEASE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"<release\b[^>]*?\sversion\s*=\s*["']([^"']+)["']"#).expect("valid regex")
+});
+
+fn appstream_metadata(xml: &str) -> AppStreamComponent {
+    let component = APPSTREAM_DEVELOPER.replace_all(xml, "");
+    let capture = |expression: &Regex| {
+        expression
+            .captures(&component)
+            .and_then(|captures| captures.get(1))
+            .map(|value| decode_xml_entities(value.as_str()))
+    };
+    AppStreamComponent {
+        name: capture(&APPSTREAM_NAME),
+        version: capture(&APPSTREAM_RELEASE),
+    }
+}
+
+fn decode_xml_entities(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 fn icon_candidates(paths: &[String], names: &[String]) -> Vec<String> {
@@ -295,14 +448,45 @@ mod tests {
 
     #[test]
     fn parses_only_safe_desktop_entry_metadata() {
-        assert_eq!(desktop_metadata("[Desktop Entry]\nIcon=sample\nX-AppImage-URL=https://example.org\n[Other]\nIcon=wrong"),
-            (Some("sample".into()), Some("https://example.org".into())));
+        assert_eq!(desktop_metadata("[Desktop Entry]\nName=Sample\nName[de]=Beispiel\nVersion=1.0\nX-AppImage-Version=2.3.4\nIcon=sample\nX-AppImage-URL=https://example.org\n[Other]\nIcon=wrong\nName=Wrong"),
+            DesktopEntry {
+                icon: Some("sample".into()),
+                website: Some("https://example.org".into()),
+                name: Some("Sample".into()),
+                version: Some("2.3.4".into()),
+            });
         for icon in ["../outside", "/absolute", "-option", "folder/../outside"] {
             assert_eq!(
                 desktop_metadata(&format!("[Desktop Entry]\nIcon={icon}")),
-                (None, None)
+                DesktopEntry::default()
             );
         }
+    }
+
+    #[test]
+    fn parses_the_component_name_and_newest_release() {
+        let xml = r#"<?xml version="1.0"?>
+<component type="desktop-application">
+  <developer id="org.example"><name>Example Developers</name></developer>
+  <name xml:lang="de">Beispiel</name>
+  <name>Sample &amp; Co</name>
+  <releases>
+    <release version="4.0.1" date="2026-09-23"/>
+    <release version="4.0.0" date="2026-08-01"/>
+  </releases>
+</component>"#;
+        assert_eq!(
+            appstream_metadata(xml),
+            AppStreamComponent {
+                name: Some("Sample & Co".into()),
+                version: Some("4.0.1".into()),
+            }
+        );
+        assert!(is_appstream_path("share/metainfo/org.example.appdata.xml"));
+        assert!(is_appstream_path(
+            "usr/share/metainfo/org.example.metainfo.xml"
+        ));
+        assert!(!is_appstream_path("usr/share/icons/index.xml"));
     }
 
     #[test]
@@ -335,10 +519,22 @@ mod tests {
         fs::write(temporary.join("root/fallback.svg"), fallback).unwrap();
         fs::write(
             temporary.join("root/sample.desktop"),
-            "[Desktop Entry]\nIcon=sample\nURL=https://example.org\n",
+            "[Desktop Entry]\nName=Sample Portable\nVersion=1.0\nIcon=sample\nURL=https://example.org\n",
         )
         .unwrap();
         symlink("fallback.svg", temporary.join("root/.DirIcon")).unwrap();
+        fs::create_dir_all(temporary.join("root/usr/share/metainfo")).unwrap();
+        fs::write(
+            temporary.join("root/usr/share/metainfo/org.example.Sample.metainfo.xml"),
+            "<component><name>Sample</name><releases><release version=\"2.0.0\"/></releases></component>",
+        )
+        .unwrap();
+        // Enough bundled files that a full listing would exceed LIST_LIMIT.
+        let bundled = temporary.join("root/lib/bundled");
+        fs::create_dir_all(&bundled).unwrap();
+        for index in 0..(LIST_LIMIT / 200 + 1) {
+            fs::write(bundled.join(format!("{index:0>200}")), b"").unwrap();
+        }
         for named_icon in [true, false] {
             if !named_icon {
                 fs::write(
@@ -379,12 +575,20 @@ mod tests {
                 })
             );
             assert_eq!(metadata.website.as_deref(), Some("https://example.org"));
+            assert_eq!(
+                discover_identity(&path).unwrap(),
+                EmbeddedIdentity {
+                    name: Some("Sample".into()),
+                    version: Some("2.0.0".into()),
+                }
+            );
         }
         let source = temporary.join("filesystem");
         assert!(run_unsquashfs(
             source.to_str().unwrap(),
             0,
-            &["-cat", "usr/share/icons/sample.svg"],
+            &["-cat"],
+            &["usr/share/icons/sample.svg"],
             4,
             Instant::now() + DISCOVERY_TIMEOUT
         )

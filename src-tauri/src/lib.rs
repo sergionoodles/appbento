@@ -1,12 +1,15 @@
+mod app_identity;
 mod apps;
 mod configuration;
 mod embedded_icon;
 mod github;
 mod icons;
+mod import_download;
 mod lifecycle;
 mod models;
 mod persistence;
 mod sandbox;
+mod self_update;
 mod settings;
 mod store;
 mod update_download;
@@ -98,10 +101,28 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(self_update::SelfUpdateState::default())
+        .on_window_event(|window, event| {
+            use std::sync::atomic::Ordering;
+            use tauri::Manager;
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window
+                    .state::<self_update::SelfUpdateState>()
+                    .is_installing
+                    .load(Ordering::Acquire)
+                {
+                    api.prevent_close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
+            self_update::self_update_check,
+            self_update::self_update_install,
             apps::library_list,
             apps::library_scan,
             apps::library_integrate,
+            apps::library_add_url,
             apps::library_launch,
             apps::library_configure,
             apps::library_set_icon,
@@ -131,9 +152,12 @@ mod permission_tests {
         let authority = context.runtime_authority_mut();
         for command in [
             "library_icon",
+            "library_add_url",
             "library_set_icon",
             "updates_configure",
             "updates_install",
+            "self_update_check",
+            "self_update_install",
         ] {
             assert!(
                 authority

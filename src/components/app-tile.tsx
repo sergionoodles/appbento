@@ -28,8 +28,7 @@ export interface TilePlacement {
 
 function statusText(app: InstalledApp, update?: UpdateInfo) {
   const fileAge = formatAge(app.file_created_at);
-  const baseStatus = app.launch_config ? `${accessLabel(app)} · ${versionLabel(app)}` : accessLabel(app);
-  return [updateLabel(update), baseStatus, fileAge].filter(Boolean).join(" · ");
+  return [updateLabel(update), accessLabel(app), versionLabel(app), fileAge].filter(Boolean).join(" · ");
 }
 
 function TileFace({ app, update, menu, launch }: {

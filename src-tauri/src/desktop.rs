@@ -81,23 +81,30 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         .lines()
         .find(|line| line.starts_with("Exec="))
         .ok_or("missing Exec")?;
+    let expected_name = current
+        .lines()
+        .find(|line| line.starts_with("Name="))
+        .ok_or("missing Name")?;
     if !content
         .lines()
         .any(|line| line == "X-AppBento-Managed=true")
     {
         return Err("desktop entry ownership cannot be verified".into());
     }
-    if content.lines().any(|line| line == expected_exec) {
-        return Ok(());
-    }
-    if !content.lines().any(|line| line == legacy_exec) {
+    if !content
+        .lines()
+        .any(|line| line == expected_exec || line == legacy_exec)
+    {
         return Err("desktop entry ownership cannot be verified".into());
     }
+    // Names change when embedded metadata replaces the filename-derived default.
     let migrated = content
         .lines()
         .map(|line| {
             if line.starts_with("Exec=") {
                 expected_exec
+            } else if line.starts_with("Name=") {
+                expected_name
             } else {
                 line
             }
@@ -105,6 +112,9 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         .collect::<Vec<_>>()
         .join("\n")
         + "\n";
+    if migrated == content {
+        return Ok(());
+    }
     crate::persistence::write_atomic(path, migrated.as_bytes()).map_err(|error| error.message)
 }
 

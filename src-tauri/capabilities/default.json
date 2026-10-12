@@ -7,6 +7,8 @@
   ],
   "permissions": [
     "core:default",
+    "allow-self-update-check",
+    "allow-self-update-install",
     "dialog:allow-open",
     "dialog:allow-save",
     {
@@ -22,6 +24,7 @@
     "allow-library-set-icon",
     "allow-library-scan",
     "allow-library-integrate",
+    "allow-library-add-url",
     "allow-library-launch",
     "allow-library-configure",
     "allow-sandbox-status",

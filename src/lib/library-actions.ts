@@ -96,6 +96,10 @@ export function createLibraryActions(
         await launchAndRefresh(id);
       });
     },
+    addUrl: (url: string) => runOperation("Download AppImage", async () => {
+      await backend.libraryAddUrl(url);
+      publishApps(await backend.libraryList());
+    }, true),
     integrate: () => runOperation("Add AppImage", async () => {
       const selected = await backend.pickAppImage();
       if (!selected) return;

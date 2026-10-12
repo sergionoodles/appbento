@@ -41,6 +41,15 @@
       "appimage": {
         "bundleMediaFramework": false
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVDNTQwN0U4RkNFMTU4OUEKUldTYVdPSDg2QWRVWExuVHJ4TVFyd0RmQ2JydFlCVnFub2xVZlZVRVBLNDBwZHhsR1VWeGwzNzEK",
+      "endpoints": [
+        "https://github.com/sergionoodles/appbento/releases/latest/download/latest.json"
+      ]
     }
   }
 }

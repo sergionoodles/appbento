@@ -51,6 +51,8 @@ export function createPreviewApi(): AppApi {
 
   return {
     isTauri: false,
+    async selfUpdateCheck() { return { currentVersion: "0.1.0", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
+    async selfUpdateInstall() { throw new Error("Updating AppBento requires the desktop AppImage."); },
     async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },
     async configurationRead() { throw new Error("Importing settings requires the desktop app."); },
     async configurationRestore() { throw new Error("Restoring settings requires the desktop app."); },
@@ -66,6 +68,7 @@ export function createPreviewApi(): AppApi {
     },
     async libraryList() { return structuredClone(apps); },
     async libraryScan() { return { apps: structuredClone(apps), warnings: [] }; },
+    async libraryAddUrl() { throw new Error("Downloading AppImages requires the desktop app."); },
     async libraryIntegrate() { throw new Error("File integration requires the desktop app."); },
     async libraryLaunch(id) {
       const app = findApp(id);

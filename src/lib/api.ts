@@ -1,8 +1,12 @@
 import type { ConfigurationPreferences, ConfigurationPreview, ConfigurationRestoreRequest } from "./configuration";
 import type { InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
+import type { Channel } from "@tauri-apps/api/core";
+import type { SelfUpdateBackend, SelfUpdateCheck, SelfUpdateProgress } from "./self-update";
 
 export interface Commands {
+  self_update_check: { args: undefined; result: SelfUpdateCheck };
+  self_update_install: { args: { onProgress: Channel<SelfUpdateProgress> }; result: null };
   configuration_export: { args: { path: string; preferences: ConfigurationPreferences }; result: null };
   configuration_read: { args: { path: string }; result: ConfigurationPreview };
   configuration_restore: { args: { request: ConfigurationRestoreRequest }; result: ConfigurationPreferences };
@@ -13,6 +17,7 @@ export interface Commands {
   library_configure: { args: { id: string; config: LaunchConfig }; result: InstalledApp };
   library_list: { args: undefined; result: InstalledApp[] };
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
+  library_add_url: { args: { url: string }; result: InstalledApp };
   library_integrate: { args: { sourcePath: string }; result: InstalledApp };
   library_launch: { args: { id: string }; result: InstalledApp };
   library_remove: { args: { id: string; deleteFile: boolean }; result: null };
@@ -29,7 +34,7 @@ export type CommandTransport = <Command extends keyof Commands>(
   args: Commands[Command]["args"],
 ) => Promise<Commands[Command]["result"]>;
 
-export interface AppApi {
+export interface AppApi extends SelfUpdateBackend {
   readonly isTauri: boolean;
   configurationExport(preferences: ConfigurationPreferences): Promise<boolean>;
   configurationRead(): Promise<ConfigurationPreview | null>;
@@ -42,6 +47,7 @@ export interface AppApi {
   libraryConfigure(id: string, config: LaunchConfig): Promise<InstalledApp>;
   libraryList(): Promise<InstalledApp[]>;
   libraryScan(): Promise<ScanReport>;
+  libraryAddUrl(url: string): Promise<InstalledApp>;
   libraryIntegrate(sourcePath: string): Promise<InstalledApp>;
   libraryLaunch(id: string): Promise<InstalledApp>;
   libraryRemove(id: string, deleteFile: boolean): Promise<void>;
@@ -67,6 +73,13 @@ export function validateExternalUrl(value: string): string {
 export function createNativeApi(transport: CommandTransport): AppApi {
   return {
     isTauri: true,
+    selfUpdateCheck: () => transport("self_update_check", undefined),
+    async selfUpdateInstall(onProgress) {
+      const { Channel } = await import("@tauri-apps/api/core");
+      const channel = new Channel<SelfUpdateProgress>();
+      channel.onmessage = onProgress;
+      await transport("self_update_install", { onProgress: channel });
+    },
     async configurationExport(preferences) {
       const { save } = await import("@tauri-apps/plugin-dialog");
       const path = await save({ defaultPath: "appbento-settings.json", filters: [{ name: "AppBento configuration", extensions: ["json"] }] });
@@ -92,6 +105,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     libraryConfigure: (id, config) => transport("library_configure", { id, config }),
     libraryList: () => transport("library_list", undefined),
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
+    libraryAddUrl: (url) => transport("library_add_url", { url }),
     libraryIntegrate: (sourcePath) => transport("library_integrate", { sourcePath }),
     libraryLaunch: (id) => transport("library_launch", { id }),
     libraryRemove: async (id, deleteFile) => {

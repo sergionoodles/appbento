@@ -100,3 +100,15 @@ test("preview checks only configured apps and installing retains identity and la
   await preview.updatesConfigure(app.id, null);
   assert.equal((await preview.updatesCheckAll()).checked_count, 0);
 });
+
+test("native URL imports send the URL and propagate download failures", async () => {
+  const calls: unknown[] = [];
+  const app = createPreviewApp("Downloaded", null);
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return app as Commands[Command]["result"];
+  };
+  assert.deepEqual(await createNativeApi(transport).libraryAddUrl("https://example.org/App.AppImage"), app);
+  assert.deepEqual(calls, [{ command: "library_add_url", args: { url: "https://example.org/App.AppImage" } }]);
+  await assert.rejects(createNativeApi(async () => { throw new Error("Download failed"); }).libraryAddUrl("https://example.org/App.AppImage"), /Download failed/);
+});
