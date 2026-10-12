@@ -14,7 +14,7 @@ it("opens the latest launch log from the app menu, refreshes, and copies output"
   render(<App backend={backend} />);
   await screen.findByRole("heading", { name: "All apps" });
   await chooseFromMenu(user, "More options for Obsidian", "View logs");
-  const dialog = screen.getByRole("dialog", { name: "Launch logs for Obsidian" });
+  const dialog = screen.getByRole("dialog", { name: "Obsidian latest launch logs" });
   const output = await within(dialog).findByLabelText("Launch log output");
   expect(output).toHaveTextContent("bwrap: permission denied");
   await user.click(within(dialog).getByRole("button", { name: "Copy logs" }));

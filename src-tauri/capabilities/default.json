@@ -26,6 +26,7 @@
     "allow-library-integrate",
     "allow-library-add-url",
     "allow-library-launch",
+    "allow-library-launch-log",
     "allow-library-configure",
     "allow-sandbox-status",
     "allow-library-remove",

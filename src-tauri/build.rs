@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "library_integrate",
     "library_add_url",
     "library_launch",
+    "library_launch_log",
     "library_configure",
     "sandbox_status",
     "library_remove",

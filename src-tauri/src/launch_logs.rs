@@ -58,7 +58,7 @@ fn read_path(path: &std::path::Path) -> Result<Option<LaunchLog>, String> {
     }
     Ok(Some(LaunchLog {
         started_at: saved.started_at,
-        text: lines.join("\n"),
+        text: lines.join("\n").trim_start_matches(['\r', '\n']).to_owned(),
     }))
 }
 
@@ -159,6 +159,32 @@ fn append_bytes_in_place(saved: &mut SavedLog, bytes: &[u8]) {
 mod tests {
     use super::*;
     use crate::persistence::tests::TemporaryDirectory;
+
+    #[test]
+    fn reads_launch_errors_without_a_leading_blank_line() {
+        let directory = TemporaryDirectory::new();
+        let path = directory.0.join("log.json");
+        let recorder = Recorder::start_at(path.clone()).unwrap();
+        recorder.record_error("launch failed");
+        assert_eq!(
+            read_path(&path).unwrap().unwrap().text,
+            "[AppBento] launch failed"
+        );
+    }
+
+    #[test]
+    fn removes_leading_blank_lines_but_preserves_indentation_and_internal_spacing() {
+        let directory = TemporaryDirectory::new();
+        let path = directory.0.join("log.json");
+        let recorder = Recorder::start_at(path.clone()).unwrap();
+        recorder
+            .append(b"\r\n\n  diagnostic\n\n  details\n")
+            .unwrap();
+        assert_eq!(
+            read_path(&path).unwrap().unwrap().text,
+            "  diagnostic\n\n  details"
+        );
+    }
 
     #[test]
     fn retains_latest_lines_and_partial_output_on_disk() {

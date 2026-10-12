@@ -19,7 +19,7 @@ describe("icon palettes", () => {
       222, 30, 42, 255,
       20, 30, 220, 255,
     ];
-    expect(paletteFromPixels(pixels)).toEqual({ accent: "rgb(221 29 41)", onAccent: "#ffffff" });
+    expect(paletteFromPixels(pixels)).toEqual({ accent: "rgb(221 29 41)", onAccent: "#ffffff", isVeryDark: false });
   });
 
   it("weights partially transparent colors by their visibility", () => {
@@ -27,8 +27,15 @@ describe("icon palettes", () => {
   });
 
   it("handles monochrome icons with contrasting foreground colors", () => {
-    expect(paletteFromPixels([255, 255, 255, 255])).toEqual({ accent: "rgb(255 255 255)", onAccent: "#000000" });
-    expect(paletteFromPixels([0, 0, 0, 255])).toEqual({ accent: "rgb(0 0 0)", onAccent: "#ffffff" });
+    expect(paletteFromPixels([255, 255, 255, 255])).toEqual({ accent: "rgb(255 255 255)", onAccent: "#000000", isVeryDark: false });
+    expect(paletteFromPixels([0, 0, 0, 255])).toEqual({ accent: "rgb(0 0 0)", onAccent: "#ffffff", isVeryDark: true });
+  });
+
+  it("flags near-black accents as very dark but keeps dark brand colors", () => {
+    expect(paletteFromPixels([24, 24, 28, 255])?.isVeryDark).toBe(true);
+    expect(paletteFromPixels([10, 20, 60, 255])?.isVeryDark).toBe(true);
+    expect(paletteFromPixels([40, 40, 160, 255])?.isVeryDark).toBe(false);
+    expect(paletteFromName("Obsidian").isVeryDark).toBe(false);
   });
 
   it("falls back for missing or fully transparent image content", () => {

@@ -28,6 +28,13 @@ const SYSTEM_CONFIG: &[&str] = &[
     "/etc/ld.so.cache",
     "/etc/fonts",
     "/etc/localtime",
+    // Public CA stores are needed independently of permission to access the network.
+    "/etc/ssl/certs",
+    "/etc/ssl/cert.pem",
+    "/etc/ca-certificates/extracted",
+    "/etc/pki/tls/certs",
+    "/etc/pki/tls/cert.pem",
+    "/etc/pki/ca-trust/extracted",
     // Rebuilding font caches can crash apps that bundle a conflicting FreeType version.
     "/var/cache/fontconfig",
 ];
@@ -292,12 +299,7 @@ pub fn plan(
     }
     if config.permissions.network {
         arguments.push("--share-net".into());
-        for path in [
-            "/etc/ssl/certs",
-            "/etc/pki/tls/certs",
-            "/etc/nsswitch.conf",
-            "/etc/hosts",
-        ] {
+        for path in ["/etc/nsswitch.conf", "/etc/hosts"] {
             if Path::new(path).exists() {
                 bind(&mut arguments, "--ro-bind", path, path);
             }
@@ -411,3 +413,7 @@ mod lifetime_tests;
 #[cfg(test)]
 #[path = "sandbox_gpu_tests.rs"]
 mod gpu_tests;
+
+#[cfg(test)]
+#[path = "sandbox_certificates_tests.rs"]
+mod certificates_tests;

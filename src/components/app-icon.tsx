@@ -19,12 +19,19 @@ export function AppIcon({ name, app, className, imageClassName = "size-3/5" }: {
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const image = appearance.image !== failedSource ? appearance.image : null;
   const accent = appearance.palette.accent;
+  // Lift the plate slightly so near-black logos stay visible on dark themes; light themes barely change.
+  const plate = appearance.palette.isVeryDark
+    ? "color-mix(in oklab, white 6%, var(--panel2))"
+    : `color-mix(in oklab, ${accent} 9%, var(--panel2))`;
+  const outline = appearance.palette.isVeryDark
+    ? "color-mix(in oklab, white 8%, var(--border))"
+    : `color-mix(in oklab, ${accent} 10%, var(--hairline))`;
   return (
     <div
       aria-hidden="true"
       title={appearance.error ?? undefined}
       className={cn("grid place-items-center shrink-0 rounded-lg font-bold tracking-tight", className)}
-      style={{ containerType: "size", background: `color-mix(in oklab, ${accent} 9%, var(--panel2))`, boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${accent} 10%, var(--hairline))` }}
+      style={{ containerType: "size", background: plate, boxShadow: `inset 0 0 0 1px ${outline}` }}
     >
       {image
         ? <img src={image} onError={() => setFailedSource(image)} alt="" draggable={false} className={cn("object-contain", imageClassName)} loading="lazy" />

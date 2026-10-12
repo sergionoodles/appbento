@@ -15,6 +15,9 @@ export interface TileActions {
   onDragStart: (event: React.PointerEvent<HTMLElement>, id: string) => void;
 }
 
+const ACCENT_PLAY_STYLE = { background: "var(--tile-accent)", color: "var(--on-accent)" };
+const NEUTRAL_PLAY_STYLE = { background: "color-mix(in oklab, var(--fg) 18%, var(--panel2))", color: "var(--fg)" };
+
 function statusText(app: InstalledApp, update?: UpdateInfo) {
   const fileAge = formatAge(app.file_created_at);
   return [updateLabel(update), accessLabel(app), fileAge].filter(Boolean).join(" · ");
@@ -89,7 +92,7 @@ export function AppTile({ app, update, index, actions, isPlaceholder, disabled }
   const launch = (
     <button type="button" aria-label={`Launch ${app.name}`} disabled={disabled} onClick={() => actions.onLaunch(app.id)}
       className="tile-play tile-action pointer-events-auto grid place-items-center size-9 shrink-0 rounded-md"
-      style={{ background: "var(--tile-accent)", color: "var(--on-accent)" }}>
+      style={appearance.palette.isVeryDark ? NEUTRAL_PLAY_STYLE : ACCENT_PLAY_STYLE}>
       <Play size={16} fill="currentColor" />
     </button>
   );

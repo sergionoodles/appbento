@@ -1,6 +1,8 @@
 export interface AppPalette {
   accent: string;
   onAccent: string;
+  /** Near-black accents disappear against dark themes, so they get neutral surfaces instead. */
+  isVeryDark: boolean;
 }
 
 const CHANNEL_MAX = 255;
@@ -8,6 +10,8 @@ const COLOR_BUCKET_SIZE = 32;
 const MINIMUM_ALPHA = 32;
 const SAMPLE_SIZE = 32;
 const NEUTRAL_COLOR_WEIGHT = 0.01;
+const VERY_DARK_LUMINANCE = 0.02;
+const CONTRAST_LUMINANCE_THRESHOLD = 0.179;
 
 export function paletteFromName(name: string): AppPalette {
   const normalized = name.trim().toLowerCase().normalize("NFKC");
@@ -15,7 +19,7 @@ export function paletteFromName(name: string): AppPalette {
     (value, character) => Math.imul(value ^ (character.codePointAt(0) ?? 0), 16777619) >>> 0,
     2166136261,
   );
-  return { accent: `hsl(${hash % 360} 62% 64%)`, onAccent: "#14151f" };
+  return { accent: `hsl(${hash % 360} 62% 64%)`, onAccent: "#14151f", isVeryDark: false };
 }
 
 function paletteFromRgb(red: number, green: number, blue: number): AppPalette {
@@ -26,7 +30,8 @@ function paletteFromRgb(red: number, green: number, blue: number): AppPalette {
   const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
   return {
     accent: `rgb(${red} ${green} ${blue})`,
-    onAccent: luminance > 0.179 ? "#000000" : "#ffffff",
+    onAccent: luminance > CONTRAST_LUMINANCE_THRESHOLD ? "#000000" : "#ffffff",
+    isVeryDark: luminance < VERY_DARK_LUMINANCE,
   };
 }
 

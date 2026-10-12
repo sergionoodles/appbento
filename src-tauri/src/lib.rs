@@ -149,6 +149,17 @@ pub fn run() {
 #[cfg(test)]
 mod permission_tests {
     #[test]
+    fn main_window_can_read_latest_launch_logs() {
+        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        assert!(
+            context.runtime_authority_mut()
+                .resolve_access("library_launch_log", "main", "main", &tauri::ipc::Origin::Local)
+                .is_some(),
+            "the main window must be allowed to read latest launch logs"
+        );
+    }
+
+    #[test]
     fn main_window_can_read_icons_and_manage_updates() {
         let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
         let authority = context.runtime_authority_mut();

@@ -48,17 +48,12 @@ export function LaunchLogsDialog({ app, backend, onClose, returnFocusElement }: 
   };
 
   return (
-    <Dialog title={`Launch logs for ${app.name}`} onClose={onClose} returnFocusElement={returnFocusElement} className="w-[800px]">
-      <div className="text-[13px] text-[var(--muted)]">
-        <p>The latest launch is saved automatically. Up to 5,000 recent lines are kept.</p>
-        <p>Refresh to read new output while the app is running.</p>
-        {log ? <p className="mt-2">Launched {new Date(log.started_at).toLocaleString()}</p> : null}
-      </div>
+    <Dialog title={`${app.name} latest launch logs`} onClose={onClose} returnFocusElement={returnFocusElement} className="w-[800px]">
       {error ? <p role="alert" className="text-[var(--bad)] selectable">{error}</p> : null}
       {isLoading ? <p role="status">Loading logs…</p> : null}
       {!isLoading && !error && !log ? <p>No launch logs yet. Launch this app to record its output.</p> : null}
       {log ? <>
-        <pre aria-label="Launch log output" tabIndex={0} className="selectable min-h-48 max-h-[50vh] overflow-auto rounded-md border border-[var(--border)] bg-[var(--bg)] p-4 text-[12px] leading-relaxed font-mono">{log.text || "No output was produced by this launch."}</pre>
+        <pre aria-label="Launch log output" tabIndex={0} className="selectable min-h-48 max-h-[50vh] overflow-auto rounded-md border border-solid border-[var(--border)] bg-[var(--bg)] p-4 text-[12px] leading-relaxed font-mono">{log.text || "No output was produced by this launch."}</pre>
         <p role="status" className="text-[13px] text-[var(--muted)]">{copyMessage}</p>
       </> : null}
       <div className="flex justify-end gap-2">
