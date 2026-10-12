@@ -10,6 +10,8 @@ use crate::models::GithubUpdateConfig;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_RELEASE_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+const RELEASES_PER_PAGE: usize = 10;
+const MAX_RELEASE_PAGES: usize = 10;
 static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
@@ -120,14 +122,38 @@ pub(crate) async fn fetch_release_bytes(url: &str) -> Result<Vec<u8>, String> {
 }
 
 pub async fn check_github(config: &GithubUpdateConfig) -> Result<ResolvedUpdate, String> {
+    check_github_with_fetch(config, |url| async move { fetch_release_bytes(&url).await }).await
+}
+
+async fn check_github_with_fetch<F, Fetch>(
+    config: &GithubUpdateConfig,
+    mut fetch: F,
+) -> Result<ResolvedUpdate, String>
+where
+    F: FnMut(String) -> Fetch,
+    Fetch: std::future::Future<Output = Result<Vec<u8>, String>>,
+{
     validate_config(config)?;
-    let url = format!(
-        "https://api.github.com/repos/{}/releases?per_page=100",
+    for page in 1..=MAX_RELEASE_PAGES {
+        let url = format!(
+            "https://api.github.com/repos/{}/releases?per_page={RELEASES_PER_PAGE}&page={page}",
+            config.repo
+        );
+        let bytes = fetch(url).await?;
+        let releases: Vec<Release> =
+            serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+        let is_last_page = releases.len() < RELEASES_PER_PAGE;
+        if let Some(update) = find_matching_release(config, releases, true)? {
+            return Ok(update);
+        }
+        if is_last_page {
+            break;
+        }
+    }
+    Err(format!(
+        "no matching compatible AppImage asset for {}",
         config.repo
-    );
-    let bytes = fetch_release_bytes(&url).await?;
-    let releases = serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
-    select_release(config, releases, true)
+    ))
 }
 
 fn asset_matches_architecture(name: &str, architecture: &str) -> bool {
@@ -166,6 +192,15 @@ pub(crate) fn select_release(
     releases: Vec<Release>,
     restrict_github_url: bool,
 ) -> Result<ResolvedUpdate, String> {
+    find_matching_release(config, releases, restrict_github_url)?
+        .ok_or_else(|| format!("no matching compatible AppImage asset for {}", config.repo))
+}
+
+fn find_matching_release(
+    config: &GithubUpdateConfig,
+    releases: Vec<Release>,
+    restrict_github_url: bool,
+) -> Result<Option<ResolvedUpdate>, String> {
     if config.architecture != std::env::consts::ARCH {
         return Err(format!(
             "configured assets do not support {}",
@@ -217,18 +252,15 @@ pub(crate) fn select_release(
             return Err("release asset URL is outside its trusted GitHub repository".into());
         }
         let latest = version.as_str().to_string();
-        return Ok(ResolvedUpdate {
+        return Ok(Some(ResolvedUpdate {
             latest,
             download_url: asset.browser_download_url.clone(),
             asset_name: asset.name.clone(),
             published_at: release.published_at,
             size_bytes: asset.size,
-        });
+        }));
     }
-    Err(format!(
-        "no matching compatible AppImage asset for {}",
-        config.repo
-    ))
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -263,6 +295,98 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[tokio::test]
+    async fn checks_small_pages_until_a_compatible_release_is_found() {
+        let mut requested_urls = Vec::new();
+        let resolved = check_github_with_fetch(&config(), |url| {
+            requested_urls.push(url);
+            let releases: Vec<_> = if requested_urls.len() == 1 {
+                (0..10).map(|_| serde_json::json!({
+                    "tag_name": "nightly", "assets": [],
+                    "body": "x".repeat(MAX_RELEASE_RESPONSE_BYTES / 100),
+                })).collect()
+            } else {
+                vec![serde_json::json!({
+                    "tag_name": "v2.0.0",
+                    "assets": [{
+                        "name": "app-x86_64.AppImage",
+                        "browser_download_url": "https://github.com/owner/app/releases/download/v2.0.0/app-x86_64.AppImage",
+                    }],
+                })]
+            };
+            let bytes = serde_json::to_vec(&releases).unwrap();
+            assert!(bytes.len() < MAX_RELEASE_RESPONSE_BYTES);
+            async move { Ok(bytes) }
+        }).await.unwrap();
+        assert_eq!(resolved.latest, "2.0.0");
+        assert_eq!(
+            requested_urls,
+            vec![
+                "https://api.github.com/repos/owner/app/releases?per_page=10&page=1",
+                "https://api.github.com/repos/owner/app/releases?per_page=10&page=2",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn stops_at_the_first_match_or_the_last_page() {
+        let matching = serde_json::json!([{
+            "tag_name": "v2.0.0",
+            "assets": [{
+                "name": "app-x86_64.AppImage",
+                "browser_download_url": "https://github.com/owner/app/releases/download/v2.0.0/app-x86_64.AppImage",
+            }],
+        }]);
+        let mut requests = 0;
+        let resolved = check_github_with_fetch(&config(), |_| {
+            requests += 1;
+            let bytes = serde_json::to_vec(&matching).unwrap();
+            async move { Ok(bytes) }
+        })
+        .await
+        .unwrap();
+        assert_eq!(resolved.latest, "2.0.0");
+        assert_eq!(requests, 1);
+
+        let mut requests = 0;
+        let error = check_github_with_fetch(&config(), |_| {
+            requests += 1;
+            async { Ok(b"[]".to_vec()) }
+        })
+        .await
+        .err()
+        .unwrap();
+        assert_eq!(error, "no matching compatible AppImage asset for owner/app");
+        assert_eq!(requests, 1);
+    }
+
+    #[tokio::test]
+    async fn bounds_the_release_search_and_propagates_fetch_errors() {
+        let mut requests = 0;
+        let error = check_github_with_fetch(&config(), |_| {
+            requests += 1;
+            let bytes = serde_json::to_vec(&vec![
+                serde_json::json!({"tag_name": "nightly", "assets": []});
+                10
+            ])
+            .unwrap();
+            async move { Ok(bytes) }
+        })
+        .await
+        .err()
+        .unwrap();
+        assert_eq!(error, "no matching compatible AppImage asset for owner/app");
+        assert_eq!(requests, 10);
+
+        let error = check_github_with_fetch(&config(), |_| async {
+            Err("release response exceeds size limit".into())
+        })
+        .await
+        .err()
+        .unwrap();
+        assert_eq!(error, "release response exceeds size limit");
     }
 
     #[test]

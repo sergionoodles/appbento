@@ -17,6 +17,25 @@ export interface UpdateDraft {
 export const DEFAULT_ASSET_REGEX = ".*\\.AppImage$";
 export const DEFAULT_TAG_REGEX = "^v?(?P<version>.*)$";
 
+export function extractGithubRepository(value: string): string {
+  const trimmed = value.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return value;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname !== "github.com" || url.username || url.password) return value;
+
+    const parts = url.pathname.split("/").filter(Boolean);
+    const owner = parts[0];
+    const repository = parts[1]?.replace(/\.git$/, "");
+    if (!owner || !repository || ![owner, repository].every((part) => /^[A-Za-z0-9_.-]+$/.test(part))) return value;
+
+    return `${owner}/${repository}`;
+  } catch {
+    return value;
+  }
+}
+
 export function draftFromConfig(config: UpdateConfig | null | undefined): UpdateDraft {
   const release = config && config.strategy !== "direct-url" ? config : null;
   return {
@@ -36,7 +55,9 @@ export function configFromDraft(draft: UpdateDraft): UpdateConfig | null {
   if (draft.strategy === "direct-url") return { strategy: draft.strategy, url: draft.url.trim() };
   return {
     strategy: draft.strategy,
-    repo: draft.repo.trim(),
+    repo: draft.strategy === "github-release"
+      ? extractGithubRepository(draft.repo).trim().replace(/^\//, "").replace(/\/$/, "")
+      : draft.repo.trim(),
     asset_regex: draft.assetRegex.trim(),
     architecture: draft.architecture.trim(),
     tag_regex: draft.tagRegex.trim(),

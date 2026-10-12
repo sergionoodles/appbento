@@ -260,6 +260,21 @@ describe("app update sources", () => {
     expect((await preview.updatesCheckAll()).checked_count).toBe(0);
   });
 
+  it("extracts a pasted GitHub release URL and saves its repository", async () => {
+    const preview = createPreviewApi();
+    const user = await openHome(preview);
+    await user.click(screen.getByRole("button", { name: "Open Joplin" }));
+    await user.click(screen.getByRole("button", { name: "Configure updates" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "github-release");
+    const repository = screen.getByRole("textbox", { name: "Repository" });
+    await user.click(repository);
+    await user.paste("https://github.com/stablyai/orca/releases");
+    expect(repository).toHaveValue("stablyai/orca");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect((await preview.libraryList()).find((app) => app.name === "Joplin")?.update_config).toMatchObject({ repo: "stablyai/orca" });
+  });
+
   it("retains source inputs and reports a configuration error", async () => {
     const user = await openHome({ ...createPreviewApi(), async updatesConfigure() { throw new Error("Invalid filename matcher"); } });
     await user.click(screen.getByRole("button", { name: "Open Joplin" }));

@@ -1,5 +1,6 @@
 import { CirclePause } from "lucide-react";
 import type { UpdateDraft, UpdateDraftStrategy } from "@/lib/update-draft";
+import { extractGithubRepository } from "@/lib/update-draft";
 import { Input } from "../../ui/card";
 import { Field, Notice } from "../../ui/field";
 import { Select } from "../../ui/select";
@@ -45,7 +46,19 @@ export function UpdatesPage({ draft, onChange, isSaving }: {
 
       {isRelease ? <>
         <Field label="Repository" htmlFor="update-repo" className="col-span-2">
-          <Input id="update-repo" required placeholder={draft.strategy === "github-release" ? "owner/repository" : "https://gitlab.com/group/project"} value={draft.repo} onChange={(event) => set("repo", event.target.value)} />
+          <Input id="update-repo" required placeholder={draft.strategy === "github-release" ? "owner/repository" : "https://gitlab.com/group/project"} value={draft.repo}
+            onChange={(event) => set("repo", event.target.value)}
+            onBlur={(event) => {
+              if (draft.strategy === "github-release") set("repo", extractGithubRepository(event.target.value));
+            }}
+            onPaste={(event) => {
+              if (draft.strategy !== "github-release") return;
+              const pasted = event.clipboardData.getData("text");
+              const repository = extractGithubRepository(pasted);
+              if (repository === pasted) return;
+              event.preventDefault();
+              set("repo", repository);
+            }} />
         </Field>
         <Field label="Filename matcher" htmlFor="update-assets" hint={<>Regular expression matching one AppImage, e.g. <code>.*x86_64.*\.AppImage$</code></>}>
           <Input id="update-assets" required className={MONO_INPUT} value={draft.assetRegex} onChange={(event) => set("assetRegex", event.target.value)} />
