@@ -1,5 +1,5 @@
 import type { ConfigurationPreferences, ConfigurationPreview, ConfigurationRestoreRequest } from "./configuration";
-import type { InstalledApp, LaunchConfig, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
+import type { InstalledApp, LaunchConfig, LaunchLog, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 import type { Channel } from "@tauri-apps/api/core";
 import type { SelfUpdateBackend, SelfUpdateCheck, SelfUpdateProgress } from "./self-update";
@@ -19,6 +19,7 @@ export interface Commands {
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
   library_add_url: { args: { url: string }; result: InstalledApp };
   library_integrate: { args: { sourcePath: string }; result: InstalledApp };
+  library_launch_log: { args: { id: string }; result: LaunchLog | null };
   library_launch: { args: { id: string }; result: InstalledApp };
   library_remove: { args: { id: string; deleteFile: boolean }; result: null };
   settings_get: { args: undefined; result: Settings };
@@ -49,6 +50,7 @@ export interface AppApi extends SelfUpdateBackend {
   libraryScan(): Promise<ScanReport>;
   libraryAddUrl(url: string): Promise<InstalledApp>;
   libraryIntegrate(sourcePath: string): Promise<InstalledApp>;
+  libraryLaunchLog(id: string): Promise<LaunchLog | null>;
   libraryLaunch(id: string): Promise<InstalledApp>;
   libraryRemove(id: string, deleteFile: boolean): Promise<void>;
   settingsGet(): Promise<Settings>;
@@ -107,6 +109,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
     libraryAddUrl: (url) => transport("library_add_url", { url }),
     libraryIntegrate: (sourcePath) => transport("library_integrate", { sourcePath }),
+    libraryLaunchLog: (id) => transport("library_launch_log", { id }),
     libraryLaunch: (id) => transport("library_launch", { id }),
     libraryRemove: async (id, deleteFile) => {
       await transport("library_remove", { id, deleteFile });

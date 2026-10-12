@@ -101,6 +101,12 @@ pub(super) fn add_devices(
     }
     if permissions.gpu && Path::new("/dev/dri").exists() {
         bind(arguments, "--dev-bind", "/dev/dri", "/dev/dri");
+        // Drivers resolve DRM device numbers through sysfs to identify the GPU.
+        for path in ["/sys/dev/char", "/sys/devices"] {
+            if Path::new(path).exists() {
+                bind(arguments, "--ro-bind", path, path);
+            }
+        }
     }
     Ok(())
 }

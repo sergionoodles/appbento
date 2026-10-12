@@ -18,6 +18,7 @@ import { AddUrlDialog } from "@/components/dialogs/add-url-dialog";
 import { FoldersDialog } from "@/components/dialogs/folders-dialog";
 import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app-settings-dialog";
 import { IconBackendContext } from "@/components/icon-backend-context";
+import { LaunchLogsDialog } from "@/components/dialogs/launch-logs-dialog";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [displayNames, setDisplayNames] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(DISPLAY_NAMES_KEY) ?? "{}"); } catch { return {}; }
   });
+  const [logsId, setLogsId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -76,12 +78,13 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const updates = updateReport?.updates ?? [];
   const confirmedUpdateCount = updates.filter((update) => update.status === "available").length;
   const disabled = isLoading || operation !== null || selfUpdate.progress !== null;
+  const logsApp = displayApps.find((app) => app.id === logsId);
   const removingApp = apps.find((app) => app.id === removingId);
   const reviewingApp = apps.find((app) => app.id === reviewIds[0]);
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasModal = !!settingsApp || showAddUrl || showFolders || showConfiguration || showSelfUpdate || !!removingApp || !!reviewingApp;
+  const hasModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || showSelfUpdate || !!removingApp || !!reviewingApp;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const onLaunch = (id: string) => { captureFocus(); void controller.launch(id); };
   const openSettings = (id: string, target: SettingsTarget) => {
@@ -112,6 +115,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   };
   const tileActions: TileActions = {
     onLaunch, onSettings, onRemove,
+    onViewLogs: (id) => { captureFocus(); setLogsId(id); },
     onDragStart: startDrag,
   };
   const groupActions: GroupActions = {
@@ -174,6 +178,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         update={updates.find((update) => update.app_id === configuringApp.id)} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
         isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
+      {logsApp ? <LaunchLogsDialog key={logsApp.id} app={logsApp} backend={backend} onClose={() => setLogsId(null)} returnFocusElement={returnFocusElement} /> : null}
       {showConfiguration ? <ConfigurationDialog backend={backend} onClose={() => setShowConfiguration(false)} onRestored={onRestored} returnFocusElement={returnFocusElement} /> : null}
       {showSelfUpdate ? <SelfUpdateDialog state={selfUpdate} isBlocked={isLoading || operation !== null || isCheckingUpdates}
         onCheck={() => { void selfUpdate.controller.check(); }}

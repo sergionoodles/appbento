@@ -1,5 +1,5 @@
 import { useAppAppearance } from "./use-app-appearance";
-import { MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
+import { MoreHorizontal, FileText, Play, Settings, Trash2 } from "lucide-react";
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 
 export interface TileActions {
   onLaunch: (id: string) => void;
+  onViewLogs: (id: string) => void;
   onSettings: (id: string) => void;
   onRemove: (id: string) => void;
   onDragStart: (event: React.PointerEvent<HTMLElement>, id: string) => void;
@@ -79,6 +80,7 @@ export function AppTile({ app, update, index, actions, isPlaceholder, disabled }
     <div className="tile-menu tile-action pointer-events-auto shrink-0">
       <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={16} />} disabled={disabled}>
         <MenuItem icon={<Settings size={15} />} onSelect={() => actions.onSettings(app.id)}>Settings</MenuItem>
+        <MenuItem icon={<FileText size={15} />} onSelect={() => actions.onViewLogs(app.id)}>View logs</MenuItem>
         <MenuSeparator />
         <MenuItem icon={<Trash2 size={15} />} onSelect={() => actions.onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
       </Menu>

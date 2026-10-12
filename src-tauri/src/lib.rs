@@ -6,6 +6,7 @@ mod github;
 mod icons;
 mod import_download;
 mod lifecycle;
+mod launch_logs;
 mod models;
 mod persistence;
 mod sandbox;
@@ -124,6 +125,7 @@ pub fn run() {
             apps::library_integrate,
             apps::library_add_url,
             apps::library_launch,
+            apps::library_launch_log,
             apps::library_configure,
             apps::library_set_icon,
             apps::library_icon,

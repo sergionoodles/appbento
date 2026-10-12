@@ -403,3 +403,11 @@ fn digest_file(file: &mut fs::File) -> Result<String, String> {
 #[cfg(test)]
 #[path = "sandbox_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "sandbox_lifetime_tests.rs"]
+mod lifetime_tests;
+
+#[cfg(test)]
+#[path = "sandbox_gpu_tests.rs"]
+mod gpu_tests;

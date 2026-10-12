@@ -70,6 +70,10 @@ export function createPreviewApi(): AppApi {
     async libraryScan() { return { apps: structuredClone(apps), warnings: [] }; },
     async libraryAddUrl() { throw new Error("Downloading AppImages requires the desktop app."); },
     async libraryIntegrate() { throw new Error("File integration requires the desktop app."); },
+    async libraryLaunchLog(id) {
+      const app = findApp(id);
+      return app.last_launched ? { started_at: app.last_launched, text: `[AppBento preview] Launched ${app.name}` } : null;
+    },
     async libraryLaunch(id) {
       const app = findApp(id);
       if (!app.launch_config) throw new Error("Review launch permissions first.");

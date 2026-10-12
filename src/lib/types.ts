@@ -100,3 +100,8 @@ export interface Settings {
   scan_dirs: string[];
   managed_dir: string;
 }
+
+export interface LaunchLog {
+  started_at: string;
+  text: string;
+}

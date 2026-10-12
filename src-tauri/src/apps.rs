@@ -103,6 +103,13 @@ pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
 }
 
 #[tauri::command]
+pub async fn library_launch_log(id: String) -> Result<Option<crate::launch_logs::LaunchLog>, String> {
+    tokio::task::spawn_blocking(move || crate::launch_logs::read(&id))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn library_remove(id: String, delete_file: bool) -> Result<(), String> {
     tokio::task::spawn_blocking(move || lifecycle()?.remove(&id, delete_file))
         .await

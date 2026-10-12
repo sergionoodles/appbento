@@ -9,7 +9,7 @@ use std::os::fd::AsRawFd;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, Command};
 
 const O_PATH: i32 = 0x200000;
 const O_NOFOLLOW: i32 = 0x20000;
@@ -27,6 +27,20 @@ pub fn launch_with_wait(
     id: &str,
     uri_arguments: &[String],
     wait: bool,
+) -> Result<InstalledApp, String> {
+    let recorder = crate::launch_logs::Recorder::start(id)?;
+    let result = launch_recorded(id, uri_arguments, wait, &recorder);
+    if let Err(error) = &result {
+        recorder.record_error(error);
+    }
+    result
+}
+
+fn launch_recorded(
+    id: &str,
+    uri_arguments: &[String],
+    wait: bool,
+    recorder: &crate::launch_logs::Recorder,
 ) -> Result<InstalledApp, String> {
     let app = crate::store::load_all()?
         .remove(id)
@@ -69,6 +83,26 @@ pub fn launch_with_wait(
     let pinned = pin_launch_paths_in_place(&mut plan, &app, &policy_directory)?;
     let mut command = prepare_command(&plan);
     inherit_descriptors(&mut command, &pinned);
+    let capture = recorder.capture(&mut command)?;
+    if wait {
+        let startup = spawn_checked(&mut command);
+        drop(command);
+        let result = match startup {
+            Ok(mut child) => {
+                let launched = crate::store::touch_launch(id);
+                let exit = wait_for_app(&mut child);
+                exit.and(launched)
+            }
+            Err(error) => Err(error),
+        };
+        capture.join().map_err(|_| "launch log capture panicked")?;
+        return result;
+    }
+    spawn_monitored(command, pinned, recorder.clone(), capture)?;
+    crate::store::touch_launch(id)
+}
+
+fn spawn_checked(command: &mut Command) -> Result<Child, String> {
     let mut child = command
         .spawn()
         .map_err(|error| format!("launch failed: {error}"))?;
@@ -78,23 +112,61 @@ pub fn launch_with_wait(
             return Err(format!("AppImage launch failed: {status}"));
         }
     }
-    if wait {
-        let launched = crate::store::touch_launch(id)?;
-        let status = child.wait().map_err(|error| error.to_string())?;
-        if !status.success() {
-            return Err(format!("AppImage exited with {status}"));
-        }
-        return Ok(launched);
+    Ok(child)
+}
+
+fn spawn_monitored(
+    mut command: Command,
+    pinned: PinnedLaunch,
+    recorder: crate::launch_logs::Recorder,
+    capture: std::thread::JoinHandle<()>,
+) -> Result<(), String> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    // Linux's parent-death signal follows the spawning thread, so it must stay alive.
+    std::thread::Builder::new()
+        .name("appbento-launch".into())
+        .spawn(move || {
+            let _pinned = pinned;
+            let result = spawn_checked(&mut command);
+            drop(command);
+            match result {
+                Ok(mut child) => {
+                    if sender.send(Ok(())).is_err() {
+                        eprintln!("launch requester disconnected before startup completed");
+                    }
+                    let exit = wait_for_app(&mut child);
+                    if capture.join().is_err() {
+                        recorder.record_error("launch log capture panicked");
+                    }
+                    if let Err(error) = exit {
+                        recorder.record_error(&error);
+                        eprintln!("{error}");
+                    }
+                }
+                Err(error) => {
+                    if capture.join().is_err() {
+                        recorder.record_error("launch log capture panicked");
+                    }
+                    if sender.send(Err(error.clone())).is_err() {
+                        eprintln!("{error}");
+                    }
+                }
+            }
+        })
+        .map_err(|error| format!("could not start launch monitor: {error}"))?;
+    receiver
+        .recv()
+        .map_err(|error| format!("launch monitor disconnected: {error}"))?
+}
+
+fn wait_for_app(child: &mut Child) -> Result<(), String> {
+    let status = child
+        .wait()
+        .map_err(|error| format!("could not wait for AppImage: {error}"))?;
+    if !status.success() {
+        return Err(format!("AppImage exited with {status}"));
     }
-    std::thread::spawn(move || {
-        let _pinned = pinned;
-        match child.wait() {
-            Ok(status) if !status.success() => eprintln!("AppImage exited with {status}"),
-            Err(error) => eprintln!("could not wait for AppImage: {error}"),
-            _ => {}
-        }
-    });
-    crate::store::touch_launch(id)
+    Ok(())
 }
 
 fn prepare_private_home(policy_directory: &Path, id: &str) -> Result<(), String> {

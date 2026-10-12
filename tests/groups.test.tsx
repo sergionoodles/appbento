@@ -67,7 +67,7 @@ describe("arranging apps", () => {
     await addGroup(user, "Notes");
     await user.click(screen.getByRole("button", { name: "More options for Obsidian" }));
     const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(items).toEqual(["Settings", "Remove"]);
+    expect(items).toEqual(["Settings", "View logs", "Remove"]);
   });
 
   it("filters to one group from the sidebar and deleting it keeps its apps", async () => {
