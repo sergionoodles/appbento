@@ -70,14 +70,6 @@ export function moveApp(layout: AppLayout, appId: string, sectionId: string, ind
   return withSection(remaining, sectionId, target);
 }
 
-/** Moves an app one or more places within its own section. */
-export function shiftApp(layout: AppLayout, appId: string, offset: number): AppLayout {
-  const sectionId = sectionOf(layout, appId);
-  if (!sectionId) return layout;
-  const index = sectionAppIds(layout, sectionId).indexOf(appId);
-  return moveApp(layout, appId, sectionId, index + offset);
-}
-
 /**
  * Insertion index for a drag that hovers `overId`: before it, or after it when `isAfter`.
  * Counted without the dragged app, matching `moveApp`.

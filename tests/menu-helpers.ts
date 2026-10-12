@@ -5,3 +5,8 @@ export async function chooseFromMenu(user: UserEvent, menu: string, item: string
   await user.click(screen.getByRole("button", { name: menu }));
   await user.click(await screen.findByRole("menuitem", { name: item }));
 }
+
+export async function chooseOption(user: UserEvent, combobox: HTMLElement, option: string) {
+  await user.click(combobox);
+  await user.click(screen.getByRole("option", { name: option }));
+}

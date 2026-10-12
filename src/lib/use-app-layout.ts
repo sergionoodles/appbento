@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  arrangeLayout, createGroup, deleteGroup, moveApp, readLayout, renameGroup, shiftApp, shiftGroup,
+  arrangeLayout, createGroup, deleteGroup, moveApp, readLayout, renameGroup, shiftGroup,
   toggleGroup, uniqueGroupName, writeLayout, type AppLayout,
 } from "./app-layout";
 
@@ -14,9 +14,9 @@ export function useAppLayout(installedIds: string[]) {
     setSaved({ layout: next, error: writeLayout(next) });
   };
 
-  const addGroup = (appIds: string[] = []) => {
+  const addGroup = () => {
     const id = crypto.randomUUID();
-    update((current) => createGroup(current, id, uniqueGroupName(current), appIds));
+    update((current) => createGroup(current, id, uniqueGroupName(current)));
     return id;
   };
 
@@ -26,7 +26,6 @@ export function useAppLayout(installedIds: string[]) {
     actions: {
       addGroup,
       moveApp: (appId: string, sectionId: string, index: number) => update((current) => moveApp(current, appId, sectionId, index)),
-      shiftApp: (appId: string, offset: number) => update((current) => shiftApp(current, appId, offset)),
       renameGroup: (groupId: string, name: string) => update((current) => renameGroup(current, groupId, name)),
       deleteGroup: (groupId: string) => update((current) => deleteGroup(current, groupId)),
       toggleGroup: (groupId: string) => update((current) => toggleGroup(current, groupId)),

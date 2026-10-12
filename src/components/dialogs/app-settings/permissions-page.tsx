@@ -6,7 +6,7 @@ import { restrictedPermissions, validateSandboxPaths } from "@/lib/sandbox";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
-import { Select } from "../../ui/select";
+import { Select, type SelectOption } from "../../ui/select";
 import { Switch } from "../../ui/switch";
 
 type PathAccess = SandboxPath["access"];
@@ -155,12 +155,14 @@ function PermissionToggles({ permissions, isSaving, onChange }: {
   );
 }
 
+const ACCESS_OPTIONS: SelectOption<PathAccess>[] = [
+  { value: "read-only", label: "Read only" },
+  { value: "read-write", label: "Read and write" },
+];
+
 function AccessSelect({ value, onChange, ...props }: { value: PathAccess; onChange: (access: PathAccess) => void; "aria-label": string; disabled: boolean; className?: string }) {
   return (
-    <Select value={value} onChange={(event) => onChange(event.target.value === "read-write" ? "read-write" : "read-only")} {...props}>
-      <option value="read-only">Read only</option>
-      <option value="read-write">Read and write</option>
-    </Select>
+    <Select value={value} options={ACCESS_OPTIONS} onChange={onChange} {...props} />
   );
 }
 

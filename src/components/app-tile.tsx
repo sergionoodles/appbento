@@ -1,5 +1,5 @@
 import { useAppAppearance } from "./use-app-appearance";
-import { ArrowLeft, ArrowRight, FolderInput, FolderPlus, Image, MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
+import { Image, MoreHorizontal, Play, Settings, Trash2 } from "lucide-react";
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -13,22 +13,12 @@ export interface TileActions {
   onSettings: (id: string) => void;
   onIcon: (id: string) => void;
   onRemove: (id: string) => void;
-  onShift: (id: string, offset: number) => void;
-  onMoveTo: (id: string, sectionId: string) => void;
-  onNewGroup: (id: string) => void;
   onDragStart: (event: React.PointerEvent<HTMLElement>, id: string) => void;
-}
-
-/** Where a tile can go from its menu: the neighbouring positions and every other section. */
-export interface TilePlacement {
-  isFirst: boolean;
-  isLast: boolean;
-  destinations: { id: string; name: string }[];
 }
 
 function statusText(app: InstalledApp, update?: UpdateInfo) {
   const fileAge = formatAge(app.file_created_at);
-  return [updateLabel(update), accessLabel(app), versionLabel(app), fileAge].filter(Boolean).join(" · ");
+  return [updateLabel(update), accessLabel(app), fileAge].filter(Boolean).join(" · ");
 }
 
 function TileFace({ app, update, menu, launch }: {
@@ -38,16 +28,17 @@ function TileFace({ app, update, menu, launch }: {
   launch?: React.ReactNode;
 }) {
   return (
-    <div className="pointer-events-none relative h-full flex flex-col justify-between p-4">
-      <div className="flex items-start justify-between">
-        <AppIcon app={app} name={app.name} className="size-12" />
-        {menu}
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
+    <div className="pointer-events-none relative h-full flex flex-col justify-between p-3">
+      <div className="flex items-center gap-2.5">
+        <AppIcon app={app} name={app.name} className="size-12" imageClassName="size-[85%]" />
+        <div className="min-w-0 flex-1">
           <h3 className="text-[15px] font-semibold leading-tight truncate">{app.name}</h3>
-          <p className={cn("mt-0.5 text-[12px] truncate", update ? "text-[var(--warn)]" : "text-[var(--muted)]")}>{statusText(app, update)}</p>
+          <p className="mt-0.5 text-[12px] text-[var(--muted)] truncate">{versionLabel(app)}</p>
         </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <p className={cn("min-w-0 flex-1 text-[12px] truncate", update ? "text-[var(--warn)]" : "text-[var(--muted)]")}>{statusText(app, update)}</p>
+        {menu}
         {launch}
       </div>
     </div>
@@ -69,19 +60,6 @@ export function TileGhost({ app, update, isShrunk, style }: {
   );
 }
 
-function ArrangeItems({ app, placement, actions }: { app: InstalledApp; placement: TilePlacement; actions: TileActions }) {
-  return (
-    <>
-      <MenuItem icon={<ArrowLeft size={15} />} disabled={placement.isFirst} onSelect={() => actions.onShift(app.id, -1)}>Move earlier</MenuItem>
-      <MenuItem icon={<ArrowRight size={15} />} disabled={placement.isLast} onSelect={() => actions.onShift(app.id, 1)}>Move later</MenuItem>
-      {placement.destinations.map((destination) => (
-        <MenuItem key={destination.id} icon={<FolderInput size={15} />} onSelect={() => actions.onMoveTo(app.id, destination.id)}>Move to {destination.name}</MenuItem>
-      ))}
-      <MenuItem icon={<FolderPlus size={15} />} onSelect={() => actions.onNewGroup(app.id)}>Move to new group</MenuItem>
-    </>
-  );
-}
-
 /** Right-clicking a tile opens the same menu as its "more" button, as in a desktop file manager. */
 function openTileMenu(event: React.MouseEvent<HTMLElement>) {
   const trigger = event.currentTarget.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]:not(:disabled)');
@@ -90,23 +68,20 @@ function openTileMenu(event: React.MouseEvent<HTMLElement>) {
   if (trigger.getAttribute("aria-expanded") !== "true") trigger.click();
 }
 
-export function AppTile({ app, update, index, placement, actions, isPlaceholder, disabled }: {
+export function AppTile({ app, update, index, actions, isPlaceholder, disabled }: {
   app: InstalledApp;
   update?: UpdateInfo;
   index: number;
-  placement: TilePlacement;
   actions: TileActions;
   isPlaceholder: boolean;
   disabled: boolean;
 }) {
   const appearance = useAppAppearance(app.name, app);
   const menu = (
-    <div className="pointer-events-auto tile-action -mr-1.5 -mt-1.5">
-      <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={17} />} disabled={disabled}>
+    <div className="tile-menu tile-action pointer-events-auto shrink-0">
+      <Menu label={`More options for ${app.name}`} icon={<MoreHorizontal size={16} />} disabled={disabled}>
         <MenuItem icon={<Settings size={15} />} onSelect={() => actions.onSettings(app.id)}>Settings</MenuItem>
         <MenuItem icon={<Image size={15} />} onSelect={() => actions.onIcon(app.id)}>Change icon</MenuItem>
-        <MenuSeparator />
-        <ArrangeItems app={app} placement={placement} actions={actions} />
         <MenuSeparator />
         <MenuItem icon={<Trash2 size={15} />} onSelect={() => actions.onRemove(app.id)} isDanger label={`Remove ${app.name}`}>Remove</MenuItem>
       </Menu>
@@ -114,7 +89,7 @@ export function AppTile({ app, update, index, placement, actions, isPlaceholder,
   );
   const launch = (
     <button type="button" aria-label={`Launch ${app.name}`} disabled={disabled} onClick={() => actions.onLaunch(app.id)}
-      className="tile-play tile-action pointer-events-auto grid place-items-center size-9 shrink-0 rounded-md disabled:opacity-40"
+      className="tile-play tile-action pointer-events-auto grid place-items-center size-9 shrink-0 rounded-md"
       style={{ background: "var(--tile-accent)", color: "var(--on-accent)" }}>
       <Play size={16} fill="currentColor" />
     </button>

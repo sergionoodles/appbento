@@ -5,7 +5,7 @@ import App from "../src/App";
 import { createPreviewApi, createPreviewApp } from "../src/lib/preview";
 import type { AppApi } from "../src/lib/api";
 import type { InstalledApp, LaunchConfig } from "../src/lib/types";
-import { chooseFromMenu } from "./menu-helpers";
+import { chooseFromMenu, chooseOption } from "./menu-helpers";
 
 function unreviewedBackend(patch: Partial<AppApi> = {}) {
   let app: InstalledApp = createPreviewApp("Obsidian", "1");
@@ -66,7 +66,9 @@ describe("AppImage permission review", () => {
   it("shows the version of an app that still needs setup", async () => {
     const { backend } = unreviewedBackend();
     render(<App backend={backend} />);
-    expect(await screen.findByText(/^Needs setup · v1/)).toBeInTheDocument();
+    const tile = await screen.findByRole("article");
+    expect(within(tile).getByText("v1")).toBeInTheDocument();
+    expect(within(tile).getByText(/^Needs setup/)).toBeInTheDocument();
   });
 
   it.each([["Add apps", "Scan folders"], ["Add apps", "Add an AppImage"]])("does not open a review for an app discovered by %s > %s", async (menu, item) => {
@@ -153,10 +155,10 @@ describe("AppImage permission review", () => {
     expect(libraryConfigure).not.toHaveBeenCalled();
     await user.type(within(dialog).getByRole("textbox", { name: "Absolute path" }), "/home/me/Notes");
     await user.click(within(dialog).getByRole("button", { name: "Add path" }));
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" }), "read-write");
+    await chooseOption(user, within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" }), "Read and write");
     await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Cannot save configuration");
-    expect(within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" })).toHaveValue("read-write");
+    expect(within(dialog).getByRole("combobox", { name: "Access for /home/me/Notes" })).toHaveTextContent("Read and write");
     expect(libraryConfigure.mock.calls[0][1].permissions.paths).toEqual([{ path: "/home/me/Notes", access: "read-write" }]);
     expect(libraryLaunch).not.toHaveBeenCalled();
     await user.click(within(dialog).getByRole("button", { name: "Remove path /home/me/Notes" }));

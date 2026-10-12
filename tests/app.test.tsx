@@ -6,7 +6,7 @@ import App from "../src/App";
 import { createPreviewApi, createPreviewApp } from "../src/lib/preview";
 import type { AppApi } from "../src/lib/api";
 import type { UpdateReport } from "../src/lib/types";
-import { chooseFromMenu } from "./menu-helpers";
+import { chooseFromMenu, chooseOption } from "./menu-helpers";
 
 const emptyReport: UpdateReport = { updates: [], errors: [], checked_count: 0, unknown_versions: [], unsupported_count: 0 };
 
@@ -231,7 +231,7 @@ describe("app update sources", () => {
     await user.click(screen.getByRole("button", { name: "Open Joplin" }));
     expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Configure updates" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "direct-url");
+    await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "Direct HTTPS download");
     await user.type(screen.getByRole("textbox", { name: "Download URL" }), "https://example.org/Joplin.AppImage");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -252,7 +252,7 @@ describe("app update sources", () => {
     const user = await openHome(preview);
     await user.click(screen.getByRole("button", { name: "Open Obsidian" }));
     await chooseFromMenu(user, "More options for Obsidian", "Update source");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "disabled");
+    await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "Disabled");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByText("Updates are disabled for this app.")).toBeInTheDocument();
@@ -265,7 +265,7 @@ describe("app update sources", () => {
     const user = await openHome(preview);
     await user.click(screen.getByRole("button", { name: "Open Joplin" }));
     await user.click(screen.getByRole("button", { name: "Configure updates" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "github-release");
+    await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "GitHub releases");
     const repository = screen.getByRole("textbox", { name: "Repository" });
     await user.click(repository);
     await user.paste("https://github.com/stablyai/orca/releases");
@@ -279,7 +279,7 @@ describe("app update sources", () => {
     const user = await openHome({ ...createPreviewApi(), async updatesConfigure() { throw new Error("Invalid filename matcher"); } });
     await user.click(screen.getByRole("button", { name: "Open Joplin" }));
     await user.click(screen.getByRole("button", { name: "Configure updates" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Source" }), "github-release");
+    await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "GitHub releases");
     await user.type(screen.getByRole("textbox", { name: "Repository" }), "owner/app");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     const dialog = screen.getByRole("dialog", { name: "Settings for Joplin" });
@@ -314,7 +314,7 @@ describe("app settings", () => {
     await user.clear(name);
     await user.type(name, "Notes");
     await user.click(within(dialog).getByRole("button", { name: "Updates" }));
-    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Source" }), "direct-url");
+    await chooseOption(user, within(dialog).getByRole("combobox", { name: "Source" }), "Direct HTTPS download");
     await user.type(within(dialog).getByRole("textbox", { name: "Download URL" }), "https://example.org/Joplin.AppImage");
     await user.click(within(dialog).getByRole("button", { name: "General" }));
     expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Notes");

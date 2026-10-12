@@ -4,7 +4,7 @@ import { UNGROUPED_ID, moveApp, type AppGroup, type AppLayout } from "@/lib/app-
 import type { TileDrag } from "@/lib/use-tile-drag";
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AppTile, TileGhost, type TileActions, type TilePlacement } from "./app-tile";
+import { AppTile, TileGhost, type TileActions } from "./app-tile";
 import { GroupHeader, SectionTitle, type GroupActions } from "./group-header";
 
 export const tileSelector = (id: string) => `[data-tile-id="${CSS.escape(id)}"]`;
@@ -38,18 +38,10 @@ function buildSections(layout: AppLayout, apps: InstalledApp[]): Section[] {
   ];
 }
 
-function placementOf(sections: Section[], section: Section, index: number): TilePlacement {
-  return {
-    isFirst: index === 0,
-    isLast: index === section.apps.length - 1,
-    destinations: sections.filter((other) => other.id !== section.id),
-  };
-}
-
 function EmptyGroup({ sectionId }: { sectionId: string }) {
   return (
     <div data-drop-section={sectionId} className="section-drop h-[132px] grid place-items-center rounded-[10px] border border-dashed border-[var(--border)] text-[13px] text-[var(--muted)]">
-      Drag apps here, or use “Move to” in an app’s menu.
+      Drag apps here.
     </div>
   );
 }
@@ -101,7 +93,7 @@ export function Bento({ layout, apps, updates, activeGroupId, isFiltering, drag,
             {isCollapsed ? null : section.apps.length ? (
               <div className={cn("bento", isAnimated && "intro")}>
                 {section.apps.map((app, index) => (
-                  <AppTile key={app.id} app={app} index={index} update={updatesById.get(app.id)} placement={placementOf(sections, section, index)}
+                  <AppTile key={app.id} app={app} index={index} update={updatesById.get(app.id)}
                     actions={tileActions} isPlaceholder={drag?.appId === app.id} disabled={disabled} />
                 ))}
               </div>

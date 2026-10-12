@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import { createPreviewApi } from "../src/lib/preview";
+import { dragTile, tileOf } from "./drag-helpers";
 import { chooseFromMenu } from "./menu-helpers";
 
 async function openHome() {
@@ -20,15 +21,26 @@ function sidebar() {
   return screen.getByRole("navigation", { name: "Library" });
 }
 
+function dropZoneOf(groupName: string) {
+  const zone = screen.getByRole("heading", { name: groupName }).closest("[data-drop-section]");
+  if (!zone) throw new Error(`No drop zone for ${groupName}`);
+  return zone;
+}
+
+async function addGroup(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(within(sidebar()).getByRole("button", { name: "New group" }));
+  await user.type(screen.getByRole("textbox", { name: "Group name" }), `${name}{Enter}`, { skipClick: true });
+}
+
 describe("arranging apps", () => {
   beforeEach(() => localStorage.clear());
 
   it("starts alphabetical and keeps a custom order after reopening the app", async () => {
-    const { user, view } = await openHome();
+    const { view } = await openHome();
     expect(appOrder()).toEqual(["Open Joplin", "Open Obsidian"]);
     expect(screen.queryByText("Most used")).not.toBeInTheDocument();
 
-    await chooseFromMenu(user, "More options for Obsidian", "Move earlier");
+    dragTile("Obsidian", tileOf("Joplin"));
     expect(appOrder()).toEqual(["Open Obsidian", "Open Joplin"]);
 
     view.unmount();
@@ -36,29 +48,32 @@ describe("arranging apps", () => {
     expect(appOrder()).toEqual(["Open Obsidian", "Open Joplin"]);
   });
 
-  it("creates a named group from an app and moves other apps into it", async () => {
+  it("drags apps onto a group header to move them into the group", async () => {
     const { user } = await openHome();
-    await chooseFromMenu(user, "More options for Joplin", "Move to new group");
-    const name = screen.getByRole("textbox", { name: "Group name" });
-    expect(name).toHaveFocus();
-    await user.clear(name);
-    await user.type(name, "Notes{Enter}");
-
-    const notes = screen.getByRole("region", { name: "Notes" });
-    expect(within(notes).getByRole("heading", { name: "Notes" })).toBeInTheDocument();
-    expect(appOrder(notes)).toEqual(["Open Joplin"]);
+    await addGroup(user, "Notes");
     expect(within(sidebar()).getByRole("button", { name: /Notes/ })).toBeInTheDocument();
 
-    await chooseFromMenu(user, "More options for Obsidian", "Move to Notes");
+    dragTile("Joplin", dropZoneOf("Notes"));
+    const notes = screen.getByRole("region", { name: "Notes" });
+    expect(appOrder(notes)).toEqual(["Open Joplin"]);
+
+    dragTile("Obsidian", dropZoneOf("Notes"));
     expect(appOrder(notes)).toEqual(["Open Joplin", "Open Obsidian"]);
     expect(screen.queryByRole("region", { name: "Ungrouped" })).not.toBeInTheDocument();
   });
 
+  it("leaves arranging to drag and drop instead of the app menu", async () => {
+    const { user } = await openHome();
+    await addGroup(user, "Notes");
+    await user.click(screen.getByRole("button", { name: "More options for Obsidian" }));
+    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    expect(items).toEqual(["Settings", "Change icon", "Remove"]);
+  });
+
   it("filters to one group from the sidebar and deleting it keeps its apps", async () => {
     const { user } = await openHome();
-    await user.click(within(sidebar()).getByRole("button", { name: "New group" }));
-    await user.type(screen.getByRole("textbox", { name: "Group name" }), "Video tools{Enter}", { skipClick: true });
-    await chooseFromMenu(user, "More options for Obsidian", "Move to Video tools");
+    await addGroup(user, "Video tools");
+    dragTile("Obsidian", within(sidebar()).getByRole("button", { name: /Video tools/ }));
 
     await user.click(within(sidebar()).getByRole("button", { name: /Video tools/ }));
     expect(screen.getByRole("heading", { level: 1, name: "Video tools" })).toBeInTheDocument();

@@ -120,15 +120,12 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   };
   const goTo = (next: View) => transitionTo(() => setView(next));
   const openApp = (id: string) => transitionTo(() => setView({ name: "app", id, groupId: activeGroupId }), { fromSelector: tileSelector(id), toSelector: STAGE_SELECTOR });
-  const createGroup = (appIds: string[] = []) => {
-    setEditingGroupId(layoutActions.addGroup(appIds));
+  const createGroup = () => {
+    setEditingGroupId(layoutActions.addGroup());
     setView(HOME);
   };
   const tileActions: TileActions = {
     onOpen: openApp, onLaunch, onSettings, onIcon, onRemove,
-    onShift: layoutActions.shiftApp,
-    onMoveTo: (id, sectionId) => layoutActions.moveApp(id, sectionId, Number.MAX_SAFE_INTEGER),
-    onNewGroup: (id) => createGroup([id]),
     onDragStart: startDrag,
   };
   const groupActions: GroupActions = {
@@ -147,7 +144,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
       <div className={cn("h-full flex flex-col", drag && "is-dragging")} inert={hasModal} onClickCapture={suppressClickAfterDrag}>
         <div className="flex-1 min-h-0 flex">
           <Sidebar page={sidebarPage(view)} appCount={apps.length} groups={layout.groups} updateCount={confirmedUpdateCount} dropSectionId={drag?.target.sectionId ?? null}
-            onHome={() => goTo(HOME)} onGroup={(groupId) => goTo({ name: "home", groupId })} onNewGroup={() => createGroup()}
+            onHome={() => goTo(HOME)} onGroup={(groupId) => goTo({ name: "home", groupId })} onNewGroup={createGroup}
             onUpdates={() => goTo({ name: "updates" })} canAdd={backend.isTauri && !disabled} onAdd={addAppImage} onAddUrl={openAddUrl} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}

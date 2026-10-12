@@ -54,7 +54,7 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, ca
   return (
     <aside className="w-[220px] shrink-0 flex flex-col bg-[var(--chrome)] border-r border-[var(--hairline)]">
       <div className="h-[52px] shrink-0 flex items-center px-4"><Wordmark onHome={onHome} /></div>
-      <nav aria-label="Library" className="flex-1 min-h-0 overflow-y-auto px-2.5 pb-3 flex flex-col gap-5">
+      <nav aria-label="Library" className="flex-1 min-h-0 overflow-y-auto px-2.5 py-3flex flex-col gap-5">
         <div className="flex flex-col gap-0.5">
           <NavItem icon={<LayoutGrid size={16} />} label="All apps" count={<Count value={appCount} />} isCurrent={page.name === "all"} onClick={onHome} />
         </div>

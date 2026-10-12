@@ -3,14 +3,24 @@ import type { UpdateDraft, UpdateDraftStrategy } from "@/lib/update-draft";
 import { extractGithubRepository } from "@/lib/update-draft";
 import { Input } from "../../ui/card";
 import { Field, Notice } from "../../ui/field";
-import { Select } from "../../ui/select";
+import { Select, type SelectOption } from "../../ui/select";
 import { Switch } from "../../ui/switch";
 
-const STRATEGIES: { value: UpdateDraftStrategy; label: string }[] = [
+const STRATEGIES: SelectOption<UpdateDraftStrategy>[] = [
   { value: "disabled", label: "Disabled" },
   { value: "github-release", label: "GitHub releases" },
   { value: "gitlab-release", label: "GitLab releases" },
   { value: "direct-url", label: "Direct HTTPS download" },
+];
+
+const ARCHITECTURES: SelectOption<string>[] = [
+  { value: "x86_64", label: "x86_64" },
+  { value: "aarch64", label: "aarch64" },
+];
+
+const CHANNELS: SelectOption<string>[] = [
+  { value: "stable", label: "Stable" },
+  { value: "prerelease", label: "Prerelease" },
 ];
 
 const MONO_INPUT = "font-mono text-[13px]";
@@ -27,12 +37,7 @@ export function UpdatesPage({ draft, onChange, isSaving }: {
     <fieldset disabled={isSaving} className="grid grid-cols-2 gap-x-4 gap-y-5">
       <legend className="sr-only">Update source</legend>
       <Field label="Source" htmlFor="update-strategy" className="col-span-2">
-        <Select id="update-strategy" value={draft.strategy} onChange={(event) => {
-          const selected = STRATEGIES.find((choice) => choice.value === event.target.value);
-          if (selected) set("strategy", selected.value);
-        }}>
-          {STRATEGIES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
-        </Select>
+        <Select id="update-strategy" value={draft.strategy} options={STRATEGIES} onChange={(strategy) => set("strategy", strategy)} />
       </Field>
 
       {draft.strategy === "disabled" ? <div className="col-span-2">
@@ -64,19 +69,13 @@ export function UpdatesPage({ draft, onChange, isSaving }: {
           <Input id="update-assets" required className={MONO_INPUT} value={draft.assetRegex} onChange={(event) => set("assetRegex", event.target.value)} />
         </Field>
         <Field label="Architecture" htmlFor="update-architecture">
-          <Select id="update-architecture" value={draft.architecture} onChange={(event) => set("architecture", event.target.value)}>
-            <option value="x86_64">x86_64</option>
-            <option value="aarch64">aarch64</option>
-          </Select>
+          <Select id="update-architecture" value={draft.architecture} options={ARCHITECTURES} onChange={(architecture) => set("architecture", architecture)} />
         </Field>
         <Field label="Version tag matcher" htmlFor="update-tags" hint={<>Use a named capture, e.g. <code>^v?(?P&lt;version&gt;.*)$</code></>}>
           <Input id="update-tags" className={MONO_INPUT} value={draft.tagRegex} onChange={(event) => set("tagRegex", event.target.value)} />
         </Field>
         <Field label="Channel" htmlFor="update-channel">
-          <Select id="update-channel" value={draft.channel} onChange={(event) => set("channel", event.target.value)}>
-            <option value="stable">Stable</option>
-            <option value="prerelease">Prerelease</option>
-          </Select>
+          <Select id="update-channel" value={draft.channel} options={CHANNELS} onChange={(channel) => set("channel", channel)} />
         </Field>
         <label className="col-span-2 flex items-center gap-4 rounded-lg border border-[var(--border)] px-4 py-3">
           <span className="flex-1">

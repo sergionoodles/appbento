@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
   EMPTY_LAYOUT, UNGROUPED_ID, arrangeLayout, createGroup, deleteGroup, dropIndex, moveApp, parseLayout,
-  readLayout, renameGroup, shiftApp, shiftGroup, uniqueGroupName, writeLayout, type AppLayout,
+  readLayout, renameGroup, shiftGroup, uniqueGroupName, writeLayout, type AppLayout,
 } from "../src/lib/app-layout.ts";
 
 const grouped: AppLayout = {
@@ -29,12 +29,6 @@ test("moving an app reorders within a section and across groups without mutating
   assert.deepEqual(moved.groups[1].appIds, ["a", "e"]);
   assert.deepEqual(moveApp(grouped, "a", "missing", 0), grouped);
   assert.deepEqual(grouped, snapshot);
-});
-
-test("shifting an app stays inside its section bounds", () => {
-  assert.deepEqual(shiftApp(grouped, "d", -1).groups[0].appIds, ["d", "c"]);
-  assert.deepEqual(shiftApp(grouped, "d", 1).groups[0].appIds, ["c", "d"]);
-  assert.deepEqual(shiftApp(grouped, "a", -1).ungrouped, ["a", "b"]);
 });
 
 test("drop index is counted without the dragged app", () => {
