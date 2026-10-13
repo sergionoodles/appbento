@@ -276,6 +276,64 @@ fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_pr
 }
 
 #[test]
+fn owned_desktop_entry_with_previous_launcher_is_migrated_before_listing() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
+    let current = fs::read_to_string(&desktop_path).unwrap();
+    for launcher in ["/previous build/appbento", r#"/previous/$`"%\appbento"#] {
+        let legacy_launcher = desktop::legacy_desktop_content(Path::new(launcher), &app.name);
+        let previous_exec = legacy_launcher
+            .lines()
+            .find(|line| line.starts_with("Exec="))
+            .unwrap()
+            .strip_suffix(" %U")
+            .unwrap();
+        let previous = current
+            .lines()
+            .map(|line| {
+                if let Some((_, arguments)) = line.split_once(" --launch ") {
+                    format!("{previous_exec} --launch {arguments}")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        fs::write(&desktop_path, previous).unwrap();
+
+        assert_eq!(service.list().unwrap(), vec![app.clone()]);
+        assert_eq!(fs::read_to_string(&desktop_path).unwrap(), current);
+    }
+}
+
+#[test]
+fn desktop_migration_preserves_entries_with_invalid_previous_launch_commands() {
+    let (_directory, service, source) = fixture();
+    let app = service.integrate(&source).unwrap();
+    let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
+    let invalid_commands = [
+        "\"/previous/appbento\" --launch \"another-app\" %U".to_owned(),
+        format!("\"relative/appbento\" --launch \"{}\" %U", app.id),
+        format!("/previous/appbento --launch \"{}\" %U", app.id),
+        format!("\"/previous/\"appbento\" --launch \"{}\" %U", app.id),
+        format!("\"/previous/$appbento\" --launch \"{}\" %U", app.id),
+        format!("\"/previous/%f\" --launch \"{}\" %U", app.id),
+    ];
+    for command in invalid_commands {
+        let content = format!("[Desktop Entry]\nExec={command}\nX-AppBento-Managed=true\n");
+        fs::write(&desktop_path, &content).unwrap();
+
+        assert_eq!(
+            service.list().unwrap_err(),
+            "desktop entry ownership cannot be verified"
+        );
+        assert_eq!(fs::read_to_string(&desktop_path).unwrap(), content);
+    }
+}
+
+#[test]
 fn rescan_replaces_filename_defaults_and_renames_the_desktop_entry() {
     let (_directory, service, source) = fixture();
     let renamed = source.with_file_name("Tool-linux-2.1.0-x86_64.AppImage");

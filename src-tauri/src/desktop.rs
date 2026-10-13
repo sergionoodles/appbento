@@ -64,6 +64,41 @@ pub(super) fn legacy_desktop_content(path: &Path, name: &str) -> String {
     format!("[Desktop Entry]\nType=Application\nName={display_name}\nExec=\"{escaped_path}\" %U\nTerminal=false\nCategories=Utility;\nX-AppBento-Managed=true\n")
 }
 
+fn is_previous_launch_exec(line: &str, app_id: &str) -> bool {
+    let suffix = format!("\" --launch \"{}\" %U", escape_exec(app_id));
+    let Some(launcher) = line
+        .strip_prefix("Exec=\"")
+        .and_then(|command| command.strip_suffix(&suffix))
+    else {
+        return false;
+    };
+    if !launcher.starts_with('/') || launcher == "/" {
+        return false;
+    }
+
+    // Accept only the quoting emitted by escape_exec, so the launcher stays one argument.
+    let escaped_sequences =
+        ['\\', '"', '`', '$', '%'].map(|character| escape_exec(&character.to_string()));
+    let mut remaining = launcher;
+    while !remaining.is_empty() {
+        if let Some(rest) = escaped_sequences
+            .iter()
+            .find_map(|sequence| remaining.strip_prefix(sequence.as_str()))
+        {
+            remaining = rest;
+            continue;
+        }
+        let Some(character) = remaining.chars().next() else {
+            return false;
+        };
+        if character.is_control() || matches!(character, '\\' | '"' | '`' | '$' | '%') {
+            return false;
+        }
+        remaining = &remaining[character.len_utf8()..];
+    }
+    true
+}
+
 pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<(), String> {
     let content = match std::fs::read_to_string(path) {
         Ok(content) => content,
@@ -93,7 +128,7 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
     }
     if !content
         .lines()
-        .any(|line| line == expected_exec || line == legacy_exec)
+        .any(|line| line == legacy_exec || is_previous_launch_exec(line, &app.id))
     {
         return Err("desktop entry ownership cannot be verified".into());
     }
