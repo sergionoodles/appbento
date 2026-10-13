@@ -40,7 +40,18 @@ impl Lifecycle {
                 {
                     return Err("update destination already exists".into());
                 }
-                let (temporary, app) = stage_update(&mut download, current, &destination, latest)?;
+                let icon_directory = self
+                    .library_path
+                    .parent()
+                    .ok_or("invalid library path")?
+                    .join("icons");
+                let (temporary, app) = stage_update(
+                    &mut download,
+                    current,
+                    &destination,
+                    latest,
+                    &icon_directory,
+                )?;
                 let preparation =
                     validate_snapshot(expected, current, expected_digest).and_then(|_| {
                         prepare_journal(
@@ -180,6 +191,7 @@ fn stage_update(
     current: &InstalledApp,
     destination: &Path,
     latest: Option<&str>,
+    icon_directory: &Path,
 ) -> Result<(PathBuf, InstalledApp), String> {
     let parent = destination.parent().ok_or("invalid update destination")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -207,9 +219,6 @@ fn stage_update(
             size_bytes: metadata.len(),
             file_created_at: file_created_at(&metadata),
             executable: true,
-            version_current: latest
-                .map(str::to_owned)
-                .or_else(|| current.version_current.clone()),
             reviewed_digest: current
                 .launch_config
                 .as_ref()
@@ -218,7 +227,7 @@ fn stage_update(
             ..current.clone()
         };
 
-        Ok(app)
+        refresh_metadata(app, &temporary, latest, icon_directory)
     })();
     match preparation {
         Ok(app) => Ok((temporary, app)),
@@ -227,4 +236,45 @@ fn stage_update(
             Err(error)
         }
     }
+}
+
+fn refresh_metadata(
+    app: InstalledApp,
+    path: &Path,
+    latest: Option<&str>,
+    icon_directory: &Path,
+) -> Result<InstalledApp, String> {
+    let embedded = crate::embedded_icon::discover_identity(path).unwrap_or_else(|error| {
+        eprintln!("update metadata unavailable for {}: {error}", app.id);
+        Default::default()
+    });
+    // Staging and managed filenames do not describe the new release's identity.
+    let identity = crate::app_identity::resolve(&embedded, "");
+    let metadata = crate::embedded_icon::discover(path).unwrap_or_else(|error| {
+        eprintln!("update icon unavailable for {}: {error}", app.id);
+        Default::default()
+    });
+    let icon_path = match metadata.icon {
+        Some(bytes) => Some(
+            crate::icons::save(icon_directory, &bytes)?
+                .to_str()
+                .ok_or("icon path must be UTF-8")?
+                .to_owned(),
+        ),
+        None => app.icon_path,
+    };
+
+    Ok(InstalledApp {
+        name: if identity.name.is_empty() {
+            app.name
+        } else {
+            identity.name
+        },
+        version_current: latest
+            .map(str::to_owned)
+            .or(identity.version)
+            .or(app.version_current),
+        icon_path,
+        ..app
+    })
 }

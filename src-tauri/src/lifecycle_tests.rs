@@ -3,7 +3,7 @@ use crate::persistence::tests::TemporaryDirectory;
 
 const ELF_HEADER_LENGTH: usize = 20;
 
-fn fixture() -> (TemporaryDirectory, Lifecycle, PathBuf) {
+pub(super) fn fixture() -> (TemporaryDirectory, Lifecycle, PathBuf) {
     let directory = TemporaryDirectory::new();
     let service = Lifecycle {
         library_path: directory.0.join("library.json"),
@@ -455,7 +455,7 @@ fn imports_require_review_without_app_specific_presets() {
     assert!(app.reviewed_digest.is_none());
 }
 
-fn staged_update(directory: &Path, source: &Path) -> PathBuf {
+pub(super) fn staged_update(directory: &Path, source: &Path) -> PathBuf {
     let staged = directory.join("download.tmp");
     let mut bytes = fs::read(source).unwrap();
     bytes.extend_from_slice(b"new release");

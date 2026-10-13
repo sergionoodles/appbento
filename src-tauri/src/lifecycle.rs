@@ -357,3 +357,7 @@ fn stage_removal(artifact: &recovery::Artifact) -> Result<(), String> {
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "update_metadata_tests.rs"]
+mod update_metadata_tests;

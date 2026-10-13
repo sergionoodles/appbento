@@ -70,6 +70,30 @@ it("keeps name colors and exposes an error when loading the saved icon fails", a
   expect(result.current.palette).toEqual(paletteFromName(app.name));
 });
 
+it("shows the new icon when an update returns a new saved icon path", async () => {
+  const preview = createPreviewApi();
+  const [original] = await preview.libraryList();
+  const app = { ...original, version_current: "1.0.0", icon_path: "/icons/old.svg" };
+  const updated = { ...app, version_current: "2.0.0", icon_path: "/icons/new.svg" };
+  const oldImage = "data:image/svg+xml;base64,old";
+  const newImage = "data:image/svg+xml;base64,new";
+  let currentApp = app;
+  const backend = {
+    ...preview,
+    async updatesInstall() { return updated; },
+    async libraryIcon() { return currentApp.icon_path === app.icon_path ? oldImage : newImage; },
+  };
+  const { result, rerender } = renderHook(({ current }) => useAppAppearance(current.name, current), {
+    wrapper: wrapper(backend), initialProps: { current: app },
+  });
+  await waitFor(() => expect(result.current.image).toBe(oldImage));
+
+  currentApp = await backend.updatesInstall();
+  rerender({ current: currentApp });
+
+  await waitFor(() => expect(result.current.image).toBe(newImage));
+});
+
 it("assigns name colors when there is no icon, including after renaming", async () => {
   const preview = createPreviewApi();
   const { result, rerender } = renderHook(({ name }) => useAppAppearance(name), {
