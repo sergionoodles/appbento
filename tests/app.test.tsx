@@ -430,7 +430,7 @@ it("downloads an AppImage from the add menu and refreshes the library", async ()
   });
   await chooseFromMenu(user, "Add apps", "Download from URL");
   const dialog = screen.getByRole("dialog", { name: "Download from URL" });
-  expect(within(dialog).getByText(/\/preview\/Applications/)).toBeInTheDocument();
+  expect(within(dialog).getByText(/\/preview\/\.local\/share\/appbento\/apps/)).toBeInTheDocument();
   await user.type(within(dialog).getByRole("textbox", { name: "AppImage URL" }), "https://example.org/Downloaded.AppImage");
   await user.click(within(dialog).getByRole("button", { name: "download + add" }));
   expect(within(dialog).getByRole("status")).toHaveTextContent("Downloading");

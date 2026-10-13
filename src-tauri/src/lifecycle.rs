@@ -20,6 +20,8 @@ mod integration;
 pub(crate) mod recovery;
 #[path = "replacement.rs"]
 mod replacement;
+#[path = "self_appimage.rs"]
+mod self_appimage;
 
 pub use appimage::open_appimage;
 #[cfg(test)]
@@ -42,6 +44,7 @@ fn discovered_app(
     path: &Path,
     file: &File,
     existing: Option<&InstalledApp>,
+    identity: AppIdentity,
 ) -> Result<InstalledApp, String> {
     let file_name = path
         .file_name()
@@ -52,8 +55,6 @@ fn discovered_app(
     if let Some(existing) = existing {
         let needs_name =
             app_identity::is_legacy_file_name_default(&existing.name, &existing.file_name);
-        let needs_version = existing.version_current.is_none();
-        let identity = (needs_name || needs_version).then(|| read_identity(path, &file_name));
         let has_current_review = existing.launch_config.is_none()
             || existing.reviewed_digest.as_deref()
                 == Some(crate::sandbox::appimage_digest(path)?.as_str());
@@ -67,18 +68,15 @@ fn discovered_app(
             size_bytes: metadata.len(),
             file_created_at: file_created_at(&metadata),
             executable: metadata.permissions().mode() & 0o111 != 0,
-            name: match &identity {
-                Some(identity) if needs_name => identity.name.clone(),
-                _ => existing.name.clone(),
+            name: if needs_name {
+                identity.name
+            } else {
+                existing.name.clone()
             },
-            version_current: existing
-                .version_current
-                .clone()
-                .or_else(|| identity.and_then(|identity| identity.version)),
+            version_current: existing.version_current.clone().or(identity.version),
             ..existing.clone()
         });
     }
-    let identity = read_identity(path, &file_name);
     Ok(InstalledApp {
         update_config: None,
         id: path_id(path)?,
@@ -102,7 +100,11 @@ fn discovered_app(
 }
 
 /// Unreadable metadata (Type 1 AppImages, missing squashfs-tools) falls back to the filename.
-fn read_identity(path: &Path, file_name: &str) -> AppIdentity {
+fn read_identity(path: &Path) -> Result<AppIdentity, String> {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("invalid filename")?;
     let embedded = crate::embedded_icon::discover_identity(path).unwrap_or_else(|error| {
         eprintln!(
             "embedded metadata unavailable for {}: {error}",
@@ -110,7 +112,7 @@ fn read_identity(path: &Path, file_name: &str) -> AppIdentity {
         );
         Default::default()
     });
-    app_identity::resolve(&embedded, file_name)
+    Ok(app_identity::resolve(&embedded, file_name))
 }
 
 fn file_created_at(metadata: &fs::Metadata) -> Option<DateTime<Utc>> {
@@ -229,10 +231,15 @@ impl Lifecycle {
                             }
                         };
                         let id = path_id(&path)?;
+                        let identity = read_identity(&path)?;
+                        if self_appimage::is_self_appimage(&path, &identity) {
+                            library.retain(|_, app| app.file_path != id);
+                            continue;
+                        }
                         let existing = library
                             .get(&id)
                             .or_else(|| library.values().find(|app| app.file_path == id));
-                        let app = discovered_app(&path, &file, existing)?;
+                        let app = discovered_app(&path, &file, existing, identity)?;
                         library.insert(app.id.clone(), app.clone());
                         if !found
                             .iter()

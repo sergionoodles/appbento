@@ -6,7 +6,9 @@ use std::path::Path;
 
 use super::desktop::desktop_content_for_app;
 use super::recovery::{self, Artifact, Journal, Operation, OriginalMode};
-use super::{desktop_id, discovered_app, open_appimage, path_id, Lifecycle};
+use super::{
+    desktop_id, discovered_app, open_appimage, path_id, read_identity, self_appimage, Lifecycle,
+};
 use crate::models::InstalledApp;
 use crate::persistence::{self, Repository};
 use crate::store::Library;
@@ -82,6 +84,10 @@ impl Lifecycle {
         library: &Library,
     ) -> Result<IntegrationPlan, String> {
         let source = fs::canonicalize(source).map_err(|error| error.to_string())?;
+        let identity = read_identity(&source)?;
+        if self_appimage::is_self_appimage(&source, &identity) {
+            return Err(self_appimage::IMPORT_WARNING.into());
+        }
         fs::create_dir_all(&self.managed_dir).map_err(|error| error.to_string())?;
         fs::create_dir_all(&self.desktop_dir).map_err(|error| error.to_string())?;
         let managed = fs::canonicalize(&self.managed_dir).map_err(|error| error.to_string())?;
@@ -97,7 +103,7 @@ impl Lifecycle {
             .get(&destination_id)
             .or_else(|| library.get(&source_id))
             .or_else(|| library.values().find(|app| app.file_path == source_id));
-        let mut app = discovered_app(&source, source_file, existing)?;
+        let mut app = discovered_app(&source, source_file, existing, identity)?;
         app.id = existing.map_or_else(|| destination_id.clone(), |app| app.id.clone());
         app.file_path = destination_id.clone();
         app.integrated = true;

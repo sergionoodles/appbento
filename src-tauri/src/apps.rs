@@ -39,16 +39,8 @@ pub async fn library_list() -> Result<Vec<InstalledApp>, String> {
 pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport, String> {
     let mut report = tokio::task::spawn_blocking(move || {
         let stored = settings::load()?;
-        let home = dirs::home_dir().ok_or("home directory unavailable")?;
-        let defaults = vec![
-            home.join("Applications"),
-            home.join("Downloads"),
-            home.join(".local/bin"),
-            PathBuf::from("/opt/appimages"),
-            PathBuf::from(&stored.managed_dir),
-        ];
         let directories =
-            settings::merge_scan_dirs(defaults, extra_dirs.unwrap_or_default(), stored.scan_dirs)?;
+            settings::merge_scan_dirs(extra_dirs.unwrap_or_default(), stored.scan_dirs)?;
         lifecycle()?.scan(directories)
     })
     .await

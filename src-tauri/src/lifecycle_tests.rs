@@ -3,6 +3,72 @@ use crate::persistence::tests::TemporaryDirectory;
 
 const ELF_HEADER_LENGTH: usize = 20;
 
+#[test]
+fn scan_skips_appbento_in_every_scan_directory() {
+    let (directory, service, source) = fixture();
+    let downloads = directory.0.join("Downloads");
+    let extra = directory.0.join("extra");
+    for folder in [&downloads, &extra, &service.managed_dir] {
+        fs::create_dir_all(folder).unwrap();
+        fs::copy(&source, folder.join("AppBento_0.5.3_amd64.AppImage")).unwrap();
+    }
+
+    let report = service
+        .scan(vec![
+            downloads,
+            extra,
+            service.managed_dir.clone(),
+            directory.0.clone(),
+        ])
+        .unwrap();
+
+    assert_eq!(report.apps.len(), 1);
+    assert_eq!(report.apps[0].name, "Example");
+    assert!(report.warnings.is_empty());
+    assert_eq!(service.list().unwrap().len(), 1);
+}
+
+#[test]
+fn rescan_removes_a_previously_registered_appbento_without_deleting_its_file() {
+    let (directory, service, source) = fixture();
+    service.scan(vec![directory.0.clone()]).unwrap();
+    let appbento = source.with_file_name("AppBento.AppImage");
+    fs::rename(&source, &appbento).unwrap();
+    persistence::mutate(&service.library_path, |library: &mut Library| {
+        let mut app = library.remove(source.to_str().unwrap()).unwrap();
+        app.file_path = appbento.to_str().unwrap().into();
+        library.insert(app.id.clone(), app);
+        Ok(())
+    })
+    .unwrap();
+
+    let report = service.scan(vec![directory.0.clone()]).unwrap();
+
+    assert!(report.apps.is_empty());
+    assert!(service.list().unwrap().is_empty());
+    assert!(appbento.exists());
+}
+
+#[test]
+fn manual_and_download_imports_reject_appbento_without_creating_artifacts() {
+    let (_directory, service, source) = fixture();
+    let appbento = source.with_file_name("appbento-0.5.3-x86_64.appimage");
+    fs::rename(&source, &appbento).unwrap();
+
+    for result in [
+        service.integrate(&appbento),
+        service.integrate_download(&appbento),
+    ] {
+        let warning = result.unwrap_err();
+        assert!(warning.contains("AppBento cannot add itself"), "{warning}");
+        assert!(warning.contains("already running"), "{warning}");
+    }
+    assert!(appbento.exists());
+    assert!(!service.managed_dir.exists());
+    assert!(!service.desktop_dir.exists());
+    assert!(service.list().unwrap().is_empty());
+}
+
 pub(super) fn fixture() -> (TemporaryDirectory, Lifecycle, PathBuf) {
     let directory = TemporaryDirectory::new();
     let service = Lifecycle {

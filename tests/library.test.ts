@@ -12,6 +12,22 @@ function deferred<Value>() {
 
 const emptyReport: UpdateReport = { updates: [], errors: [], unknown_versions: [], checked_count: 0, unsupported_count: 0 };
 
+test("adding AppBento itself displays the backend explanation and preserves the library", async () => {
+  const warning = "AppBento cannot add itself to its library. You are already running AppBento; adding it would only create another copy of this app inside itself. Add other AppImages instead.";
+  const controller = createLibraryController({
+    ...createPreviewApi(),
+    pickAppImage: async () => "/Downloads/AppBento.AppImage",
+    libraryIntegrate: async () => { throw new Error(warning); },
+  });
+  await controller.initialize();
+  const apps = controller.getState().apps;
+
+  assert.equal(await controller.integrate(), false);
+  assert.equal(controller.getState().error, `Add AppImage: ${warning}`);
+  assert.deepEqual(controller.getState().apps, apps);
+  assert.equal(controller.getState().operation, null);
+});
+
 test("local library appears before network update checks complete", async () => {
   const updates = deferred<UpdateReport>();
   const controller = createLibraryController({ ...createPreviewApi(), updatesCheckAll: () => updates.promise });

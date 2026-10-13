@@ -3,10 +3,11 @@ import { restrictedPermissions } from "./sandbox";
 import type { InstalledApp, Settings, UpdateCheckResult, UpdateConfig, UpdateInfo, UpdateReport } from "./types";
 
 const PREVIEW_DATE = "2026-01-01T12:00:00Z";
+const PREVIEW_MANAGED_DIRECTORY = "/preview/.local/share/appbento/apps";
 
 export function createPreviewApp(name: string, version: string | null): InstalledApp {
   const fileName = `${name}${version ? `-${version}` : ""}.AppImage`;
-  const path = `/preview/Applications/${fileName}`;
+  const path = `${PREVIEW_MANAGED_DIRECTORY}/${fileName}`;
   return {
     launch_config: null, update_config: null,
     id: path, name, file_path: path, source_path: null, file_name: fileName, size_bytes: 180_000_000,
@@ -23,7 +24,7 @@ export function createPreviewApi(): AppApi {
     architecture: "x86_64", tag_regex: "^v?(?P<version>.*)$", prerelease: false, channel: "stable",
   } : null }));
   const installedDirectUrls = new Map<string, string>();
-  let settings: Settings = { scan_dirs: [], managed_dir: "/preview/Applications" };
+  let settings: Settings = { scan_dirs: [], managed_dir: PREVIEW_MANAGED_DIRECTORY };
   const findApp = (id: string) => {
     const app = apps.find((entry) => entry.id === id);
     if (!app) throw new Error("App not found in preview.");

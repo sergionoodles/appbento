@@ -49,8 +49,8 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
             </div>
           </div>
           <div>
-            <div className="font-medium mb-1">Extra scan folders</div>
-            <p className="text-[13px] text-[var(--muted)] mb-2">Scanned together with the managed folder, ~/Applications, ~/Downloads and other defaults.</p>
+            <div className="font-medium mb-1">Scan folders</div>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Only folders you add here are scanned. Leave this list empty to add apps manually, one at a time.</p>
             <div className="flex flex-col gap-1">
               {directories.map((directory) => (
                 <div key={directory} className="flex items-center gap-2 text-[14px] bg-[var(--panel2)] rounded-md pl-4 pr-1 py-1">

@@ -16,8 +16,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             scan_dirs: Vec::new(),
-            managed_dir: dirs::home_dir()
-                .map(|home| home.join("Applications").to_string_lossy().into_owned())
+            managed_dir: persistence::data_path("apps")
+                .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_default(),
         }
     }
@@ -100,12 +100,8 @@ pub fn load() -> Result<Settings, String> {
     )?)?)
 }
 
-pub fn merge_scan_dirs(
-    defaults: Vec<PathBuf>,
-    extra: Vec<String>,
-    stored: Vec<String>,
-) -> Result<Vec<PathBuf>, String> {
-    let mut output = defaults;
+pub fn merge_scan_dirs(extra: Vec<String>, stored: Vec<String>) -> Result<Vec<PathBuf>, String> {
+    let mut output = Vec::new();
     for raw in extra.into_iter().chain(stored) {
         if raw.trim().is_empty() {
             continue;
@@ -156,15 +152,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_managed_folder_is_beside_settings_file() {
+        assert_eq!(
+            PathBuf::from(Settings::default().managed_dir),
+            persistence::data_path("settings.json")
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("apps")
+        );
+    }
+
+    #[test]
     fn merge_dedupes_and_skips_blanks() {
         assert_eq!(
             merge_scan_dirs(
-                vec!["/a".into()],
                 vec!["/b".into(), " ".into()],
                 vec!["/b".into(), "/c".into()]
             )
             .unwrap(),
-            vec![PathBuf::from("/a"), "/b".into(), "/c".into()]
+            vec![PathBuf::from("/b"), "/c".into()]
         );
     }
 

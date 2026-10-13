@@ -5,9 +5,83 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 const SCAN_TEST_DIRECTORY: &str = "APPBENTO_TEST_ICON_SCAN_DIRECTORY";
+const SELECTED_SCAN_TEST_DIRECTORY: &str = "APPBENTO_TEST_SELECTED_SCAN_DIRECTORY";
 const EMBEDDED_ICON: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'><rect width='1' height='1'/></svg>";
 const CUSTOM_ICON: &[u8] =
     b"<svg xmlns='http://www.w3.org/2000/svg' width='2' height='2'><circle r='1'/></svg>";
+
+#[test]
+fn scan_requires_explicitly_selected_folders() {
+    let directory = TemporaryDirectory::new();
+    let home = directory.0.join("home");
+    let data = directory.0.join("data");
+    let managed = directory.0.join("managed");
+    for folder in [
+        home.join("Applications"),
+        home.join("Downloads"),
+        home.join(".local/bin"),
+        managed.clone(),
+    ] {
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("Invalid.AppImage"), b"invalid").unwrap();
+    }
+    persistence::mutate(
+        &data.join("appbento/settings.json"),
+        |stored: &mut settings::Settings| {
+            stored.managed_dir = managed.to_str().unwrap().into();
+            Ok(())
+        },
+    )
+    .unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "apps::tests::selected_scan_worker",
+            "--nocapture",
+        ])
+        .env("HOME", &home)
+        .env("XDG_DATA_HOME", &data)
+        .env(SELECTED_SCAN_TEST_DIRECTORY, &directory.0)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "isolated scan failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[tokio::test]
+async fn selected_scan_worker() {
+    let Some(directory) = std::env::var_os(SELECTED_SCAN_TEST_DIRECTORY) else {
+        return;
+    };
+    let report = library_scan(None).await.unwrap();
+    assert!(report.apps.is_empty());
+    assert!(
+        report.warnings.is_empty(),
+        "unselected folders were scanned: {:?}",
+        report.warnings
+    );
+
+    let downloads = PathBuf::from(directory).join("home/Downloads");
+    let chosen = downloads.to_str().unwrap().to_owned();
+    for extra in [Some(vec![chosen.clone()]), None] {
+        if extra.is_none() {
+            settings::settings_set(Some(vec![chosen.clone()]), None)
+                .await
+                .unwrap();
+        }
+        let report = library_scan(extra).await.unwrap();
+        assert!(report.apps.is_empty());
+        assert_eq!(report.warnings.len(), 1);
+        assert_eq!(
+            report.warnings[0].path,
+            downloads.join("Invalid.AppImage").to_str().unwrap()
+        );
+    }
+}
 
 fn create_appimage(directory: &Path) -> PathBuf {
     let root = directory.join("image-root");
@@ -153,4 +227,9 @@ async fn rescan_icons_worker() {
         fs::read(custom.icon_path.as_ref().unwrap()).unwrap(),
         CUSTOM_ICON
     );
+
+    let unconfigured = library_scan(None).await.unwrap();
+    assert!(unconfigured.apps.is_empty());
+    assert!(unconfigured.warnings.is_empty());
+    assert_eq!(library_list().await.unwrap().len(), 2);
 }
