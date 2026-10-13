@@ -347,10 +347,25 @@ fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
 fn interrupted_update_does_not_overwrite_foreign_destination() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
-    let (journal, _original) = interrupted_replacement(&service, &app);
-    fs::remove_file(&app.file_path).unwrap();
-    fs::write(&app.file_path, "foreign bytes").unwrap();
-    assert!(service.list().is_err());
+    let (journal, original) = interrupted_replacement(&service, &app);
+    let destination = Path::new(&app.file_path);
+    let foreign = persistence::temporary_path(destination.parent().unwrap());
+    // Allocate the foreign file while the replacement inode is still in use.
+    fs::write(&foreign, "foreign bytes").unwrap();
+    fs::rename(&foreign, destination).unwrap();
+    assert_ne!(
+        recovery::identity(destination).unwrap(),
+        journal.artifacts[1].identity
+    );
+
+    assert_eq!(
+        service.list().unwrap_err(),
+        "replacement recovery destination was changed"
+    );
     assert_eq!(fs::read_to_string(&app.file_path).unwrap(), "foreign bytes");
-    assert!(journal.artifacts[0].stage.exists());
+    assert_eq!(fs::read(&journal.artifacts[0].stage).unwrap(), original);
+    assert!(service
+        .library_path
+        .with_extension("lifecycle.json")
+        .exists());
 }
