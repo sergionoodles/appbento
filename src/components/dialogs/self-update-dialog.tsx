@@ -42,7 +42,20 @@ export function SelfUpdateDialog({ state, isBlocked, onCheck, onInstall, onDownl
     </> : <p role="status" className="text-[14px]">{checkLabel(state)}</p>}
     {progress ? <div role="status" className="space-y-2 text-[14px]">
       <p>{progressLabel(progress)}{percentage !== null ? ` ${percentage}%` : ""}</p>
-      {progress.phase === "downloading" ? <progress aria-label="Update download" className="w-full accent-[var(--accent)]" max={100} value={percentage ?? undefined} /> : null}
+      {progress.phase === "downloading" ? <div
+        role="progressbar"
+        aria-label="Update download"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percentage ?? undefined}
+        className="h-3.5 w-full overflow-hidden rounded-full"
+        style={{ backgroundColor: "var(--panel2)" }}
+      >
+        <div
+          className={`h-full rounded-full${percentage === null ? " animate-pulse motion-reduce:animate-none" : ""}`}
+          style={{ backgroundColor: "var(--accent)", width: `${percentage ?? 100}%` }}
+        />
+      </div> : null}
     </div> : null}
     {state.error || downloadError ? <p role="alert" className="text-[13px] text-[var(--bad)] selectable">{state.error ?? downloadError}</p> : null}
     <div className="flex flex-wrap justify-end gap-2">

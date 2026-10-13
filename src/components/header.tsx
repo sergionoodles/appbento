@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { FolderCog, PackagePlus, Plus, ScanSearch, Search, Settings, Archive, Download } from "lucide-react";
+import { FolderCog, Info, PackagePlus, Plus, ScanSearch, Search, Settings, Archive, Download } from "lucide-react";
 import { Input } from "./ui/card";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 import { ThemeSwatches } from "./theme";
 
-export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate }: {
+export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate, onAbout }: {
   isNative: boolean;
   query: string;
   onQuery: (query: string) => void;
@@ -17,6 +17,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
   onScan: () => void;
   updateVersion?: string;
   onSelfUpdate: () => void;
+  onAbout: () => void;
 }) {
   const search = useRef<HTMLInputElement>(null);
 
@@ -52,6 +53,8 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
           <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>
           <MenuSeparator />
           <ThemeSwatches />
+          <MenuSeparator />
+          <MenuItem icon={<Info size={15} />} onSelect={onAbout}>About AppBento</MenuItem>
         </Menu>
       </div>
     </header>

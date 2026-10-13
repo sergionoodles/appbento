@@ -14,6 +14,25 @@ const available: SelfUpdateCheck = {
 
 afterEach(() => vi.useRealTimers());
 
+it.each([50, 100, null])("uses theme colors for update download progress at %s percent", (percentage) => {
+  render(<SelfUpdateDialog state={{
+    result: available, isChecking: false, error: null,
+    progress: { phase: "downloading", downloaded: percentage ?? 0, total: percentage === null ? null : 100 },
+  }} isBlocked={false} onCheck={() => {}} onInstall={() => {}}
+    onDownload={async () => {}} onClose={() => {}} returnFocusElement={null} />);
+
+  const progress = screen.getByRole("progressbar", { name: "Update download" });
+  expect(progress).toHaveStyle({ backgroundColor: "var(--panel2)" });
+  expect(progress.firstElementChild).toHaveStyle({
+    backgroundColor: "var(--accent)", width: `${percentage ?? 100}%`,
+  });
+  if (percentage === null) {
+    expect(progress).not.toHaveAttribute("aria-valuenow");
+    return;
+  }
+  expect(progress).toHaveAttribute("aria-valuenow", String(percentage));
+});
+
 it("checks once at startup, polls, and stops polling on unmount", async () => {
   vi.useFakeTimers();
   let checks = 0;
