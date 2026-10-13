@@ -18,6 +18,15 @@ const CANDIDATE_LIMIT: usize = 8;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const LIST_PREFIX: &str = "squashfs-root/";
+const CACHE_SIZE_MIB: &str = "8";
+#[cfg(not(test))]
+const UNSQUASHFS_PATH: &str = "/usr/bin/unsquashfs";
+// Allow compatibility tests against older tools without replacing the system binary.
+#[cfg(test)]
+const UNSQUASHFS_PATH: &str = match option_env!("APPBENTO_TEST_UNSQUASHFS") {
+    Some(path) => path,
+    None => "/usr/bin/unsquashfs",
+};
 /// Directories below the AppImage root that hold icons and AppStream metadata. Listing only
 /// these keeps large AppImages (thousands of bundled files) within `LIST_LIMIT`.
 const METADATA_DIRECTORIES: [&str; 7] = [
@@ -244,13 +253,16 @@ fn run_unsquashfs(
         return Err("embedded icon discovery timed out".into());
     }
     let offset = offset.to_string();
-    let mut child = Command::new("/usr/bin/unsquashfs")
+    // Separate cache limits also work on SquashFS 4.5 (Ubuntu 22.04), which lacks -mem.
+    let mut child = Command::new(UNSQUASHFS_PATH)
         .args([
             "-no-wildcards",
             "-processors",
             "1",
-            "-mem",
-            "16M",
+            "-data-queue",
+            CACHE_SIZE_MIB,
+            "-frag-queue",
+            CACHE_SIZE_MIB,
             "-offset",
             &offset,
         ])
@@ -445,6 +457,40 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::symlink;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn reads_squashfs_metadata_with_bounded_caches() {
+        if !Path::new("/usr/bin/mksquashfs").exists() || !Path::new(UNSQUASHFS_PATH).exists() {
+            eprintln!("skipping fixture: squashfs-tools unavailable");
+            return;
+        }
+        let temporary = crate::persistence::tests::TemporaryDirectory::new();
+        let root = temporary.0.join("root");
+        fs::create_dir(&root).unwrap();
+        let content = b"[Desktop Entry]\nName=Sample\n";
+        fs::write(root.join("sample.desktop"), content).unwrap();
+        let filesystem = temporary.0.join("filesystem");
+        let status = Command::new("/usr/bin/mksquashfs")
+            .arg(&root)
+            .arg(&filesystem)
+            .args(["-noappend", "-processors", "1", "-quiet"])
+            .stdout(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            run_unsquashfs(
+                filesystem.to_str().unwrap(),
+                0,
+                &["-cat"],
+                &["sample.desktop"],
+                DESKTOP_LIMIT,
+                Instant::now() + DISCOVERY_TIMEOUT,
+            )
+            .unwrap(),
+            content
+        );
+    }
 
     #[test]
     fn parses_only_safe_desktop_entry_metadata() {
