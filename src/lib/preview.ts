@@ -51,7 +51,7 @@ export function createPreviewApi(): AppApi {
 
   return {
     isTauri: false,
-    async selfUpdateCheck() { return { currentVersion: "0.1.0", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
+    async selfUpdateCheck() { return { currentVersion: "0.5.0", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
     async selfUpdateInstall() { throw new Error("Updating AppBento requires the desktop AppImage."); },
     async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },
     async configurationRead() { throw new Error("Importing settings requires the desktop app."); },

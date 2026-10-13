@@ -61,7 +61,16 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: AppBento ${{ github.ref_name }}
-          releaseBody: Download the AppImage below. Existing installations can update from the Settings menu.
+          releaseBody: |
+            AppBento is a local AppImage manager for Linux.
+
+            - Find and integrate AppImages into your library and desktop menu.
+            - Launch apps from a bento grid and organize them into groups.
+            - Configure per-app updates and launch permissions.
+            - Customize themes and back up or restore your settings.
+
+            Download the x86_64 AppImage below, make it executable, and launch it.
+            Future AppBento updates are available from the Settings menu.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           uploadUpdaterJson: true
