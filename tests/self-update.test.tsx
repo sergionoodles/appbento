@@ -123,8 +123,8 @@ it("shows the cog badge, release notes, download progress, and one-click install
   await user.click(screen.getByRole("button", { name: "Settings" }));
   await user.click(screen.getByRole("menuitem", { name: "Update available · v0.2.0" }));
   expect(screen.getByLabelText("Release notes")).toHaveTextContent("Improved updates");
-  await waitFor(() => expect(screen.getByRole("button", { name: "Install update and restart" })).toBeEnabled());
-  await user.click(screen.getByRole("button", { name: "Install update and restart" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Update & Restart" })).toBeEnabled());
+  await user.click(screen.getByRole("button", { name: "Update & Restart" }));
   expect(screen.getByText("Downloading update… 50%")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
   await user.keyboard("{Escape}");
@@ -156,9 +156,9 @@ it("offers a manual download for a protected AppImage and blocks automatic insta
   expect(controller.getState().progress).toBeNull();
   render(<SelfUpdateDialog state={controller.getState()} isBlocked={false} onCheck={() => {}} onInstall={() => {}}
     onDownload={async (url) => { downloads.push(url); }} onClose={() => {}} returnFocusElement={null} />);
-  expect(screen.getByRole("button", { name: "Install update and restart" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Update & Restart" })).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "Download manually" }));
-  expect(downloads).toEqual([result.update.downloadUrl]);
+  expect(downloads).toEqual(["https://github.com/sergionoodles/appbento/releases"]);
 });
 
 it("reports up-to-date and failed checks with a retry action", async () => {

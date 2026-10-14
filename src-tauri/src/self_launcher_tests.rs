@@ -33,7 +33,7 @@ fn installs_a_direct_launcher_with_icon_and_detects_it_after_restart() {
     assert!(status.installed);
     assert!(status.dismissed);
     let content = std::fs::read_to_string(&service.entry).unwrap();
-    assert!(content.contains("Name=appbento\n"));
+    assert!(content.contains("Name=AppBento\n"));
     assert!(content.contains(&format!(
         "Exec=\"{}\"\n",
         desktop::escape_exec(executable.to_str().unwrap())

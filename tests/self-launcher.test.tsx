@@ -6,7 +6,7 @@ import { createPreviewApi } from "../src/lib/preview";
 import type { AppApi } from "../src/lib/api";
 import { chooseFromMenu } from "./menu-helpers";
 
-const TITLE = "Add appbento to your system launcher?";
+const TITLE = "Add AppBento to your system launcher?";
 
 function nativeBackend(): AppApi {
   const preview = createPreviewApi();
@@ -31,7 +31,7 @@ function nativeBackend(): AppApi {
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 
-describe("appbento launcher registration", () => {
+describe("AppBento launcher registration", () => {
   it("prompts on first launch, remembers dismissal, and installs later from Settings", async () => {
     const backend = nativeBackend();
     const user = userEvent.setup();
@@ -43,11 +43,11 @@ describe("appbento launcher registration", () => {
     render(<App backend={backend} />);
     await screen.findByText("Obsidian");
     expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument();
-    await chooseFromMenu(user, "Settings", "Add appbento to launcher");
+    await chooseFromMenu(user, "Settings", "Add AppBento to launcher");
     await user.click(screen.getByRole("button", { name: "Add to launcher" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.queryByRole("menuitem", { name: "Add appbento to launcher" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Add AppBento to launcher" })).not.toBeInTheDocument();
   });
 
   it("adds directly from the first-launch prompt and skips the prompt on restart", async () => {
@@ -62,7 +62,7 @@ describe("appbento launcher registration", () => {
     await screen.findByText("Obsidian");
     expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.queryByRole("menuitem", { name: "Add appbento to launcher" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Add AppBento to launcher" })).not.toBeInTheDocument();
   });
 
   it("shows installation errors and lets the user retry", async () => {
@@ -91,7 +91,7 @@ describe("appbento launcher registration", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument());
     expect((await backend.selfLauncherStatus()).dismissed).toBe(true);
-    await chooseFromMenu(user, "Settings", "Add appbento to launcher");
+    await chooseFromMenu(user, "Settings", "Add AppBento to launcher");
     expect(screen.getByRole("dialog", { name: TITLE })).toBeInTheDocument();
   });
 
@@ -101,6 +101,6 @@ describe("appbento launcher registration", () => {
     await screen.findByText("Obsidian");
     expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.queryByRole("menuitem", { name: "Add appbento to launcher" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Add AppBento to launcher" })).not.toBeInTheDocument();
   });
 });

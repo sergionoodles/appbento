@@ -3,6 +3,8 @@ import type { SelfUpdateProgress, SelfUpdateState } from "@/lib/self-update";
 import { Button } from "../ui/button";
 import { Dialog } from "./dialog";
 
+const RELEASES_URL = "https://github.com/sergionoodles/appbento/releases";
+
 function progressLabel(progress: SelfUpdateProgress | null) {
   if (progress?.phase === "installing") return "Installing update…";
   if (progress?.phase === "restarting") return "Restarting AppBento…";
@@ -62,9 +64,9 @@ export function SelfUpdateDialog({ state, isBlocked, onCheck, onInstall, onDownl
       <Button variant="ghost" disabled={isInstalling} onClick={onClose}>Close</Button>
       {update ? <Button variant="outline" disabled={isInstalling} onClick={() => {
         setDownloadError(null);
-        void onDownload(update.downloadUrl).catch((error: unknown) => setDownloadError(error instanceof Error ? error.message : String(error)));
+        void onDownload(RELEASES_URL).catch((error: unknown) => setDownloadError(error instanceof Error ? error.message : String(error)));
       }}>Download manually</Button> : null}
-      {update ? <Button disabled={isInstalling || state.isChecking || isBlocked || !!update.installDisabledReason} onClick={onInstall}>Install update and restart</Button>
+      {update ? <Button variant="accent" disabled={isInstalling || state.isChecking || isBlocked || !!update.installDisabledReason} onClick={onInstall}>Update &amp; Restart</Button>
         : <Button disabled={state.isChecking || !!state.result?.unavailableReason} onClick={onCheck}>Check for updates</Button>}
     </div>
   </Dialog>;

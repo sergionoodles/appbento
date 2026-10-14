@@ -64,7 +64,7 @@ impl Launcher {
         let executable = executable.to_str().ok_or("launcher path must be UTF-8")?;
         if executable.contains('=') {
             return Err(
-                "Move appbento to a path without an equals sign before adding it to the launcher."
+                "Move AppBento to a path without an equals sign before adding it to the launcher."
                     .into(),
             );
         }
@@ -73,7 +73,7 @@ impl Launcher {
             return Err("icon path cannot contain control characters".into());
         }
         let content = format!(
-            "[Desktop Entry]\nType=Application\nName=appbento\nComment=Manage your AppImages\nExec=\"{}\"\nIcon={}\nTerminal=false\nCategories=Utility;\n{OWNERSHIP_MARKER}\n",
+            "[Desktop Entry]\nType=Application\nName=AppBento\nComment=Manage your AppImages\nExec=\"{}\"\nIcon={}\nTerminal=false\nCategories=Utility;\n{OWNERSHIP_MARKER}\n",
             desktop::escape_exec(executable),
             icon.replace('\\', "\\\\"),
         );
@@ -82,7 +82,7 @@ impl Launcher {
             match std::fs::read_to_string(&self.entry) {
                 Ok(existing) if !existing.lines().any(|line| line == OWNERSHIP_MARKER) => {
                     return Err(
-                        "An existing appbento launcher entry is not managed by appbento.".into(),
+                        "An existing AppBento launcher entry is not managed by AppBento.".into(),
                     );
                 }
                 Ok(_) => {}

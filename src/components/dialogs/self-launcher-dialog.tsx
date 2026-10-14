@@ -9,10 +9,10 @@ export function SelfLauncherDialog({ isSaving, error, onAdd, onClose, returnFocu
   onClose: () => void;
   returnFocusElement: HTMLElement | null;
 }) {
-  return <Dialog title="Add appbento to your system launcher?" onClose={onClose} canClose={!isSaving} returnFocusElement={returnFocusElement}>
+  return <Dialog title="Add AppBento to your system launcher?" onClose={onClose} canClose={!isSaving} returnFocusElement={returnFocusElement}>
     <div className="flex items-start gap-4">
       <LogoMark className="size-12 shrink-0" />
-      <p className="text-[14px] text-[var(--muted)]">Open appbento from your system’s app menu without finding the AppImage file. You can also add it later from Settings.</p>
+      <p className="text-[14px] text-[var(--muted)]">Open AppBento from your system’s app menu without finding the AppImage file. You can also add it later from Settings.</p>
     </div>
     {error ? <p role="alert" className="text-[14px] text-[var(--bad)] selectable">{error}</p> : null}
     <div className="flex justify-end gap-2">
