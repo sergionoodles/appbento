@@ -33,6 +33,7 @@ fn fixture() -> (TemporaryDirectory, ConfigurationBackup) {
         desktop_dir: directory.0.join("old-desktop"),
     };
     let app = lifecycle.integrate(&source).unwrap();
+    let app = lifecycle.set_menu_entry(&app.id, true).unwrap();
     let grant = home.join("Documents");
     fs::create_dir(&grant).unwrap();
     lifecycle
@@ -177,15 +178,8 @@ fn settings_round_trip_to_another_home_preserves_every_configuration() {
         vec![restored.id.clone()]
     );
     assert!(preferences.layout.groups[0].is_collapsed);
-    let desktop = fs::read_to_string(
-        directory
-            .0
-            .join("new-desktop")
-            .join(restored.desktop_id.as_ref().unwrap()),
-    )
-    .unwrap();
-    assert!(desktop.contains(&restored.id));
-    assert!(desktop.contains("--launch"));
+    assert!(restored.desktop_id.is_none());
+    assert!(!directory.0.join("new-desktop").exists());
     let settings: Settings =
         persistence::load(&path.parent().unwrap().join("settings.json")).unwrap();
     assert_eq!(
@@ -241,6 +235,19 @@ fn invalid_or_missing_files_do_not_change_existing_settings_or_library() {
     assert_eq!(fs::read(path).unwrap(), library_before);
     assert_eq!(fs::read(settings_path).unwrap(), settings_before);
     assert!(!directory.0.join("new-desktop").exists());
+}
+
+#[test]
+fn restoring_an_app_without_a_shortcut_does_not_create_one() {
+    let (directory, mut backup) = fixture();
+    backup.apps[0].app.desktop_id = None;
+    let request = request(&directory, backup);
+    let path = directory.0.join("new-data/library.json");
+    let desktop = directory.0.join("new-desktop");
+    restore_at(&path, &desktop, &directory.0.join("new-home"), request).unwrap();
+    let library: Library = persistence::load(&path).unwrap();
+    assert!(library.values().next().unwrap().desktop_id.is_none());
+    assert!(!desktop.exists());
 }
 
 #[test]
@@ -437,6 +444,7 @@ fn restore_preserves_foreign_desktop_entries_even_for_known_integrated_apps() {
     let mut existing = backup.apps[0].app.clone();
     existing.id = image.clone();
     existing.file_path = image.clone();
+    existing.desktop_id = Some(crate::lifecycle::desktop::desktop_id(Path::new(&image)));
     persistence::mutate(&path, |library: &mut Library| {
         library.insert(existing.id.clone(), existing.clone());
         Ok(())

@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
-import { FolderCog, Info, PackagePlus, Plus, ScanSearch, Search, Settings, Archive, Download } from "lucide-react";
+import { FolderCog, Info, PackagePlus, Plus, ScanSearch, Search, Settings, AppWindow, Archive, Download } from "lucide-react";
 import { Input } from "./ui/card";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 import { ThemeSwatches } from "./theme";
 
-export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate, onAbout }: {
+export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate, onAbout, canAddLauncher, onAddLauncher }: {
   isNative: boolean;
+  canAddLauncher: boolean;
+  onAddLauncher: () => void;
   query: string;
   onQuery: (query: string) => void;
   disabled: boolean;
@@ -48,6 +50,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
           <MenuItem icon={<ScanSearch size={15} />} onSelect={onScan}>Scan folders</MenuItem>
         </Menu>
         <Menu label="Settings" icon={<span className="relative"><Settings size={16} />{updateVersion ? <span role="status" aria-label={`AppBento ${updateVersion} update available`} className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--accent)] ring-2 ring-[var(--panel)]" /> : null}</span>}>
+          {canAddLauncher ? <MenuItem icon={<AppWindow size={15} />} onSelect={onAddLauncher} disabled={disabled}>Add appbento to launcher</MenuItem> : null}
           <MenuItem icon={<FolderCog size={15} />} onSelect={onFolders} disabled={!canEditFolders || disabled}>Folders</MenuItem>
           <MenuItem icon={<Archive size={15} />} onSelect={onConfiguration} disabled={!isNative || disabled}>Export / restore settings</MenuItem>
           <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>

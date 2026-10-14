@@ -284,6 +284,9 @@ fn prepare_app(
         .find(|existing| existing.file_path == app.file_path)
         .map(|existing| existing.id.clone())
         .unwrap_or_else(|| app.file_path.clone());
+    app.desktop_id = library
+        .get(&app.id)
+        .and_then(|existing| existing.desktop_id.clone());
     if library
         .get(&app.id)
         .is_some_and(|existing| existing.file_path != app.file_path)
@@ -366,17 +369,26 @@ fn prepare_desktop(
     desktop_directory: &Path,
     library: &Library,
 ) -> Result<Option<(String, FileChange)>, String> {
-    if !app.integrated {
+    if app.desktop_id.is_none() {
         return Ok(None);
     }
-    let path = Path::new(&app.file_path);
-    let id = crate::lifecycle::desktop::desktop_id(path);
-    let destination = desktop_directory.join(&id);
+    let id = app
+        .desktop_id
+        .clone()
+        .ok_or("desktop entry id unavailable")?;
+    let destination = crate::lifecycle::desktop::entry_path(desktop_directory, app)?
+        .ok_or("desktop entry id unavailable")?;
+    if !destination
+        .try_exists()
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(None);
+    }
     if destination.exists() {
         let metadata = fs::symlink_metadata(&destination).map_err(|error| error.to_string())?;
-        let is_known = library
-            .values()
-            .any(|existing| existing.file_path == app.file_path && existing.integrated);
+        let is_known = library.values().any(|existing| {
+            existing.file_path == app.file_path && existing.desktop_id.as_deref() == Some(&id)
+        });
         let content = fs::read_to_string(&destination).map_err(|error| error.to_string())?;
         let is_owned = content
             .lines()
@@ -387,7 +399,7 @@ fn prepare_desktop(
             );
         }
     }
-    let content = crate::lifecycle::desktop::desktop_content_for_app(path, &app.id, &app.name)?;
+    let content = crate::lifecycle::desktop::content_for_entry(app)?;
     Ok(Some((
         id,
         FileChange::Write {

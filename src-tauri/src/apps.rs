@@ -73,7 +73,7 @@ pub async fn library_add_url(url: String) -> Result<InstalledApp, String> {
 }
 
 #[tauri::command]
-pub async fn library_integrate(source_path: String) -> Result<InstalledApp, String> {
+pub async fn library_import(source_path: String) -> Result<InstalledApp, String> {
     let app =
         tokio::task::spawn_blocking(move || lifecycle()?.integrate(&PathBuf::from(source_path)))
             .await
@@ -88,6 +88,13 @@ pub async fn library_integrate(source_path: String) -> Result<InstalledApp, Stri
 }
 
 #[tauri::command]
+pub async fn library_set_menu_entry(id: String, enabled: bool) -> Result<InstalledApp, String> {
+    tokio::task::spawn_blocking(move || lifecycle()?.set_menu_entry(&id, enabled))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
     tokio::task::spawn_blocking(move || crate::sandbox::launch(&id, &[]))
         .await
@@ -95,7 +102,9 @@ pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
 }
 
 #[tauri::command]
-pub async fn library_launch_log(id: String) -> Result<Option<crate::launch_logs::LaunchLog>, String> {
+pub async fn library_launch_log(
+    id: String,
+) -> Result<Option<crate::launch_logs::LaunchLog>, String> {
     tokio::task::spawn_blocking(move || crate::launch_logs::read(&id))
         .await
         .map_err(|error| error.to_string())?

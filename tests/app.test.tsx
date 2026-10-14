@@ -18,6 +18,36 @@ async function openHome(backend: AppApi) {
 }
 
 describe("library management", () => {
+  it("creates a menu shortcut from a card and removes it from Integration settings", async () => {
+    const preview = createPreviewApi();
+    const user = await openHome(preview);
+    const original = (await preview.libraryList())[0];
+    await chooseFromMenu(user, "More options for Obsidian", "Add to app menu");
+    await waitFor(async () => expect((await preview.libraryList())[0].desktop_id).not.toBeNull());
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+    await user.click(within(dialog).getByRole("button", { name: "Integration" }));
+    expect(within(dialog).getByText("This app has a shortcut in your system app menu.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Remove from app menu" }));
+    expect(await within(dialog).findByText("This app has no shortcut in your system app menu.")).toBeInTheDocument();
+    expect((await preview.libraryList())[0]).toEqual(original);
+    await user.click(within(dialog).getByRole("button", { name: "Add to app menu" }));
+    expect(await within(dialog).findByText("This app has a shortcut in your system app menu.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Close settings" }));
+    await chooseFromMenu(user, "More options for Obsidian", "Remove from app menu");
+    await waitFor(async () => expect((await preview.libraryList())[0]).toEqual(original));
+  });
+
+  it("shows menu integration failures without claiming a shortcut was created", async () => {
+    const user = await openHome({ ...createPreviewApi(), async librarySetMenuEntry() { throw new Error("Permission denied"); } });
+    await chooseFromMenu(user, "More options for Obsidian", "Settings");
+    const dialog = screen.getByRole("dialog", { name: "Settings for Obsidian" });
+    await user.click(within(dialog).getByRole("button", { name: "Integration" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add to app menu" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Permission denied");
+    expect(within(dialog).getByText("This app has no shortcut in your system app menu.")).toBeInTheDocument();
+  });
+
   it("loads local apps while release checking is still pending", async () => {
     const user = await openHome({ ...createPreviewApi(), updatesCheckAll: () => new Promise(() => {}) });
     expect(screen.getByText("Obsidian")).toBeInTheDocument();
@@ -157,7 +187,7 @@ it("shows portable app status and launch count in General settings", async () =>
   const app = { ...createPreviewApp("Portable", "1.0"), integrated: false, launch_count: 3 };
   const user = await openHome({ ...createPreviewApi(), async libraryList() { return [app]; }, async updatesCheckAll() { return emptyReport; } });
   await chooseFromMenu(user, "More options for Portable", "Settings");
-  expect(screen.getByText("Portable, not in the app menu")).toBeInTheDocument();
+  expect(screen.getByText("No shortcut")).toBeInTheDocument();
   expect(screen.getByText("Launch count").nextElementSibling).toHaveTextContent("3");
 });
 

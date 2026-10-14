@@ -80,7 +80,7 @@ describe("AppImage permission review", () => {
       async libraryList() { return [...await preview.libraryList(), ...(isDiscovered ? [app] : [])]; },
       async libraryScan() { isDiscovered = true; return { apps: [app], warnings: [] }; },
       async pickAppImage() { return app.file_path; },
-      async libraryIntegrate() { isDiscovered = true; return app; },
+      async libraryImport() { isDiscovered = true; return app; },
     };
     const user = userEvent.setup();
     render(<App backend={backend} />);

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { InstalledApp } from "@/lib/types";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { Dialog } from "./dialog";
 
 function removeLabel(isRemoving: boolean, deleteFile: boolean) {
@@ -17,15 +18,18 @@ export function RemoveDialog({ app, onClose, onRemove, isRemoving, error, return
   returnFocusElement: HTMLElement | null;
 }) {
   const [deleteFile, setDeleteFile] = useState(false);
+  const deletionHintId = useId();
   return (
     <Dialog title={`Remove ${app.name}?`} onClose={onClose} canClose={!isRemoving} returnFocusElement={returnFocusElement}>
-      <p className="text-[14px]">Remove this entry and its managed desktop shortcut from the library.</p>
+      <p className="text-[14px]">Remove this app from your library and delete its AppBento-created app menu shortcut, if it has one.</p>
       <p className="text-[13px] text-[var(--muted)] break-all">{app.file_path}</p>
       <label className="flex gap-2 items-start text-[14px]">
-        <input type="checkbox" checked={deleteFile} disabled={isRemoving || !app.integrated} onChange={(event) => setDeleteFile(event.target.checked)} />
+        <Checkbox className="mt-0.5" aria-describedby={deletionHintId} checked={deleteFile} disabled={isRemoving || !app.integrated} onChange={(event) => setDeleteFile(event.target.checked)} />
         Also delete the AppImage file permanently
       </label>
-      {!app.integrated ? <p className="text-[13px] text-[var(--muted)]">Portable files can be removed from the library. Delete the file yourself to remove it from disk.</p> : null}
+      <p id={deletionHintId} className="text-[13px] text-[var(--muted)]">{app.integrated
+        ? "This app was imported into AppBento’s managed folder. You can also delete its AppImage file from that folder."
+        : "File deletion is only available for apps imported into AppBento’s managed folder. This app hasn’t been imported. To delete its file, use your file manager at the location shown above."}</p>
       {!deleteFile ? <p className="text-[13px] text-[var(--muted)]">The file stays on disk. A later scan can add it again.</p> : null}
       {error ? <p role="alert" className="text-[var(--bad)] text-[14px]">{error}</p> : null}
       <div className="flex justify-end gap-2">

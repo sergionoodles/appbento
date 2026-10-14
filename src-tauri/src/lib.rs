@@ -5,11 +5,12 @@ mod embedded_icon;
 mod github;
 mod icons;
 mod import_download;
-mod lifecycle;
 mod launch_logs;
+mod lifecycle;
 mod models;
 mod persistence;
 mod sandbox;
+mod self_launcher;
 mod self_update;
 mod settings;
 mod store;
@@ -118,11 +119,15 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            self_launcher::self_launcher_status,
+            self_launcher::self_launcher_install,
+            self_launcher::self_launcher_dismiss,
             self_update::self_update_check,
             self_update::self_update_install,
             apps::library_list,
             apps::library_scan,
-            apps::library_integrate,
+            apps::library_import,
+            apps::library_set_menu_entry,
             apps::library_add_url,
             apps::library_launch,
             apps::library_launch_log,
@@ -152,8 +157,14 @@ mod permission_tests {
     fn main_window_can_read_latest_launch_logs() {
         let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
         assert!(
-            context.runtime_authority_mut()
-                .resolve_access("library_launch_log", "main", "main", &tauri::ipc::Origin::Local)
+            context
+                .runtime_authority_mut()
+                .resolve_access(
+                    "library_launch_log",
+                    "main",
+                    "main",
+                    &tauri::ipc::Origin::Local
+                )
                 .is_some(),
             "the main window must be allowed to read latest launch logs"
         );
@@ -169,6 +180,9 @@ mod permission_tests {
             "library_set_icon",
             "updates_configure",
             "updates_install",
+            "self_launcher_status",
+            "self_launcher_install",
+            "self_launcher_dismiss",
             "self_update_check",
             "self_update_install",
         ] {

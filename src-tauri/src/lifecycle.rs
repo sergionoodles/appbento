@@ -16,6 +16,8 @@ mod appimage;
 pub(crate) mod desktop;
 #[path = "integration.rs"]
 mod integration;
+#[path = "menu_integration.rs"]
+mod menu_integration;
 #[path = "recovery.rs"]
 pub(crate) mod recovery;
 #[path = "replacement.rs"]
@@ -26,6 +28,7 @@ mod self_appimage;
 pub use appimage::open_appimage;
 #[cfg(test)]
 use desktop::desktop_content;
+#[cfg(test)]
 use desktop::desktop_id;
 
 pub struct Lifecycle {
@@ -142,6 +145,9 @@ impl Lifecycle {
                     Some(crate::sandbox::appimage_digest(Path::new(&app.file_path))?);
                 app.launch_config = Some(config);
                 let configured = app.clone();
+                if let Some(path) = desktop::entry_path(&self.desktop_dir, &configured)? {
+                    desktop::migrate(&path, &configured)?;
+                }
                 repository.commit().map_err(|error| error.message)?;
                 Ok(configured)
             },
@@ -151,11 +157,8 @@ impl Lifecycle {
     pub fn list(&self) -> Result<Vec<InstalledApp>, String> {
         let apps = Self::list_at(&self.library_path)?;
         for app in &apps {
-            if app.integrated {
-                desktop::migrate(
-                    &self.desktop_dir.join(desktop_id(Path::new(&app.file_path))),
-                    app,
-                )?;
+            if let Some(path) = desktop::entry_path(&self.desktop_dir, app)? {
+                desktop::migrate(&path, app)?;
             }
         }
         Ok(apps)
@@ -265,22 +268,19 @@ impl Lifecycle {
                 recovery::recover(repository)?;
                 let app = repository.state.get(id).ok_or("app not found")?;
                 let path = PathBuf::from(&app.file_path);
-                let expected_desktop_id = desktop_id(&path);
-                if delete_file
-                    && (!app.integrated || app.desktop_id.as_deref() != Some(&expected_desktop_id))
-                {
+                let desktop_path = desktop::entry_path(&self.desktop_dir, app)?;
+                if delete_file && !app.integrated {
                     return Err("only owned integrated AppImages can be deleted".into());
                 }
-                if app.integrated {
-                    desktop::migrate(&self.desktop_dir.join(&expected_desktop_id), app)?;
+                if let Some(desktop) = &desktop_path {
+                    desktop::migrate(desktop, app)?;
                 }
                 let mut artifacts = Vec::new();
                 if delete_file {
                     let _file = open_appimage(&path)?;
                     artifacts.push(removal_artifact(&path)?);
                 }
-                if app.integrated {
-                    let desktop = self.desktop_dir.join(&expected_desktop_id);
+                if let Some(desktop) = desktop_path {
                     match fs::read_to_string(&desktop) {
                         Ok(content) => {
                             let expected =

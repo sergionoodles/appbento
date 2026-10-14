@@ -17,12 +17,12 @@ test("adding AppBento itself displays the backend explanation and preserves the 
   const controller = createLibraryController({
     ...createPreviewApi(),
     pickAppImage: async () => "/Downloads/AppBento.AppImage",
-    libraryIntegrate: async () => { throw new Error(warning); },
+    libraryImport: async () => { throw new Error(warning); },
   });
   await controller.initialize();
   const apps = controller.getState().apps;
 
-  assert.equal(await controller.integrate(), false);
+  assert.equal(await controller.importAppImage(), false);
   assert.equal(controller.getState().error, `Add AppImage: ${warning}`);
   assert.deepEqual(controller.getState().apps, apps);
   assert.equal(controller.getState().operation, null);

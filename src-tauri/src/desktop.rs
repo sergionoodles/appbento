@@ -9,6 +9,36 @@ pub fn desktop_id(path: &Path) -> String {
     )
 }
 
+pub(crate) fn entry_path(
+    directory: &Path,
+    app: &crate::models::InstalledApp,
+) -> Result<Option<PathBuf>, String> {
+    app.desktop_id
+        .as_deref()
+        .map(|id| {
+            let digest = id
+                .strip_prefix("appbento-")
+                .and_then(|id| id.strip_suffix(".desktop"))
+                .ok_or("desktop entry ownership cannot be verified")?;
+            if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err("desktop entry ownership cannot be verified".into());
+            }
+            Ok(directory.join(id))
+        })
+        .transpose()
+}
+
+pub(crate) fn content_for_entry(app: &crate::models::InstalledApp) -> Result<String, String> {
+    let content = desktop_content_for_app(Path::new(&app.file_path), &app.id, &app.name)?;
+    // The launcher reads the saved policy; the fingerprint records which policy it reflects
+    // without embedding environment values in a world-readable desktop entry.
+    let config = serde_json::to_vec(&app.launch_config).map_err(|error| error.to_string())?;
+    Ok(format!(
+        "{content}X-AppBento-Launch-Config={:x}\n",
+        Sha256::digest(config)
+    ))
+}
+
 #[cfg(test)]
 pub fn desktop_content(path: &Path, name: &str) -> Result<String, String> {
     desktop_content_for_app(path, &path.to_string_lossy(), name)
@@ -40,7 +70,7 @@ pub(crate) fn desktop_content_for_app(
         + "\n")
 }
 
-fn escape_exec(value: &str) -> String {
+pub(crate) fn escape_exec(value: &str) -> String {
     value
         .replace('\\', "\\\\\\\\")
         .replace('"', "\\\\\"")
@@ -106,7 +136,7 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         Err(error) => return Err(error.to_string()),
     };
     let app_path = Path::new(&app.file_path);
-    let current = desktop_content_for_app(app_path, &app.id, &app.name)?;
+    let current = content_for_entry(app)?;
     let legacy = legacy_desktop_content(app_path, &app.name);
     let expected_exec = current
         .lines()
@@ -133,8 +163,13 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         return Err("desktop entry ownership cannot be verified".into());
     }
     // Names change when embedded metadata replaces the filename-derived default.
+    let config_line = current
+        .lines()
+        .find(|line| line.starts_with("X-AppBento-Launch-Config="))
+        .ok_or("missing launch config fingerprint")?;
     let migrated = content
         .lines()
+        .filter(|line| !line.starts_with("X-AppBento-Launch-Config="))
         .map(|line| {
             if line.starts_with("Exec=") {
                 expected_exec
@@ -146,6 +181,8 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
         })
         .collect::<Vec<_>>()
         .join("\n")
+        + "\n"
+        + config_line
         + "\n";
     if migrated == content {
         return Ok(());
@@ -153,7 +190,7 @@ pub(super) fn migrate(path: &Path, app: &crate::models::InstalledApp) -> Result<
     crate::persistence::write_atomic(path, migrated.as_bytes()).map_err(|error| error.message)
 }
 
-pub(super) fn resolve_launcher(
+pub(crate) fn resolve_launcher(
     current_executable: &Path,
     appimage: Option<&Path>,
 ) -> Result<PathBuf, String> {

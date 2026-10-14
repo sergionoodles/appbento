@@ -129,9 +129,6 @@ fn validate_snapshot(
 fn update_destination(app: &InstalledApp, directory: &Path) -> Result<PathBuf, String> {
     let current = Path::new(&app.file_path);
     if app.integrated {
-        if app.desktop_id.as_deref() != Some(super::desktop_id(current).as_str()) {
-            return Err("integrated AppImage ownership cannot be verified".into());
-        }
         return Ok(current.to_owned());
     }
     if current.parent() == Some(directory) {

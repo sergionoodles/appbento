@@ -14,6 +14,8 @@ pub enum Operation {
     Integrate,
     Remove,
     Replace,
+    MenuCreate,
+    MenuRemove,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -63,7 +65,10 @@ pub fn recover(repository: &mut Repository<Library>) -> Result<(), String> {
     let journal: Journal = serde_json::from_slice(&bytes)
         .map_err(|error| format!("invalid lifecycle recovery journal: {error}"))?;
     let committed = match journal.operation {
-        Operation::Integrate | Operation::Replace => {
+        Operation::Integrate
+        | Operation::Replace
+        | Operation::MenuCreate
+        | Operation::MenuRemove => {
             identity(&repository.path)? != journal.previous_library_identity
                 && journal.installed_app.as_ref().is_some_and(|expected| {
                     repository
@@ -92,8 +97,12 @@ pub fn finish(library: &Path, journal: &Journal, committed: bool) -> Result<(), 
             ));
         }
         match (&journal.operation, committed) {
-            (Operation::Integrate, false) => remove_created_artifact(artifact)?,
-            (Operation::Remove, false) => restore_removed_artifact(artifact)?,
+            (Operation::Integrate | Operation::MenuCreate, false) => {
+                remove_created_artifact(artifact)?
+            }
+            (Operation::Remove | Operation::MenuRemove, false) => {
+                restore_removed_artifact(artifact)?
+            }
             _ => remove_if_present(&artifact.stage)?,
         }
         sync_parent(&artifact.original)?;

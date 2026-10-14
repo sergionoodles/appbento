@@ -1,14 +1,10 @@
 //! Journaled integration keeps the library lock through commit and recovery.
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
-use super::desktop::desktop_content_for_app;
 use super::recovery::{self, Artifact, Journal, Operation, OriginalMode};
-use super::{
-    desktop_id, discovered_app, open_appimage, path_id, read_identity, self_appimage, Lifecycle,
-};
+use super::{discovered_app, open_appimage, path_id, read_identity, self_appimage, Lifecycle};
 use crate::models::InstalledApp;
 use crate::persistence::{self, Repository};
 use crate::store::Library;
@@ -20,8 +16,6 @@ struct IntegrationPlan {
     journal: Journal,
     app: InstalledApp,
     appimage: Option<Artifact>,
-    desktop: Option<Artifact>,
-    desktop_content: String,
 }
 
 impl Lifecycle {
@@ -89,7 +83,6 @@ impl Lifecycle {
             return Err(self_appimage::IMPORT_WARNING.into());
         }
         fs::create_dir_all(&self.managed_dir).map_err(|error| error.to_string())?;
-        fs::create_dir_all(&self.desktop_dir).map_err(|error| error.to_string())?;
         let managed = fs::canonicalize(&self.managed_dir).map_err(|error| error.to_string())?;
         let destination = managed.join(source.file_name().ok_or("invalid filename")?);
         if destination.exists() && source != destination {
@@ -108,42 +101,13 @@ impl Lifecycle {
         app.file_path = destination_id.clone();
         app.integrated = true;
         app.executable = true;
-        app.desktop_id = Some(desktop_id(&destination));
         if source != destination {
             app.source_path = Some(source_id);
-        }
-        let desktop_path = self
-            .desktop_dir
-            .join(app.desktop_id.as_ref().ok_or("desktop id unavailable")?);
-        if let Some(existing) = existing.filter(|app| app.integrated) {
-            super::desktop::migrate(&desktop_path, existing)?;
-        }
-        let content = desktop_content_for_app(&destination, &app.id, &app.name)?;
-        let is_idempotent = source == destination
-            && existing.is_some_and(|app| app.integrated)
-            && desktop_path.exists();
-        if is_idempotent
-            && fs::read_to_string(&desktop_path).map_err(|error| error.to_string())? != content
-        {
-            return Err("existing desktop entry ownership or metadata differs".into());
         }
         let appimage = if source != destination {
             Some(reserve_artifact(&destination)?)
         } else {
             None
-        };
-        let desktop = if is_idempotent {
-            None
-        } else {
-            match reserve_artifact(&desktop_path) {
-                Ok(artifact) => Some(artifact),
-                Err(error) => {
-                    if let Some(artifact) = &appimage {
-                        recovery::remove_if_present(&artifact.stage)?;
-                    }
-                    return Err(error);
-                }
-            }
         };
         let original_mode = if source == destination {
             Some(OriginalMode {
@@ -160,7 +124,7 @@ impl Lifecycle {
         let journal = Journal {
             operation: Operation::Integrate,
             app_id: app.id.clone(),
-            artifacts: appimage.iter().chain(desktop.iter()).cloned().collect(),
+            artifacts: appimage.iter().cloned().collect(),
             original_mode,
             installed_app: Some(app.clone()),
             previous_library_identity: recovery::identity(&self.library_path)?,
@@ -169,8 +133,6 @@ impl Lifecycle {
             journal,
             app,
             appimage,
-            desktop,
-            desktop_content: content,
         })
     }
 }
@@ -223,18 +185,6 @@ fn install_artifacts(plan: &IntegrationPlan, source: &mut File) -> Result<(), St
             .set_permissions(fs::Permissions::from_mode(original_mode.mode | 0o100))
             .map_err(|error| error.to_string())?;
         source.sync_all().map_err(|error| error.to_string())?;
-    }
-    if let Some(artifact) = &plan.desktop {
-        let mut staged = stage_file(artifact)?;
-        staged
-            .write_all(plan.desktop_content.as_bytes())
-            .map_err(|error| error.to_string())?;
-        staged
-            .set_permissions(fs::Permissions::from_mode(0o644))
-            .map_err(|error| error.to_string())?;
-        staged.sync_all().map_err(|error| error.to_string())?;
-        fs::hard_link(&artifact.stage, &artifact.original).map_err(|error| error.to_string())?;
-        recovery::sync_parent(&artifact.original)?;
     }
     Ok(())
 }

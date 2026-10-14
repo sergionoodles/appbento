@@ -1,6 +1,9 @@
 use super::*;
 use crate::persistence::tests::TemporaryDirectory;
 
+#[path = "menu_integration_tests.rs"]
+mod menu_integration_tests;
+
 const ELF_HEADER_LENGTH: usize = 20;
 
 #[test]
@@ -149,6 +152,7 @@ fn integration_preserves_source_and_history_without_duplicate_scan_records() {
     })
     .unwrap();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     assert!(source.exists());
     assert_eq!(app.launch_count, 4);
     assert!(service.desktop_dir.join(app.desktop_id.unwrap()).exists());
@@ -183,8 +187,10 @@ fn failed_integration_rolls_back_created_files() {
     let destination = service.managed_dir.join(source.file_name().unwrap());
     let desktop = service.desktop_dir.join(desktop_id(&destination));
     fs::write(&desktop, "foreign launcher").unwrap();
-    assert!(service.integrate(&source).is_err());
-    assert!(!destination.exists());
+    let app = service.integrate(&source).unwrap();
+    assert!(service.set_menu_entry(&app.id, true).is_err());
+    assert!(destination.exists());
+    assert!(service.list().unwrap()[0].desktop_id.is_none());
     assert_eq!(fs::read_to_string(desktop).unwrap(), "foreign launcher");
     assert!(source.exists());
 }
@@ -193,6 +199,7 @@ fn failed_integration_rolls_back_created_files() {
 fn remove_owned_app_cleans_desktop_and_preserves_original() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     service.remove(&app.id, true).unwrap();
     assert!(!Path::new(&app.file_path).exists());
     assert!(!service.desktop_dir.join(app.desktop_id.unwrap()).exists());
@@ -270,6 +277,7 @@ fn integration_uses_generic_desktop_metadata() {
     let renamed = source.with_file_name("Neovim-0.10.0.AppImage");
     fs::rename(&source, &renamed).unwrap();
     let app = service.integrate(&renamed).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     assert_eq!(app.name, "Neovim");
     assert_eq!(app.version_current.as_deref(), Some("0.10.0"));
     assert!(app.update_config.is_none());
@@ -329,6 +337,7 @@ fn replacing_reviewed_appimage_requires_new_review() {
 fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_preserved() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let legacy = desktop::legacy_desktop_content(Path::new(&app.file_path), &app.name);
     fs::write(&desktop_path, legacy).unwrap();
@@ -345,6 +354,7 @@ fn legacy_owned_desktop_entry_is_migrated_before_listing_and_foreign_entry_is_pr
 fn owned_desktop_entry_with_previous_launcher_is_migrated_before_listing() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let current = fs::read_to_string(&desktop_path).unwrap();
     for launcher in ["/previous build/appbento", r#"/previous/$`"%\appbento"#] {
@@ -378,6 +388,7 @@ fn owned_desktop_entry_with_previous_launcher_is_migrated_before_listing() {
 fn desktop_migration_preserves_entries_with_invalid_previous_launch_commands() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop_path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let invalid_commands = [
         "\"/previous/appbento\" --launch \"another-app\" %U".to_owned(),
@@ -405,6 +416,7 @@ fn rescan_replaces_filename_defaults_and_renames_the_desktop_entry() {
     let renamed = source.with_file_name("Tool-linux-2.1.0-x86_64.AppImage");
     fs::rename(&source, &renamed).unwrap();
     let app = service.integrate(&renamed).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let managed_dir = Path::new(&app.file_path).parent().unwrap().to_owned();
     persistence::mutate(&service.library_path, |library: &mut Library| {
         let stored = library.get_mut(&app.id).unwrap();
@@ -533,6 +545,7 @@ pub(super) fn staged_update(directory: &Path, source: &Path) -> PathBuf {
 fn manual_update_preserves_identity_permissions_history_and_desktop() {
     let (directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let config = crate::models::LaunchConfig {
         arguments: Vec::new(),
         environment: Default::default(),
@@ -717,6 +730,7 @@ fn integrating_updated_portable_preserves_identity_configuration_and_private_hom
         .unwrap();
     let internal = Path::new(&updated.file_path).parent().unwrap().to_owned();
     let integrated = service.integrate(Path::new(&updated.file_path)).unwrap();
+    let integrated = service.set_menu_entry(&integrated.id, true).unwrap();
     assert_eq!(integrated.id, updated.id);
     assert_eq!(integrated.launch_config, updated.launch_config);
     assert_eq!(integrated.update_config, updated.update_config);
@@ -764,7 +778,8 @@ fn downloaded_appimage_is_managed_without_a_temporary_source_reference() {
         fs::read(&source).unwrap()
     );
     assert_eq!(service.list().unwrap()[0].source_path, None);
-    assert!(service.desktop_dir.join(app.desktop_id.unwrap()).exists());
+    assert!(app.desktop_id.is_none());
+    assert!(!service.desktop_dir.exists());
 }
 
 #[test]

@@ -4,6 +4,7 @@ use super::*;
 fn startup_recovers_interrupted_removal_before_commit() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let app_path = PathBuf::from(&app.file_path);
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let app_stage = app_path.with_extension("removing");
@@ -86,6 +87,7 @@ fn startup_rolls_back_uncommitted_integration_and_preserves_source() {
 fn startup_preserves_committed_integration_and_cleans_stages() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let artifacts = vec![
         crash_artifact(Path::new(&app.file_path)),
@@ -113,6 +115,7 @@ fn startup_preserves_committed_integration_and_cleans_stages() {
 fn startup_cleans_committed_removal_stages() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let artifacts = vec![
         crash_artifact(Path::new(&app.file_path)),
@@ -148,6 +151,7 @@ fn startup_cleans_committed_removal_stages() {
 fn startup_conflicts_do_not_overwrite_foreign_files() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let artifact = crash_artifact(Path::new(&app.file_path));
     fs::remove_file(&artifact.original).unwrap();
     fs::write(&artifact.original, "foreign file").unwrap();
@@ -209,6 +213,7 @@ fn startup_restores_permissions_after_uncommitted_in_place_integration() {
 fn idempotent_integration_restores_owner_execution_and_persists_metadata() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     fs::set_permissions(&app.file_path, fs::Permissions::from_mode(0o645)).unwrap();
     persistence::mutate(&service.library_path, |library: &mut Library| {
         library.get_mut(&app.id).unwrap().executable = false;
@@ -248,6 +253,7 @@ fn scan_reports_invalid_candidates_without_losing_valid_apps() {
 fn startup_distinguishes_uncommitted_integration_with_unchanged_metadata() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     fs::set_permissions(&app.file_path, fs::Permissions::from_mode(0o700)).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     fs::remove_file(&desktop).unwrap();
@@ -315,6 +321,7 @@ fn interrupted_replacement(
 fn interrupted_update_rolls_back_bytes_and_library_before_commit() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     assert_eq!(service.list().unwrap(), vec![app.clone()]);
     assert_eq!(fs::read(&app.file_path).unwrap(), original);
@@ -328,6 +335,7 @@ fn interrupted_update_rolls_back_bytes_and_library_before_commit() {
 fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     let updated = journal.installed_app.as_ref().unwrap().clone();
     persistence::mutate(&service.library_path, |library: &mut Library| {
@@ -347,6 +355,7 @@ fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
 fn interrupted_update_does_not_overwrite_foreign_destination() {
     let (_directory, service, source) = fixture();
     let app = service.integrate(&source).unwrap();
+    let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     let destination = Path::new(&app.file_path);
     let foreign = persistence::temporary_path(destination.parent().unwrap());

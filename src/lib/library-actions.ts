@@ -100,11 +100,15 @@ export function createLibraryActions(
       await backend.libraryAddUrl(url);
       publishApps(await backend.libraryList());
     }, true),
-    integrate: () => runOperation("Add AppImage", async () => {
+    setMenuEntry: (id: string, enabled: boolean) => runOperation(enabled ? "Add to app menu" : "Remove from app menu", async () => {
+      const updated = await backend.librarySetMenuEntry(id, enabled);
+      publishState({ apps: getState().apps.map((app) => app.id === id ? updated : app) });
+    }),
+    importAppImage: () => runOperation("Add AppImage", async () => {
       const selected = await backend.pickAppImage();
       if (!selected) return;
 
-      await backend.libraryIntegrate(selected);
+      await backend.libraryImport(selected);
       publishApps(await backend.libraryList());
     }, true),
     saveFolders: (settings: Settings) => runOperation("Save folders", async () => {

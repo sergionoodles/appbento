@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, Terminal, Settings2, ShieldCheck, X, type LucideIcon } from "lucide-react";
+import { RefreshCw, Terminal, Settings2, ShieldCheck, PanelsTopLeft, X, type LucideIcon } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, UpdateConfig, UpdateInfo } from "@/lib/types";
 import { validateSandboxPaths } from "@/lib/sandbox";
@@ -12,10 +12,11 @@ import { versionLabel } from "../app-status";
 import { Button } from "../ui/button";
 import { Dialog } from "./dialog";
 import { GeneralPage } from "./app-settings/general-page";
+import { IntegrationPage } from "./app-settings/integration-page";
 import { PermissionsPage, initialLaunchConfig, useSandboxStatus } from "./app-settings/permissions-page";
 import { UpdatesPage } from "./app-settings/updates-page";
 
-type Page = "general" | "permissions" | "launch" | "updates";
+type Page = "general" | "permissions" | "launch" | "updates" | "integration";
 
 /** Where the dialog opens; "icon" is the General page with the icon editor already open. */
 export type SettingsTarget = Page | "icon";
@@ -24,10 +25,11 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "general", label: "General", icon: Settings2, description: "How this app appears in your library." },
   { page: "permissions", label: "Permissions", icon: ShieldCheck, description: "What this app can access when it runs." },
   { page: "launch", label: "Launch", icon: Terminal, description: "Arguments and environment variables used every time this app launches." },
+  { page: "integration", label: "Integration", icon: PanelsTopLeft, description: "Choose whether this app appears in your system app menu." },
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, isSaving, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   app: InstalledApp;
   update?: UpdateInfo;
   isCheckingUpdates: boolean;
@@ -43,6 +45,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   onSaveUpdates: (config: UpdateConfig | null) => Promise<boolean>;
   onSaveIcon: (source: string) => Promise<boolean>;
   onSaveName: (name: string) => void;
+  onSetMenuEntry: (enabled: boolean) => Promise<boolean>;
   isSaving: boolean;
   error: string | null;
   returnFocusElement?: HTMLElement | null;
@@ -63,7 +66,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const hasLaunchChange = JSON.stringify(launchDraft) !== JSON.stringify(launchDraftFromConfig(initialLaunchConfig(app)));
   const hasConfigChange = hasPermissionChange || hasLaunchChange;
   const hasUpdateChange = isDraftChanged(updateDraft, app.update_config);
-  const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange };
+  const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange, integration: false };
   const isPermissionsBlocked = hasConfigChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
   const canSave = !isSaving && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
     && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft));
@@ -134,6 +137,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
             {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
               isReview={isReview} isSaving={isSaving} onError={setLocalError} /> : null}
             {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isSaving} /> : null}
+            {page === "integration" ? <IntegrationPage app={app} isSaving={isSaving} onSetMenuEntry={onSetMenuEntry} /> : null}
             {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving}
               hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} isCheckingUpdates={isCheckingUpdates}
               onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}

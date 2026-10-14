@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSelfUpdate } from "@/lib/use-self-update";
 import { SelfUpdateDialog } from "@/components/dialogs/self-update-dialog";
+import { useSelfLauncher } from "@/lib/use-self-launcher";
+import { SelfLauncherDialog } from "@/components/dialogs/self-launcher-dialog";
 import { AboutDialog } from "@/components/dialogs/about-dialog";
 
 type View = { name: "home"; groupId: string | null } | { name: "updates" };
@@ -69,6 +71,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const { apps, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const selfUpdate = useSelfUpdate(backend);
+  const selfLauncher = useSelfLauncher(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
   const installedIds = [...apps].sort((first, second) => first.name.localeCompare(second.name)).map((app) => app.id);
   const { layout, error: layoutError, actions: layoutActions } = useAppLayout(installedIds);
@@ -86,7 +89,9 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || showSelfUpdate || showAbout || !!removingApp || !!reviewingApp;
+  const hasOtherModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || showSelfUpdate || showAbout || !!removingApp || !!reviewingApp;
+  const showLauncher = !hasOtherModal && !isLoading && (selfLauncher.isRequested || selfLauncher.shouldPrompt);
+  const hasModal = hasOtherModal || showLauncher;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const onLaunch = (id: string) => { captureFocus(); void controller.launch(id); };
   const openSettings = (id: string, target: SettingsTarget) => {
@@ -117,6 +122,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   };
   const tileActions: TileActions = {
     onLaunch, onSettings, onRemove,
+    onSetMenuEntry: (id, enabled) => { void controller.setMenuEntry(id, enabled); },
     onViewLogs: (id) => { captureFocus(); setLogsId(id); },
     onDragStart: startDrag,
   };
@@ -129,7 +135,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   };
   const statusText = operation ?? (isCheckingUpdates ? "Checking for updates" : null);
   const openAddUrl = () => { captureFocus(); controller.dismissError(); setShowAddUrl(true); };
-  const addAppImage = () => { captureFocus(); void controller.integrate(); };
+  const addAppImage = () => { captureFocus(); void controller.importAppImage(); };
 
   return (
     <>
@@ -140,6 +146,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
             onUpdates={() => goTo({ name: "updates" })} canAdd={backend.isTauri && !disabled} onAdd={addAppImage} onAddUrl={openAddUrl} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}
+              canAddLauncher={selfLauncher.canAdd} onAddLauncher={() => { captureFocus(); selfLauncher.open(); }}
               updateVersion={selfUpdate.result?.update?.version}
               onSelfUpdate={() => { captureFocus(); setShowSelfUpdate(true); if (!selfUpdate.result?.update) void selfUpdate.controller.check(); }}
               onConfiguration={() => { captureFocus(); setShowConfiguration(true); }}
@@ -178,6 +185,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
         onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
+        onSetMenuEntry={(enabled) => controller.setMenuEntry(configuringApp.id, enabled)}
         update={updates.find((update) => update.app_id === configuringApp.id)} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
         isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
@@ -187,6 +195,8 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         onCheck={() => { void selfUpdate.controller.check(); }}
         onInstall={() => { void selfUpdate.controller.install(isLoading || operation !== null || isCheckingUpdates); }}
         onDownload={backend.openExternal} onClose={() => setShowSelfUpdate(false)} returnFocusElement={returnFocusElement} /> : null}
+      {showLauncher ? <SelfLauncherDialog isSaving={selfLauncher.isSaving} error={selfLauncher.error}
+        onAdd={() => { void selfLauncher.install(); }} onClose={() => { void selfLauncher.dismiss(); }} returnFocusElement={returnFocusElement} /> : null}
       {showAbout ? <AboutDialog onOpenExternal={backend.openExternal} onClose={() => setShowAbout(false)} returnFocusElement={returnFocusElement} /> : null}
       {showAddUrl ? <AddUrlDialog returnFocusElement={returnFocusElement} managedDir={settings?.managed_dir} onClose={() => setShowAddUrl(false)} onAdd={controller.addUrl} isDownloading={operation !== null} error={error} /> : null}
       {showFolders && settings ? <FoldersDialog returnFocusElement={returnFocusElement} pickFolder={backend.pickFolder} isNative={backend.isTauri} initial={settings} onClose={() => setShowFolders(false)} onSaved={controller.saveFolders} isSaving={operation !== null} error={error} /> : null}

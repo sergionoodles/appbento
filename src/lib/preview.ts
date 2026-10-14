@@ -24,6 +24,7 @@ export function createPreviewApi(): AppApi {
     architecture: "x86_64", tag_regex: "^v?(?P<version>.*)$", prerelease: false, channel: "stable",
   } : null }));
   const installedDirectUrls = new Map<string, string>();
+  let launcherStatus = { installed: false, dismissed: true };
   let settings: Settings = { scan_dirs: [], managed_dir: PREVIEW_MANAGED_DIRECTORY };
   const findApp = (id: string) => {
     const app = apps.find((entry) => entry.id === id);
@@ -52,7 +53,10 @@ export function createPreviewApi(): AppApi {
 
   return {
     isTauri: false,
-    async selfUpdateCheck() { return { currentVersion: "0.5.3", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
+    async selfLauncherStatus() { return { ...launcherStatus }; },
+    async selfLauncherInstall() { launcherStatus = { installed: true, dismissed: true }; return { ...launcherStatus }; },
+    async selfLauncherDismiss() { launcherStatus = { ...launcherStatus, dismissed: true }; return { ...launcherStatus }; },
+    async selfUpdateCheck() { return { currentVersion: "0.6.0", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
     async selfUpdateInstall() { throw new Error("Updating AppBento requires the desktop AppImage."); },
     async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },
     async configurationRead() { throw new Error("Importing settings requires the desktop app."); },
@@ -70,7 +74,12 @@ export function createPreviewApi(): AppApi {
     async libraryList() { return structuredClone(apps); },
     async libraryScan() { return { apps: structuredClone(apps), warnings: [] }; },
     async libraryAddUrl() { throw new Error("Downloading AppImages requires the desktop app."); },
-    async libraryIntegrate() { throw new Error("File integration requires the desktop app."); },
+    async librarySetMenuEntry(id, enabled) {
+      const updated = { ...findApp(id), desktop_id: enabled ? "appbento-preview.desktop" : null };
+      apps = apps.map((app) => app.id === id ? updated : app);
+      return structuredClone(updated);
+    },
+    async libraryImport() { throw new Error("File integration requires the desktop app."); },
     async libraryLaunchLog(id) {
       const app = findApp(id);
       return app.last_launched ? { started_at: app.last_launched, text: `[AppBento preview] Launched ${app.name}` } : null;

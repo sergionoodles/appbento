@@ -27,7 +27,7 @@ export function GeneralPage({ app, backend, name, originalName, onNameChange, is
     ["Version", versionLabel(app)],
     ["File", app.file_path],
     ["Launch count", String(app.launch_count)],
-    ...(!app.integrated ? [["Integration", "Portable, not in the app menu"]] : []),
+    ["App menu", app.desktop_id ? "Shortcut installed" : "No shortcut"],
     ["Size", `${(app.size_bytes / BYTES_PER_MEGABYTE).toFixed(0)} MB`],
     ...(fileAge ? [["Downloaded", fileAge]] : []),
   ];
