@@ -1,6 +1,6 @@
 [package]
 name = "appbento"
-version = "0.6.0"
+version = "0.6.1"
 license = "MIT"
 edition = "2021"
 
