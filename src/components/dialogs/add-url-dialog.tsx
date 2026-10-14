@@ -40,8 +40,8 @@ export function AddUrlDialog({ managedDir, onClose, onAdd, isDownloading, error,
         {validationError || error ? <p role="alert" className="text-[var(--bad)] text-[14px]">{validationError ?? error}</p> : null}
         {isDownloading ? <p role="status" className="text-[13px] text-[var(--muted)]">Downloading and adding AppImage…</p> : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" disabled={isDownloading} onClick={onClose}>cancel</Button>
-          <Button type="submit" variant="accent" disabled={isDownloading || !url.trim()}>{isDownloading ? "downloading…" : "download + add"}</Button>
+          <Button type="button" variant="ghost" disabled={isDownloading} onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="accent" disabled={isDownloading || !url.trim()}>{isDownloading ? "Downloading…" : "Download and add"}</Button>
         </div>
       </form>
     </Dialog>

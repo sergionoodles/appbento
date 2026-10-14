@@ -5,8 +5,8 @@ import { Checkbox } from "../ui/checkbox";
 import { Dialog } from "./dialog";
 
 function removeLabel(isRemoving: boolean, deleteFile: boolean) {
-  if (isRemoving) return "removing…";
-  return deleteFile ? "delete file + remove" : "remove entry";
+  if (isRemoving) return "Removing…";
+  return deleteFile ? "Delete file and remove" : "Remove entry";
 }
 
 export function RemoveDialog({ app, onClose, onRemove, isRemoving, error, returnFocusElement }: {
@@ -33,7 +33,7 @@ export function RemoveDialog({ app, onClose, onRemove, isRemoving, error, return
       {!deleteFile ? <p className="text-[13px] text-[var(--muted)]">The file stays on disk. A later scan can add it again.</p> : null}
       {error ? <p role="alert" className="text-[var(--bad)] text-[14px]">{error}</p> : null}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" disabled={isRemoving} onClick={onClose}>cancel</Button>
+        <Button variant="ghost" disabled={isRemoving} onClick={onClose}>Cancel</Button>
         <Button variant="danger" disabled={isRemoving} onClick={async () => {
           if (await onRemove(deleteFile)) onClose();
         }}>{removeLabel(isRemoving, deleteFile)}</Button>

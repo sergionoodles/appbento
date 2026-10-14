@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchLog } from "@/lib/types";
 import { createLaunchFixPrompt } from "@/lib/launch-fix-prompt";
@@ -60,7 +61,8 @@ export function LaunchLogsDialog({ app, backend, onClose, returnFocusElement }: 
   };
 
   return (
-    <Dialog title={`${app.name} latest launch logs`} onClose={onClose} returnFocusElement={returnFocusElement} className="w-[800px]">
+    <Dialog title={`${app.name} logs`} onClose={onClose} returnFocusElement={returnFocusElement} className="w-[800px]"
+      titleAction={prompt === null ? <Button variant="outline" size="icon" aria-label="Refresh" title="Refresh" onClick={refresh} disabled={isLoading}><RefreshCw size={16} aria-hidden="true" /></Button> : null}>
       {prompt !== null ? <>
         <p id="fix-prompt-help" className="text-[13px] text-[var(--muted)]">Copy this prompt into your external AI agent for help diagnosing the launch. Review or edit it first: logs, paths, and environment variables may contain private information.</p>
         <textarea aria-label="Troubleshooting prompt" aria-describedby="fix-prompt-help" tabIndex={0} rows={16} autoFocus
@@ -75,12 +77,11 @@ export function LaunchLogsDialog({ app, backend, onClose, returnFocusElement }: 
       <p role="status" className="text-[13px] text-[var(--muted)]">{copyMessage}</p>
       <div className="flex flex-wrap justify-end gap-2">
         {prompt !== null ? <>
-          <Button variant="outline" onClick={() => { setPrompt(null); setCopyMessage(""); }}>Back to logs</Button>
-          <Button variant="outline" onClick={() => void copyPrompt()} disabled={!prompt.trim()}>Copy prompt</Button>
+          <Button variant="outline" className="mr-auto" onClick={() => { setPrompt(null); setCopyMessage(""); }}>Back to logs</Button>
+          <Button variant="accent" onClick={() => void copyPrompt()} disabled={!prompt.trim()}>Copy prompt</Button>
         </> : <>
-          <Button variant="outline" onClick={refresh} disabled={isLoading}>Refresh</Button>
-          <Button variant="outline" onClick={() => void copyLogs()} disabled={isLoading || !log?.text}>Copy logs</Button>
-          <Button variant="outline" disabled={isLoading || !!error} onClick={() => { setPrompt(createLaunchFixPrompt(app, log)); setCopyMessage(""); }}>Fix with a prompt</Button>
+          <Button variant="accent" className="mr-auto" disabled={isLoading || !!error || !log?.text.trim()} onClick={() => { setPrompt(createLaunchFixPrompt(app, log)); setCopyMessage(""); }}>Prompt your agent</Button>
+          <Button variant="accent" onClick={() => void copyLogs()} disabled={isLoading || !log?.text}>Copy logs</Button>
         </>}
         <Button onClick={onClose}>Close</Button>
       </div>

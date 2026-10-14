@@ -16,7 +16,7 @@ it("opens the latest launch log from the app menu, refreshes, and copies output"
   render(<App backend={backend} />);
   await screen.findByRole("heading", { name: "All apps" });
   await chooseFromMenu(user, "More options for Obsidian", "View logs");
-  const dialog = screen.getByRole("dialog", { name: "Obsidian latest launch logs" });
+  const dialog = screen.getByRole("dialog", { name: "Obsidian logs" });
   const output = await within(dialog).findByLabelText("Launch log output");
   expect(output).toHaveTextContent("bwrap: permission denied");
   await user.click(within(dialog).getByRole("button", { name: "Copy logs" }));
@@ -81,7 +81,7 @@ it("shows an editable prompt with app settings and logs, copies edits, and retur
   const log = { started_at: "2026-10-12T10:00:00Z", text: "bwrap: permission denied\nApplication exited with status 1" };
   render(<LaunchLogsDialog app={app} backend={{ ...createPreviewApi(), async libraryLaunchLog() { return log; } }} onClose={() => {}} />);
   await screen.findByLabelText("Launch log output");
-  await user.click(screen.getByRole("button", { name: "Fix with a prompt" }));
+  await user.click(screen.getByRole("button", { name: "Prompt your agent" }));
   const editor = screen.getByRole("textbox", { name: "Troubleshooting prompt" });
   const prompt = (editor as HTMLTextAreaElement).value;
   const diagnostics = JSON.parse(prompt.split("Diagnostics (JSON):\n")[1]);
@@ -106,25 +106,27 @@ it("shows an editable prompt with app settings and logs, copies edits, and retur
   expect(screen.getByLabelText("Launch log output")).toHaveTextContent("bwrap: permission denied");
 });
 
-it("can prepare a prompt when logs and saved configuration are missing", async () => {
+it.each([null, "", " \n\t"])("disables prompting when log output is missing or blank: %j", async (text) => {
   const user = userEvent.setup();
-  render(<LaunchLogsDialog app={createPreviewApp("Example", null)} backend={{ ...createPreviewApi(), async libraryLaunchLog() { return null; } }} onClose={() => {}} />);
-  await screen.findByText("No launch logs yet. Launch this app to record its output.");
-  await user.click(screen.getByRole("button", { name: "Fix with a prompt" }));
-  const prompt = (screen.getByRole("textbox", { name: "Troubleshooting prompt" }) as HTMLTextAreaElement).value;
-  expect(prompt).toContain('"current_launch_config": null');
-  expect(prompt).toContain("No launch logs recorded yet.");
+  render(<LaunchLogsDialog app={createPreviewApp("Example", null)} backend={{ ...createPreviewApi(), async libraryLaunchLog() {
+    return text === null ? null : { started_at: "2026-10-12T10:00:00Z", text };
+  } }} onClose={() => {}} />);
+  await waitFor(() => expect(screen.queryByText("Loading logs…")).not.toBeInTheDocument());
+  const promptButton = screen.getByRole("button", { name: "Prompt your agent" });
+  expect(promptButton).toBeDisabled();
+  await user.click(promptButton);
+  expect(screen.queryByRole("textbox", { name: "Troubleshooting prompt" })).not.toBeInTheDocument();
 });
 
 it("keeps the prompt available for manual copying when clipboard access fails", async () => {
   const user = userEvent.setup();
   vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Clipboard denied"));
   render(<LaunchLogsDialog app={createPreviewApp("Example", null)} backend={{ ...createPreviewApi(), async libraryLaunchLog() {
-    return { started_at: "2026-10-12T10:00:00Z", text: "" };
+    return { started_at: "2026-10-12T10:00:00Z", text: "Launch failed" };
   } }} onClose={() => {}} />);
-  await screen.findByText("No output was produced by this launch.");
-  await user.click(screen.getByRole("button", { name: "Fix with a prompt" }));
+  await screen.findByLabelText("Launch log output");
+  await user.click(screen.getByRole("button", { name: "Prompt your agent" }));
   await user.click(screen.getByRole("button", { name: "Copy prompt" }));
   expect(screen.getByRole("status")).toHaveTextContent("Could not copy automatically. Select the prompt text and copy it manually.");
-  expect((screen.getByRole("textbox", { name: "Troubleshooting prompt" }) as HTMLTextAreaElement).value).toContain('"text": ""');
+  expect((screen.getByRole("textbox", { name: "Troubleshooting prompt" }) as HTMLTextAreaElement).value).toContain('"text": "Launch failed"');
 });

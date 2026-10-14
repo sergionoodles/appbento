@@ -1,15 +1,20 @@
 import type { InstalledApp, LaunchLog } from "./types";
 
+const MAX_PROMPT_LOG_LINES = 15;
+
 export function createLaunchFixPrompt(app: InstalledApp, log: LaunchLog | null): string {
   const diagnostics = {
     app: { name: app.name, version: app.version_current, file_path: app.file_path },
     current_launch_config: app.launch_config ?? null,
-    latest_launch: log ?? { started_at: null, text: "No launch logs recorded yet." },
+    latest_launch: log ? {
+      ...log,
+      text: log.text.replace(/\r?\n$/, "").split(/\r?\n/).slice(-MAX_PROMPT_LOG_LINES).join("\n"),
+    } : { started_at: null, text: "No launch logs recorded yet." },
   };
 
   return `Help me diagnose an AppImage launch problem in AppBento on Linux and suggest settings I can try.
 
-AppBento can run AppImages directly or restrict them with Bubblewrap. The configuration below is the current saved configuration; it may have changed since the recorded launch. A null configuration means launch permissions have not been configured.
+AppBento can run AppImages directly or restrict them with Bubblewrap. The configuration below is the current saved configuration; it may have changed since the recorded launch. A null configuration means launch permissions have not been configured. Log output is limited to the latest ${MAX_PROMPT_LOG_LINES} lines.
 
 Available controls in the app's Settings:
 - Permissions: "Restrict with bubblewrap" or "Run without restrictions".

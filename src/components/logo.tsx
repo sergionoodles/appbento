@@ -27,7 +27,7 @@ export function LogoMark({ className }: { className?: string }) {
 
 export function Wordmark({ onHome }: { onHome: () => void }) {
   return (
-    <button type="button" onClick={onHome} aria-label="appbento home" className="flex items-center gap-2 rounded-md px-1 -mx-1">
+    <button type="button" onClick={onHome} aria-label="AppBento home" className="flex items-center gap-2 rounded-md px-1 -mx-1">
       <LogoMark />
       <span className="font-display text-[17px] font-bold leading-none tracking-[-0.03em]">appbento</span>
     </button>

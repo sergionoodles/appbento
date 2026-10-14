@@ -4,8 +4,9 @@ import { cn } from "@/lib/utils";
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]';
 
 /** `isBare` drops the padded card chrome so children can lay out the whole panel; the title stays as the accessible name. */
-export function Dialog({ title, children, onClose, returnFocusElement, canClose = true, isSheet = false, isBare = false, className }: {
+export function Dialog({ title, titleAction, children, onClose, returnFocusElement, canClose = true, isSheet = false, isBare = false, className }: {
   title: string;
+  titleAction?: ReactNode;
   children: ReactNode;
   onClose: () => void;
   canClose?: boolean;
@@ -74,7 +75,10 @@ export function Dialog({ title, children, onClose, returnFocusElement, canClose 
           isSheet ? "sheet w-[480px] h-full rounded-[10px]" : "dialog-card w-[520px] max-h-[90vh] rounded-[10px]",
           className
         )}>
-        <h2 id={titleId} className={isBare ? "sr-only" : "text-[18px] font-semibold leading-tight"}>{title}</h2>
+        {titleAction ? <div className="flex items-center justify-between gap-4">
+          <h2 id={titleId} className="text-[18px] font-semibold leading-tight">{title}</h2>
+          {titleAction}
+        </div> : <h2 id={titleId} className={isBare ? "sr-only" : "text-[18px] font-semibold leading-tight"}>{title}</h2>}
         {children}
       </div>
     </div>

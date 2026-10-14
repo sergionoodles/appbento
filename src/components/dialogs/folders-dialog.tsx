@@ -45,7 +45,7 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
             <p className="text-[13px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. Enter an absolute path.</p>
             <div className="flex gap-2">
               <Input id="managed-folder" required value={managed} onChange={(event) => setManaged(event.target.value)} />
-              <Button type="button" onClick={() => void browse(true)} disabled={!isNative}>browse</Button>
+              <Button type="button" onClick={() => void browse(true)} disabled={!isNative}>Browse</Button>
             </div>
           </div>
           <div>
@@ -59,14 +59,14 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
                     onClick={() => setDirectories((existing) => existing.filter((entry) => entry !== directory))}><X size={14} /></Button>
                 </div>
               ))}
-              <Button type="button" onClick={() => void browse(false)} disabled={!isNative} className="self-start">+ add folder</Button>
+              <Button type="button" onClick={() => void browse(false)} disabled={!isNative} className="self-start">+ Add folder</Button>
             </div>
           </div>
         </fieldset>
         {error || browseError ? <p role="alert" className="text-[var(--bad)] text-[14px]">{browseError ?? error}</p> : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" disabled={isSaving} onClick={onClose}>cancel</Button>
-          <Button type="submit" variant="accent" disabled={isSaving}>{isSaving ? "saving…" : "save + rescan"}</Button>
+          <Button type="button" variant="ghost" disabled={isSaving} onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="accent" disabled={isSaving}>{isSaving ? "Saving…" : "Save and rescan"}</Button>
         </div>
       </form>
     </Dialog>
