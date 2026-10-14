@@ -39,8 +39,14 @@ pub async fn library_list() -> Result<Vec<InstalledApp>, String> {
 pub async fn library_scan(extra_dirs: Option<Vec<String>>) -> Result<ScanReport, String> {
     let mut report = tokio::task::spawn_blocking(move || {
         let stored = settings::load()?;
-        let directories =
-            settings::merge_scan_dirs(extra_dirs.unwrap_or_default(), stored.scan_dirs)?;
+        let directories = settings::merge_scan_dirs(
+            extra_dirs.unwrap_or_default(),
+            stored
+                .scan_dirs
+                .into_iter()
+                .chain(std::iter::once(stored.managed_dir))
+                .collect(),
+        )?;
         lifecycle()?.scan(directories)
     })
     .await

@@ -11,7 +11,7 @@ const CUSTOM_ICON: &[u8] =
     b"<svg xmlns='http://www.w3.org/2000/svg' width='2' height='2'><circle r='1'/></svg>";
 
 #[test]
-fn scan_requires_explicitly_selected_folders() {
+fn scan_includes_managed_folder_and_requires_selection_for_other_folders() {
     let directory = TemporaryDirectory::new();
     let home = directory.0.join("home");
     let data = directory.0.join("data");
@@ -59,15 +59,19 @@ async fn selected_scan_worker() {
     };
     let report = library_scan(None).await.unwrap();
     assert!(report.apps.is_empty());
-    assert!(
-        report.warnings.is_empty(),
-        "unselected folders were scanned: {:?}",
-        report.warnings
+    let managed = PathBuf::from(&directory).join("managed");
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].path,
+        managed.join("Invalid.AppImage").to_str().unwrap()
     );
 
     let downloads = PathBuf::from(directory).join("home/Downloads");
     let chosen = downloads.to_str().unwrap().to_owned();
-    for extra in [Some(vec![chosen.clone()]), None] {
+    for extra in [
+        Some(vec![chosen.clone(), managed.to_str().unwrap().into()]),
+        None,
+    ] {
         if extra.is_none() {
             settings::settings_set(Some(vec![chosen.clone()]), None)
                 .await
@@ -75,10 +79,14 @@ async fn selected_scan_worker() {
         }
         let report = library_scan(extra).await.unwrap();
         assert!(report.apps.is_empty());
-        assert_eq!(report.warnings.len(), 1);
+        assert_eq!(report.warnings.len(), 2);
         assert_eq!(
             report.warnings[0].path,
             downloads.join("Invalid.AppImage").to_str().unwrap()
+        );
+        assert_eq!(
+            report.warnings[1].path,
+            managed.join("Invalid.AppImage").to_str().unwrap()
         );
     }
 }
@@ -201,9 +209,8 @@ async fn rescan_icons_worker() {
     };
     let directory = PathBuf::from(directory);
     let apps = directory.join("apps");
-    let report = library_scan(Some(vec![apps.to_str().unwrap().into()]))
-        .await
-        .unwrap();
+    let report = library_scan(None).await.unwrap();
+    assert_eq!(report.apps.len(), 2);
     assert!(report.warnings.is_empty(), "{:?}", report.warnings);
     let source = apps.join("Existing.AppImage");
     let found = report
@@ -228,8 +235,10 @@ async fn rescan_icons_worker() {
         CUSTOM_ICON
     );
 
-    let unconfigured = library_scan(None).await.unwrap();
-    assert!(unconfigured.apps.is_empty());
-    assert!(unconfigured.warnings.is_empty());
+    let repeated = library_scan(Some(vec![apps.to_str().unwrap().into()]))
+        .await
+        .unwrap();
+    assert_eq!(repeated.apps.len(), 2);
+    assert!(repeated.warnings.is_empty());
     assert_eq!(library_list().await.unwrap().len(), 2);
 }

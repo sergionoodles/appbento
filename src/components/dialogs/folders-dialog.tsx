@@ -42,7 +42,7 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
         <fieldset disabled={isSaving} className="flex flex-col gap-4">
           <div>
             <label htmlFor="managed-folder" className="block font-medium mb-1">Managed folder</label>
-            <p className="text-[13px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. Enter an absolute path.</p>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. This folder is always scanned. Enter an absolute path.</p>
             <div className="flex gap-2">
               <Input id="managed-folder" required value={managed} onChange={(event) => setManaged(event.target.value)} />
               <Button type="button" onClick={() => void browse(true)} disabled={!isNative}>Browse</Button>
@@ -50,7 +50,7 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
           </div>
           <div>
             <div className="font-medium mb-1">Scan folders</div>
-            <p className="text-[13px] text-[var(--muted)] mb-2">Only folders you add here are scanned. Leave this list empty to add apps manually, one at a time.</p>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Add other folders to scan for AppImages. The managed folder is always included.</p>
             <div className="flex flex-col gap-1">
               {directories.map((directory) => (
                 <div key={directory} className="flex items-center gap-2 text-[14px] bg-[var(--panel2)] rounded-md pl-4 pr-1 py-1">
