@@ -14,8 +14,13 @@ static PROBE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default)]
 pub struct SelfUpdateState {
-    pending: Mutex<Option<Update>>,
+    pending: Mutex<Option<PendingUpdate>>,
     pub is_installing: AtomicBool,
+}
+
+struct PendingUpdate {
+    update: Update,
+    staging_path: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -90,9 +95,14 @@ pub async fn self_update_check(
         return Err("An AppBento update is already being installed.".into());
     }
     let mut pending = state.pending.lock().await;
+    let staging_path = path.with_file_name(format!(
+        ".appbento-update-{}-{}.AppImage",
+        std::process::id(),
+        PROBE_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+    ));
     let update = app
         .updater_builder()
-        .executable_path(&path)
+        .executable_path(&staging_path)
         .timeout(CHECK_TIMEOUT)
         .build()
         .map_err(|error| error.to_string())?
@@ -105,7 +115,10 @@ pub async fn self_update_check(
         download_url: update.download_url.to_string(),
         install_disabled_reason: validate_install_location(&path).err(),
     });
-    *pending = update;
+    *pending = update.map(|update| PendingUpdate {
+        update,
+        staging_path,
+    });
     Ok(CheckResult {
         current_version,
         update: info,
@@ -135,10 +148,11 @@ pub async fn self_update_install(
     let path = appimage_path(&app)?;
     validate_install_location(&path)?;
     let mut pending = state.pending.lock().await;
-    let mut update = pending
+    let pending_update = pending
         .as_ref()
-        .ok_or("Check for an AppBento update before installing.")?
-        .clone();
+        .ok_or("Check for an AppBento update before installing.")?;
+    let mut update = pending_update.update.clone();
+    let staging_path = pending_update.staging_path.clone();
     update.timeout = Some(DOWNLOAD_TIMEOUT);
     let mut downloaded = 0;
     let mut progress_error = None;
@@ -162,15 +176,37 @@ pub async fn self_update_install(
     on_progress
         .send(Progress::Installing)
         .map_err(|error| error.to_string())?;
-    // The plugin verifies the signature before replacement and restores the old image on install errors.
-    tokio::task::spawn_blocking(move || update.install(bytes))
-        .await.map_err(|error| error.to_string())?
-        .map_err(|error| format!("Could not install the AppBento update: {error}. You can download it manually instead."))?;
+    tokio::task::spawn_blocking(move || {
+        crate::self_update_installation::install_and_launch(
+            &path,
+            &staging_path,
+            &update.version,
+            |staging_path| {
+                update.install(bytes).map_err(|error| error.to_string())?;
+                fs::set_permissions(
+                    staging_path,
+                    fs::metadata(&path)
+                        .map_err(|error| error.to_string())?
+                        .permissions(),
+                )
+                .map_err(|error| error.to_string())
+            },
+            crate::self_launcher::update_executable,
+            || crate::apps::lifecycle()?.list().map(|_| ()),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+    .map_err(|error| {
+        format!(
+            "Could not install the AppBento update: {error}. You can download it manually instead."
+        )
+    })?;
     *pending = None;
     if let Err(error) = on_progress.send(Progress::Restarting) {
         eprintln!("Update installed; could not report restart progress: {error}");
     }
-    app.request_restart();
+    app.exit(0);
     Ok(())
 }
 

@@ -26,7 +26,71 @@ struct Launcher {
     icon: PathBuf,
 }
 
+pub(crate) struct LauncherUpdate {
+    entry: PathBuf,
+    previous: String,
+    updated: String,
+}
+
+impl LauncherUpdate {
+    pub(crate) fn rollback(&self) -> Result<(), String> {
+        if std::fs::read_to_string(&self.entry).map_err(|error| error.to_string())? != self.updated
+        {
+            return Err("The AppBento launcher changed during the update; it cannot be restored automatically.".into());
+        }
+        persistence::write_atomic(&self.entry, self.previous.as_bytes())
+            .map_err(|error| error.message)
+    }
+}
+
 impl Launcher {
+    fn update_executable(&self, executable: &Path) -> Result<Option<LauncherUpdate>, String> {
+        let executable = desktop::resolve_launcher(executable, None)?;
+        let executable = executable.to_str().ok_or("launcher path must be UTF-8")?;
+        persistence::with_repository::<Preferences, _>(&self.preferences, |_| {
+            let previous = match std::fs::read_to_string(&self.entry) {
+                Ok(content) => content,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => return Err(error.to_string()),
+            };
+            if !previous.lines().any(|line| line == OWNERSHIP_MARKER) {
+                return Err(
+                    "An existing AppBento launcher entry is not managed by AppBento.".into(),
+                );
+            }
+            if !previous.lines().any(|line| line.starts_with("Exec=")) {
+                return Err("The AppBento launcher has no Exec entry.".into());
+            }
+            let updated = previous
+                .lines()
+                .map(|line| {
+                    if line.starts_with("Exec=") {
+                        format!("Exec=\"{}\"", desktop::escape_exec(executable))
+                    } else if line.starts_with("TryExec=") {
+                        format!("TryExec={}", executable.replace('\\', "\\\\"))
+                    } else {
+                        line.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            match persistence::write_atomic(&self.entry, updated.as_bytes()) {
+                Ok(()) => {}
+                Err(error) if error.committed => {
+                    // The entry already points to the new image; retain a rollback receipt.
+                    eprintln!("AppBento launcher updated: {}", error.message);
+                }
+                Err(error) => return Err(error.message),
+            }
+            Ok(Some(LauncherUpdate {
+                entry: self.entry.clone(),
+                previous,
+                updated,
+            }))
+        })
+    }
+
     fn current() -> Result<Self, String> {
         Ok(Self {
             preferences: persistence::data_path("self-launcher.json")?,
@@ -97,6 +161,10 @@ impl Launcher {
         })?;
         self.status()
     }
+}
+
+pub(crate) fn update_executable(executable: &Path) -> Result<Option<LauncherUpdate>, String> {
+    Launcher::current()?.update_executable(executable)
 }
 
 #[tauri::command]

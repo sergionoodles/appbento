@@ -12,6 +12,7 @@ mod persistence;
 mod sandbox;
 mod self_launcher;
 mod self_update;
+mod self_update_installation;
 mod settings;
 mod store;
 mod update_download;
@@ -105,6 +106,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(self_update::SelfUpdateState::default())
+        .setup(|_| {
+            self_update_installation::notify_startup()?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
             use std::sync::atomic::Ordering;
             use tauri::Manager;
