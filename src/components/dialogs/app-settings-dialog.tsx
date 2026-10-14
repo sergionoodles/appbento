@@ -29,7 +29,7 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, isUpdating = false, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   app: InstalledApp;
   update?: UpdateInfo;
   isCheckingUpdates: boolean;
@@ -47,6 +47,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   onSaveName: (name: string) => void;
   onSetMenuEntry: (enabled: boolean) => Promise<boolean>;
   isSaving: boolean;
+  isUpdating?: boolean;
   error: string | null;
   returnFocusElement?: HTMLElement | null;
 }) {
@@ -68,7 +69,8 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const hasUpdateChange = isDraftChanged(updateDraft, app.update_config);
   const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange, integration: false };
   const isPermissionsBlocked = hasConfigChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
-  const canSave = !isSaving && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
+  const isBusy = isSaving || isUpdating;
+  const canSave = !isBusy && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
     && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft));
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
@@ -133,13 +135,13 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
 
           <div key={page} className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
             {page === "general" ? <GeneralPage app={app} backend={backend} name={name} originalName={originalName} onNameChange={setName}
-              isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isSaving} /> : null}
+              isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isBusy} /> : null}
             {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
-              isReview={isReview} isSaving={isSaving} onError={setLocalError} /> : null}
-            {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isSaving} /> : null}
-            {page === "integration" ? <IntegrationPage app={app} isSaving={isSaving} onSetMenuEntry={onSetMenuEntry} /> : null}
-            {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isSaving}
-              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} isCheckingUpdates={isCheckingUpdates}
+              isReview={isReview} isSaving={isBusy} onError={setLocalError} /> : null}
+            {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isBusy} /> : null}
+            {page === "integration" ? <IntegrationPage app={app} isSaving={isBusy} onSetMenuEntry={onSetMenuEntry} /> : null}
+            {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isBusy}
+              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
               onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}
           </div>
 

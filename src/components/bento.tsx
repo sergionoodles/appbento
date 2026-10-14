@@ -45,11 +45,12 @@ function EmptyGroup({ sectionId }: { sectionId: string }) {
   );
 }
 
-export function Bento({ layout, apps, updates, activeGroupId, isFiltering, drag, editingGroupId, isAnimated, onEntered, tileActions, groupActions, disabled }: {
+export function Bento({ layout, apps, updates, updatingAppIds, activeGroupId, isFiltering, drag, editingGroupId, isAnimated, onEntered, tileActions, groupActions, disabled }: {
   layout: AppLayout;
   /** Apps to show, already filtered by the search query. */
   apps: InstalledApp[];
   updates: UpdateInfo[];
+  updatingAppIds: string[];
   activeGroupId: string | null;
   isFiltering: boolean;
   drag: TileDrag | null;
@@ -93,7 +94,8 @@ export function Bento({ layout, apps, updates, activeGroupId, isFiltering, drag,
               <div className={cn("bento", isAnimated && "intro")}>
                 {section.apps.map((app, index) => (
                   <AppTile key={app.id} app={app} index={index} update={updatesById.get(app.id)}
-                    actions={tileActions} isPlaceholder={drag?.appId === app.id} disabled={disabled} />
+                    actions={tileActions} isPlaceholder={drag?.appId === app.id}
+                    isUpdating={updatingAppIds.includes(app.id)} disabled={disabled || updatingAppIds.includes(app.id)} />
                 ))}
               </div>
             ) : <EmptyGroup sectionId={section.id} />}

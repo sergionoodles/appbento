@@ -129,10 +129,18 @@ it("shows the cog badge, release notes, download progress, and one-click install
   expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
   await user.keyboard("{Escape}");
   expect(screen.getByRole("dialog", { name: "AppBento updates" })).toBeInTheDocument();
+  const dialog = screen.getByRole("dialog", { name: "AppBento updates" });
+  const backdrop = dialog.parentElement;
+  if (!backdrop) throw new Error("Missing modal backdrop");
+  await user.click(backdrop);
+  expect(dialog).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Launch Obsidian" }).closest("[inert]")).not.toBeNull();
   act(() => reportProgress({ phase: "installing" }));
   expect(screen.getByText("Installing update…")).toBeInTheDocument();
   await act(async () => { finishInstall(); });
   expect(screen.getByText("Restarting AppBento…")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(dialog).toBeInTheDocument();
 });
 
 it("offers a manual download for a protected AppImage and blocks automatic installation", async () => {

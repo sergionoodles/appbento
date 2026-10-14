@@ -224,6 +224,44 @@ test("failed update installation preserves the old app and reports the failure",
   assert.equal(await controller.installUpdate(app.id), false);
   assert.deepEqual(controller.getState().apps[0], app);
   assert.match(controller.getState().error ?? "", /Download interrupted/);
+  assert.deepEqual(controller.getState().updatingAppIds, []);
+  assert.equal(await controller.setMenuEntry(app.id, true), true);
+});
+
+test("updating one app permits other apps to launch and update while refusing conflicts", async () => {
+  const preview = createPreviewApi();
+  const firstDownload = deferred<ReturnType<typeof createPreviewApp>>();
+  const secondDownload = deferred<ReturnType<typeof createPreviewApp>>();
+  const [first, second] = await preview.libraryList();
+  const controller = createLibraryController({ ...preview,
+    updatesInstall: (id) => id === first.id ? firstDownload.promise : secondDownload.promise,
+  });
+  await controller.initialize();
+  const report = controller.getState().updateReport;
+  const firstUpdate = controller.installUpdate(first.id);
+
+  assert.equal(controller.getState().operation, null);
+  assert.deepEqual(controller.getState().updatingAppIds, [first.id]);
+  assert.deepEqual(controller.getState().updateReport, report);
+  assert.equal(await controller.installUpdate(first.id), false);
+  assert.equal(await controller.launch(first.id), false);
+  assert.equal(await controller.remove(first.id, false), false);
+  assert.equal(await controller.setMenuEntry(first.id, true), false);
+  assert.equal(await controller.configureUpdates(first.id, null), false);
+  assert.equal(await controller.launch(second.id), true);
+  const launchedSecond = controller.getState().apps[1];
+  const secondUpdate = controller.installUpdate(second.id);
+  assert.deepEqual(controller.getState().updatingAppIds, [first.id, second.id]);
+
+  firstDownload.resolve({ ...first, version_current: "2.0" });
+  assert.equal(await firstUpdate, true);
+  assert.deepEqual(controller.getState().updatingAppIds, [second.id]);
+  assert.equal(controller.getState().apps[1].launch_count, launchedSecond.launch_count);
+  secondDownload.resolve({ ...launchedSecond, version_current: "3.0" });
+  assert.equal(await secondUpdate, true);
+  assert.deepEqual(controller.getState().updatingAppIds, []);
+  assert.deepEqual(controller.getState().apps.map((app) => app.version_current), ["2.0", "3.0"]);
+  assert.equal(await controller.setMenuEntry(first.id, true), true);
 });
 
 

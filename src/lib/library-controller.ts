@@ -12,6 +12,7 @@ export interface LibraryState {
   isLoading: boolean;
   isCheckingUpdates: boolean;
   operation: string | null;
+  updatingAppIds: string[];
   error: string | null;
 }
 
@@ -23,7 +24,7 @@ export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
     reviewIds: [], launchAfterReview: false,
     apps: [], settings: null, updateReport: null, scanWarnings: [],
-    isLoading: true, isCheckingUpdates: false, operation: null, error: null,
+    isLoading: true, isCheckingUpdates: false, operation: null, updatingAppIds: [], error: null,
   };
   let hasInitialized = false;
   let revision = 0;
@@ -47,7 +48,7 @@ export function createLibraryController(backend: AppApi) {
   };
 
   const checkUpdates = async () => {
-    if (state.isCheckingUpdates || state.operation) return;
+    if (state.isCheckingUpdates || state.operation || state.updatingAppIds.length) return;
     needsUpdateCheck = false;
     const requestedRevision = revision;
     publish({ isCheckingUpdates: true });
@@ -61,7 +62,7 @@ export function createLibraryController(backend: AppApi) {
       }
     } finally {
       publish({ isCheckingUpdates: false });
-      if (needsUpdateCheck && !state.operation) void checkUpdates();
+      if (needsUpdateCheck) void checkUpdates();
     }
   };
 
@@ -84,6 +85,33 @@ export function createLibraryController(backend: AppApi) {
     }
   };
 
+  const installUpdate = async (id: string): Promise<boolean> => {
+    if (state.isLoading || state.operation || state.updatingAppIds.includes(id)) return false;
+    revision += 1;
+    needsUpdateCheck = true;
+    publish({ updatingAppIds: [...state.updatingAppIds, id], error: null });
+    try {
+      const updated = await backend.updatesInstall(id);
+      const report = state.updateReport;
+      revision += 1;
+      publish({
+        apps: state.apps.map((app) => app.id === id ? updated : app),
+        updateReport: report ? { ...report,
+          updates: report.updates.filter((update) => update.app_id !== id),
+          errors: report.errors.filter((error) => error.app_id !== id),
+          unknown_versions: report.unknown_versions.filter((appId) => appId !== id),
+        } : null,
+      });
+      return true;
+    } catch (error) {
+      publish({ error: `Install update: ${errorMessage(error)}` });
+      return false;
+    } finally {
+      publish({ updatingAppIds: state.updatingAppIds.filter((appId) => appId !== id) });
+      if (needsUpdateCheck) void checkUpdates();
+    }
+  };
+
   return {
     getState: () => state,
     subscribe(listener: () => void) {
@@ -101,6 +129,7 @@ export function createLibraryController(backend: AppApi) {
     dismissError: () => publish({ error: null }),
     dismissScanWarnings: () => publish({ scanWarnings: [] }),
     ...createLibraryActions(backend, () => state, publish, runOperation),
+    installUpdate,
   };
 }
 

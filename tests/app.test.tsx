@@ -1,6 +1,6 @@
 import { Profiler } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import { createPreviewApi, createPreviewApp } from "../src/lib/preview";
@@ -377,6 +377,37 @@ it("failed update installation keeps the installed version visible and reports t
   expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent("Download interrupted");
   expect((await preview.libraryList())[0]).toEqual(original);
   expect(screen.getByRole("button", { name: "Install update" })).toBeEnabled();
+});
+
+it("shows an update on its card while other apps remain usable", async () => {
+  const preview = createPreviewApi();
+  let finishDownload: () => void = () => { throw new Error("Download has not started"); };
+  const user = await openHome({ ...preview,
+    async updatesInstall(id) {
+      await new Promise<void>((resolve) => { finishDownload = resolve; });
+      return preview.updatesInstall(id);
+    },
+  });
+  await openAppUpdates(user, "Obsidian");
+  await user.click(await screen.findByRole("button", { name: "Install update" }));
+  expect(screen.getByRole("button", { name: "Close settings" })).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Close settings" }));
+
+  const updatingCard = screen.getByRole("article", { name: "Obsidian" });
+  expect(within(updatingCard).getByRole("status")).toHaveTextContent("Updating…");
+  expect(within(updatingCard).getByRole("button", { name: "Launch Obsidian" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Launch Joplin" })).toBeEnabled();
+  await chooseFromMenu(user, "More options for Joplin", "Settings");
+  await user.click(screen.getByRole("button", { name: "Close settings" }));
+  await user.click(screen.getByRole("button", { name: "Updates" }));
+  expect(screen.getByRole("button", { name: "Updating…" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "Back to all apps" }));
+
+  await act(async () => { finishDownload(); });
+  const updatedCard = screen.getByRole("article", { name: "Obsidian" });
+  await waitFor(() => expect(within(updatedCard).queryByRole("status")).not.toBeInTheDocument());
+  expect(within(updatedCard).getByRole("button", { name: "Launch Obsidian" })).toBeEnabled();
+  expect(within(updatedCard).getByText("v1.6.7")).toBeInTheDocument();
 });
 
 describe("app settings", () => {

@@ -69,7 +69,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const { apps, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
+  const { apps, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const selfUpdate = useSelfUpdate(backend);
   const selfLauncher = useSelfLauncher(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
@@ -83,13 +83,15 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const updates = updateReport?.updates ?? [];
   const confirmedUpdateCount = updates.filter((update) => update.status === "available").length;
   const disabled = isLoading || operation !== null || selfUpdate.progress !== null;
+  const isSelfUpdateBlocked = isLoading || operation !== null || isCheckingUpdates || updatingAppIds.length > 0;
+  const isSelfUpdateOpen = showSelfUpdate || selfUpdate.progress !== null;
   const logsApp = displayApps.find((app) => app.id === logsId);
   const removingApp = apps.find((app) => app.id === removingId);
   const reviewingApp = apps.find((app) => app.id === reviewIds[0]);
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasOtherModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || showSelfUpdate || showAbout || !!removingApp || !!reviewingApp;
+  const hasOtherModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || isSelfUpdateOpen || showAbout || !!removingApp || !!reviewingApp;
   const showLauncher = !hasOtherModal && !isLoading && (selfLauncher.isRequested || selfLauncher.shouldPrompt);
   const hasModal = hasOtherModal || showLauncher;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -168,10 +170,10 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
                 </section> : null}
                 {isLoading ? <BentoSkeleton /> : (
                   <>
-                    {view.name === "home" ? <Bento layout={layout} apps={filteredApps} updates={updates} activeGroupId={activeGroupId}
+                    {view.name === "home" ? <Bento layout={layout} apps={filteredApps} updates={updates} updatingAppIds={updatingAppIds} activeGroupId={activeGroupId}
                       isFiltering={filter.length > 0} drag={drag} editingGroupId={editingGroupId} isAnimated={!hasEntered} onEntered={markEntered}
                       tileActions={tileActions} groupActions={groupActions} disabled={disabled} /> : null}
-                    {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
+                    {view.name === "updates" ? <UpdatesView report={updateReport} apps={apps} updatingAppIds={updatingAppIds} disabled={disabled} isChecking={isCheckingUpdates} onBack={goHome} onCheck={() => void controller.checkUpdates()} onInstall={(id) => void controller.installUpdate(id)} /> : null}
                   </>
                 )}
               </div>
@@ -188,13 +190,13 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         onSetMenuEntry={(enabled) => controller.setMenuEntry(configuringApp.id, enabled)}
         update={updates.find((update) => update.app_id === configuringApp.id)} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
-        isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
+        isSaving={disabled} isUpdating={updatingAppIds.includes(configuringApp.id)} error={error} returnFocusElement={returnFocusElement} /> : null}
       {logsApp ? <LaunchLogsDialog key={logsApp.id} app={logsApp} backend={backend} onClose={() => setLogsId(null)} returnFocusElement={returnFocusElement} /> : null}
       {showConfiguration ? <ConfigurationDialog backend={backend} onClose={() => setShowConfiguration(false)} onRestored={onRestored} returnFocusElement={returnFocusElement} /> : null}
-      {showSelfUpdate ? <SelfUpdateDialog state={selfUpdate} isBlocked={isLoading || operation !== null || isCheckingUpdates}
+      {isSelfUpdateOpen ? <SelfUpdateDialog state={selfUpdate} isBlocked={isSelfUpdateBlocked}
         onCheck={() => { void selfUpdate.controller.check(); }}
-        onInstall={() => { void selfUpdate.controller.install(isLoading || operation !== null || isCheckingUpdates); }}
-        onDownload={backend.openExternal} onClose={() => setShowSelfUpdate(false)} returnFocusElement={returnFocusElement} /> : null}
+        onInstall={() => { void selfUpdate.controller.install(isSelfUpdateBlocked); }}
+        onDownload={backend.openExternal} onClose={() => { if (selfUpdate.progress === null) setShowSelfUpdate(false); }} returnFocusElement={returnFocusElement} /> : null}
       {showLauncher ? <SelfLauncherDialog isSaving={selfLauncher.isSaving} error={selfLauncher.error}
         onAdd={() => { void selfLauncher.install(); }} onClose={() => { void selfLauncher.dismiss(); }} returnFocusElement={returnFocusElement} /> : null}
       {showAbout ? <AboutDialog onOpenExternal={backend.openExternal} onClose={() => setShowAbout(false)} returnFocusElement={returnFocusElement} /> : null}

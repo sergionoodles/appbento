@@ -1,5 +1,5 @@
 import { useAppAppearance } from "./use-app-appearance";
-import { MoreHorizontal, FileText, Play, Settings, Trash2, PanelsTopLeft } from "lucide-react";
+import { MoreHorizontal, FileText, Play, Settings, Trash2, PanelsTopLeft, RefreshCw } from "lucide-react";
 import type { InstalledApp, UpdateInfo } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -24,11 +24,12 @@ function statusText(app: InstalledApp, update?: UpdateInfo) {
   return [updateLabel(update), accessLabel(app), fileAge].filter(Boolean).join(" · ");
 }
 
-function TileFace({ app, update, menu, launch }: {
+function TileFace({ app, update, menu, launch, isUpdating = false }: {
   app: InstalledApp;
   update?: UpdateInfo;
   menu?: React.ReactNode;
   launch?: React.ReactNode;
+  isUpdating?: boolean;
 }) {
   return (
     <div className="pointer-events-none relative h-full flex flex-col justify-between p-3">
@@ -40,7 +41,9 @@ function TileFace({ app, update, menu, launch }: {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <p className={cn("min-w-0 flex-1 text-[12px] truncate", update ? "text-[var(--warn)]" : "text-[var(--muted)]")}>{statusText(app, update)}</p>
+        {isUpdating ? <p role="status" className="min-w-0 flex-1 flex items-center gap-1.5 text-[12px] text-[var(--accent)]">
+          <RefreshCw size={13} className="shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />Updating…
+        </p> : <p className={cn("min-w-0 flex-1 text-[12px] truncate", update ? "text-[var(--warn)]" : "text-[var(--muted)]")}>{statusText(app, update)}</p>}
         {menu}
         {launch}
       </div>
@@ -71,13 +74,14 @@ function openTileMenu(event: React.MouseEvent<HTMLElement>) {
   if (trigger.getAttribute("aria-expanded") !== "true") trigger.click();
 }
 
-export function AppTile({ app, update, index, actions, isPlaceholder, disabled }: {
+export function AppTile({ app, update, index, actions, isPlaceholder, disabled, isUpdating }: {
   app: InstalledApp;
   update?: UpdateInfo;
   index: number;
   actions: TileActions;
   isPlaceholder: boolean;
   disabled: boolean;
+  isUpdating: boolean;
 }) {
   const appearance = useAppAppearance(app.name, app);
   const menu = (
@@ -102,9 +106,9 @@ export function AppTile({ app, update, index, actions, isPlaceholder, disabled }
   );
 
   return (
-    <article aria-label={app.name} className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={{ ...appearance.style, "--i": index } as React.CSSProperties}
-      onPointerDown={(event) => actions.onDragStart(event, app.id)} onContextMenu={openTileMenu}>
-      <TileFace app={app} update={update} menu={menu} launch={launch} />
+    <article aria-label={app.name} aria-busy={isUpdating} className={cn("tile", isPlaceholder && "tile-placeholder")} data-tile-id={app.id} style={{ ...appearance.style, "--i": index } as React.CSSProperties}
+      onPointerDown={(event) => { if (!disabled) actions.onDragStart(event, app.id); }} onContextMenu={openTileMenu}>
+      <TileFace app={app} update={update} menu={menu} launch={launch} isUpdating={isUpdating} />
     </article>
   );
 }

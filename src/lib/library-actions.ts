@@ -10,6 +10,11 @@ export function createLibraryActions(
   publishState: (patch: Partial<LibraryState>) => void,
   runOperation: RunOperation,
 ) {
+  const runAppOperation = (id: string, operation: string, action: () => Promise<void>, changesLibrary = false) => {
+    if (getState().updatingAppIds.includes(id)) return Promise.resolve(false);
+    return runOperation(operation, action, changesLibrary);
+  };
+
   const publishApps = (apps: InstalledApp[]) => {
     publishState({ apps, updateReport: null });
   };
@@ -43,21 +48,17 @@ export function createLibraryActions(
   };
 
   return {
-    setIcon: (id: string, source: string) => runOperation("Save icon", async () => {
+    setIcon: (id: string, source: string) => runAppOperation(id, "Save icon", async () => {
       const updated = await backend.librarySetIcon(id, source);
       publishState({ apps: getState().apps.map((app) => app.id === id ? updated : app) });
     }),
-    configureUpdates: (id: string, config: UpdateConfig | null) => runOperation("Save update source", async () => {
+    configureUpdates: (id: string, config: UpdateConfig | null) => runAppOperation(id, "Save update source", async () => {
       const configured = await backend.updatesConfigure(id, config);
       publishApps(getState().apps.map((app) => app.id === id ? configured : app));
     }, true),
-    installUpdate: (id: string) => runOperation("Install update", async () => {
-      const updated = await backend.updatesInstall(id);
-      publishApps(getState().apps.map((app) => app.id === id ? updated : app));
-    }, true),
     checkAppUpdates: (id: string) => {
       if (getState().isCheckingUpdates) return Promise.resolve(false);
-      return runOperation("Check app updates", async () => {
+      return runAppOperation(id, "Check app updates", async () => {
         const previousReport = getState().updateReport;
         if (previousReport) {
           publishState({ updateReport: { ...previousReport,
@@ -80,19 +81,20 @@ export function createLibraryActions(
     scan: () => runOperation("Scan folders", scan, true),
     requestReview: (id: string) => publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: false, error: null }),
     dismissReview: () => publishState({ reviewIds: getState().reviewIds.slice(1), launchAfterReview: false, error: null }),
-    configure: (id: string, config: LaunchConfig, launch: boolean) => runOperation("Save permissions", async () => {
+    configure: (id: string, config: LaunchConfig, launch: boolean) => runAppOperation(id, "Save permissions", async () => {
       const configured = await backend.libraryConfigure(id, config);
       publishState({ apps: getState().apps.map((app) => app.id === id ? configured : app) });
       if (launch) await launchAndRefresh(id);
       publishState({ reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), launchAfterReview: false });
     }),
     launch: (id: string) => {
+      if (getState().updatingAppIds.includes(id)) return Promise.resolve(false);
       const app = getState().apps.find((entry) => entry.id === id);
       if (!app?.launch_config || app.reviewed_digest === null) {
         publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: true, error: null });
         return Promise.resolve(false);
       }
-      return runOperation("Launch app", async () => {
+      return runAppOperation(id, "Launch app", async () => {
         await launchAndRefresh(id);
       });
     },
@@ -100,7 +102,7 @@ export function createLibraryActions(
       await backend.libraryAddUrl(url);
       publishApps(await backend.libraryList());
     }, true),
-    setMenuEntry: (id: string, enabled: boolean) => runOperation(enabled ? "Add to app menu" : "Remove from app menu", async () => {
+    setMenuEntry: (id: string, enabled: boolean) => runAppOperation(id, enabled ? "Add to app menu" : "Remove from app menu", async () => {
       const updated = await backend.librarySetMenuEntry(id, enabled);
       publishState({ apps: getState().apps.map((app) => app.id === id ? updated : app) });
     }),
@@ -116,7 +118,7 @@ export function createLibraryActions(
       publishState({ settings: saved });
       await scan();
     }, true),
-    remove: (id: string, deleteFile: boolean) => runOperation("Remove app", async () => {
+    remove: (id: string, deleteFile: boolean) => runAppOperation(id, "Remove app", async () => {
       await backend.libraryRemove(id, deleteFile);
       publishState({ apps: getState().apps.filter((app) => app.id !== id), reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), updateReport: null });
     }, true),

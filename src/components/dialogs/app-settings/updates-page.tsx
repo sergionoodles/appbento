@@ -28,11 +28,12 @@ const CHANNELS: SelectOption<string>[] = [
 
 const MONO_INPUT = "font-mono text-[13px]";
 
-export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, update, isUpdating, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   draft: UpdateDraft;
   hasUpdateSource: boolean;
   hasUnsavedSource: boolean;
   update?: UpdateInfo;
+  isUpdating: boolean;
   isCheckingUpdates: boolean;
   onCheckUpdate: () => void;
   onInstallUpdate: () => void;
@@ -43,14 +44,17 @@ export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUns
   const isRelease = draft.strategy === "github-release" || draft.strategy === "gitlab-release";
 
   const areActionsDisabled = isSaving || isCheckingUpdates || hasUnsavedSource;
+  const sourceLabel = hasUpdateSource ? "Check your saved source for a newer release." : "Updates are disabled for this app.";
+  const statusLabel = updateLabel(update) ?? sourceLabel;
+  const installLabel = update?.status === "available" ? "Install update" : "Install latest";
 
   return (
     <div className="flex flex-col gap-6">
       <section aria-label="App updates" className="flex flex-col gap-3">
-        <p className="text-[13px] text-[var(--muted)]">{updateLabel(update) ?? (hasUpdateSource ? "Check your saved source for a newer release." : "Updates are disabled for this app.")}</p>
+        <p className="text-[13px] text-[var(--muted)]">{isUpdating ? "Updating… You can close settings while the update continues." : statusLabel}</p>
         <div className="flex flex-wrap gap-2">
           {hasUpdateSource ? <Button variant="outline" size="sm" disabled={areActionsDisabled} onClick={onCheckUpdate}>{isCheckingUpdates ? "Checking for updates…" : "Check for updates"}</Button> : null}
-          {hasUpdateSource && update ? <Button variant="accent" size="sm" disabled={areActionsDisabled} onClick={onInstallUpdate}>{update.status === "available" ? "Install update" : "Install latest"}</Button> : null}
+          {hasUpdateSource && update ? <Button variant="accent" size="sm" disabled={areActionsDisabled} onClick={onInstallUpdate}>{isUpdating ? "Updating…" : installLabel}</Button> : null}
         </div>
         {hasUnsavedSource ? <p className="text-[13px] text-[var(--muted)]">Save your source changes before checking or installing updates.</p> : null}
       </section>
