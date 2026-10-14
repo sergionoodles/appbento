@@ -34,7 +34,7 @@ export function useSelfLauncher(backend: AppApi) {
 
   return {
     canAdd: backend.isTauri && !status?.installed,
-    shouldPrompt: status !== null && !status.installed && !status.dismissed,
+    shouldPrompt: !import.meta.env.DEV && status !== null && !status.installed && !status.dismissed,
     isRequested, isSaving, error,
     open: () => setIsRequested(true),
     install: () => save(true),

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
@@ -28,10 +28,31 @@ function nativeBackend(): AppApi {
   };
 }
 
-beforeEach(() => localStorage.clear());
-afterEach(cleanup);
+beforeEach(() => {
+  localStorage.clear();
+  vi.stubEnv("DEV", false);
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe("AppBento launcher registration", () => {
+  it("skips the startup prompt in development and allows installation from Settings", async () => {
+    vi.stubEnv("DEV", true);
+    const backend = nativeBackend();
+    const user = userEvent.setup();
+    render(<App backend={backend} />);
+    await screen.findByRole("heading", { name: "All apps" });
+    expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument();
+    expect((await backend.selfLauncherStatus()).dismissed).toBe(false);
+
+    await chooseFromMenu(user, "Settings", "Add AppBento to launcher");
+    await user.click(screen.getByRole("button", { name: "Add to launcher" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: TITLE })).not.toBeInTheDocument());
+    expect((await backend.selfLauncherStatus()).installed).toBe(true);
+  });
+
   it("prompts on first launch, remembers dismissal, and installs later from Settings", async () => {
     const backend = nativeBackend();
     const user = userEvent.setup();
