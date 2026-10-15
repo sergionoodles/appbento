@@ -59,6 +59,7 @@ export function createLibraryActions(
     checkAppUpdates: (id: string) => {
       if (getState().isCheckingUpdates) return Promise.resolve(false);
       return runAppOperation(id, "Check app updates", async () => {
+        publishState({ appUpdateChecks: { ...getState().appUpdateChecks, [id]: undefined } });
         const previousReport = getState().updateReport;
         if (previousReport) {
           publishState({ updateReport: { ...previousReport,
@@ -68,6 +69,7 @@ export function createLibraryActions(
         }
         const result = await backend.updatesCheck(id);
         if (result.status === "error") throw new Error(result.error ?? "Update check failed");
+        publishState({ appUpdateChecks: { ...getState().appUpdateChecks, [id]: result } });
         const report = getState().updateReport;
         publishState({ updateReport: {
           updates: [...(report?.updates ?? []).filter((update) => update.app_id !== id), ...(result.update ? [result.update] : [])],

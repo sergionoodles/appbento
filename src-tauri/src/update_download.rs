@@ -126,6 +126,7 @@ fn content_result(
     UpdateCheckResult {
         app_id: app.id.clone(),
         status,
+        latest: None,
         update,
         error: None,
     }

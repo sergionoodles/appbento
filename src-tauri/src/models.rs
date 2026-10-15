@@ -98,6 +98,7 @@ pub enum UpdateStatus {
 pub struct UpdateCheckResult {
     pub app_id: String,
     pub status: UpdateStatus,
+    pub latest: Option<String>,
     pub update: Option<UpdateInfo>,
     pub error: Option<String>,
 }

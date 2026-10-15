@@ -69,7 +69,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const { apps, settings, updateReport, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
+  const { apps, settings, updateReport, appUpdateChecks, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const selfUpdate = useSelfUpdate(backend);
   const selfLauncher = useSelfLauncher(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
@@ -188,7 +188,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
         onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
         onSetMenuEntry={(enabled) => controller.setMenuEntry(configuringApp.id, enabled)}
-        update={updates.find((update) => update.app_id === configuringApp.id)} isCheckingUpdates={isCheckingUpdates}
+        update={updates.find((update) => update.app_id === configuringApp.id)} updateCheck={appUpdateChecks[configuringApp.id]} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
         isSaving={disabled} isUpdating={updatingAppIds.includes(configuringApp.id)} error={error} returnFocusElement={returnFocusElement} /> : null}
       {logsApp ? <LaunchLogsDialog key={logsApp.id} app={logsApp} backend={backend} onClose={() => setLogsId(null)} returnFocusElement={returnFocusElement} /> : null}

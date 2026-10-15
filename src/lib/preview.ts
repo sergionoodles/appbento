@@ -33,17 +33,17 @@ export function createPreviewApi(): AppApi {
   };
 
   const checkApp = (app: InstalledApp): UpdateCheckResult => {
-    if (!app.update_config) return { app_id: app.id, status: "unsupported", update: null, error: null };
+    if (!app.update_config) return { app_id: app.id, status: "unsupported", latest: null, update: null, error: null };
     const isDirect = app.update_config.strategy === "direct-url";
     const latest = isDirect ? "Updated file" : "1.6.7";
-    if ((app.update_config.strategy === "direct-url" && installedDirectUrls.get(app.id) === app.update_config.url) || app.version_current === latest) return { app_id: app.id, status: "up-to-date", update: null, error: null };
+    if ((app.update_config.strategy === "direct-url" && installedDirectUrls.get(app.id) === app.update_config.url) || app.version_current === latest) return { app_id: app.id, status: "up-to-date", latest: isDirect ? null : latest, update: null, error: null };
     const update: UpdateInfo = {
       app_id: app.id, current: app.version_current, latest,
       download_url: app.update_config.strategy === "direct-url" ? app.update_config.url : "https://example.org/preview.AppImage",
       asset_name: isDirect ? `${app.name}.AppImage` : `${app.name}-${latest}.AppImage`, published_at: PREVIEW_DATE, size_bytes: 185_000_000,
       status: isDirect || app.version_current ? "available" : "unknown-current",
     };
-    return { app_id: app.id, status: update.status, update, error: null };
+    return { app_id: app.id, status: update.status, latest: isDirect ? null : latest, update, error: null };
   };
   const configureUpdates = (id: string, config: UpdateConfig | null) => {
     const configured = { ...findApp(id), update_config: structuredClone(config) };
@@ -56,7 +56,7 @@ export function createPreviewApi(): AppApi {
     async selfLauncherStatus() { return { ...launcherStatus }; },
     async selfLauncherInstall() { launcherStatus = { installed: true, dismissed: true }; return { ...launcherStatus }; },
     async selfLauncherDismiss() { launcherStatus = { ...launcherStatus, dismissed: true }; return { ...launcherStatus }; },
-    async selfUpdateCheck() { return { currentVersion: "0.6.2", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
+    async selfUpdateCheck() { return { currentVersion: "0.6.5", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
     async selfUpdateInstall() { throw new Error("Updating AppBento requires the desktop AppImage."); },
     async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },
     async configurationRead() { throw new Error("Importing settings requires the desktop app."); },

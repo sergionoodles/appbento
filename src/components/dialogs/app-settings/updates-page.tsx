@@ -1,4 +1,4 @@
-import type { UpdateInfo } from "@/lib/types";
+import type { UpdateCheckResult, UpdateInfo } from "@/lib/types";
 import { updateLabel } from "../../app-status";
 import { Button } from "../../ui/button";
 import { CirclePause } from "lucide-react";
@@ -28,11 +28,12 @@ const CHANNELS: SelectOption<string>[] = [
 
 const MONO_INPUT = "font-mono text-[13px]";
 
-export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, update, isUpdating, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, update, updateCheck, isUpdating, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   draft: UpdateDraft;
   hasUpdateSource: boolean;
   hasUnsavedSource: boolean;
   update?: UpdateInfo;
+  updateCheck?: UpdateCheckResult;
   isUpdating: boolean;
   isCheckingUpdates: boolean;
   onCheckUpdate: () => void;
@@ -45,13 +46,23 @@ export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUns
 
   const areActionsDisabled = isSaving || isCheckingUpdates || hasUnsavedSource;
   const sourceLabel = hasUpdateSource ? "Check your saved source for a newer release." : "Updates are disabled for this app.";
-  const statusLabel = updateLabel(update) ?? sourceLabel;
+  const isUpToDate = hasUpdateSource && updateCheck?.status === "up-to-date";
+  const latest = updateCheck?.latest ?? update?.latest;
+  const updateStatusLabel = update?.status === "available" ? "Update available." : "Installed version unknown.";
+  const sourceStatusLabel = update ? updateStatusLabel : sourceLabel;
+  const resultLabel = isUpToDate ? "App is up to date." : sourceStatusLabel;
+  const fallbackLabel = isUpToDate ? resultLabel : updateLabel(update) ?? sourceLabel;
+  const statusLabel = latest && latest !== "Updated file"
+    ? `${resultLabel} Latest version found: ${latest}.`
+    : fallbackLabel;
   const installLabel = update?.status === "available" ? "Install update" : "Install latest";
 
   return (
     <div className="flex flex-col gap-6">
       <section aria-label="App updates" className="flex flex-col gap-3">
-        <p className="text-[13px] text-[var(--muted)]">{isUpdating ? "Updating… You can close settings while the update continues." : statusLabel}</p>
+        <p role="status" className={`text-[13px] ${isUpToDate && !isUpdating && !isCheckingUpdates && !hasUnsavedSource ? "text-[var(--ok)]" : "text-[var(--muted)]"}`}>
+          {isUpdating ? "Updating… You can close settings while the update continues." : statusLabel}
+        </p>
         <div className="flex flex-wrap gap-2">
           {hasUpdateSource ? <Button variant="outline" size="sm" disabled={areActionsDisabled} onClick={onCheckUpdate}>{isCheckingUpdates ? "Checking for updates…" : "Check for updates"}</Button> : null}
           {hasUpdateSource && update ? <Button variant="accent" size="sm" disabled={areActionsDisabled} onClick={onInstallUpdate}>{isUpdating ? "Updating…" : installLabel}</Button> : null}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RefreshCw, Terminal, Settings2, ShieldCheck, PanelsTopLeft, X, type LucideIcon } from "lucide-react";
 import type { AppApi } from "@/lib/api";
-import type { InstalledApp, LaunchConfig, UpdateConfig, UpdateInfo } from "@/lib/types";
+import type { InstalledApp, LaunchConfig, UpdateConfig, UpdateCheckResult, UpdateInfo } from "@/lib/types";
 import { validateSandboxPaths } from "@/lib/sandbox";
 import { configFromDraft, draftFromConfig, isDraftChanged, isDraftComplete } from "@/lib/update-draft";
 import { launchDraftFromConfig, parseLaunchDraft } from "@/lib/launch-draft";
@@ -29,9 +29,10 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, isUpdating = false, error, returnFocusElement, update, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, isUpdating = false, error, returnFocusElement, update, updateCheck, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   app: InstalledApp;
   update?: UpdateInfo;
+  updateCheck?: UpdateCheckResult;
   isCheckingUpdates: boolean;
   onCheckUpdate: () => void;
   onInstallUpdate: () => void;
@@ -141,7 +142,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
             {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isBusy} /> : null}
             {page === "integration" ? <IntegrationPage app={app} isSaving={isBusy} onSetMenuEntry={onSetMenuEntry} /> : null}
             {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isBusy}
-              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
+              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} updateCheck={updateCheck} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
               onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}
           </div>
 

@@ -101,6 +101,7 @@ fn failure(app_id: &str, status: UpdateStatus, message: String) -> UpdateCheckRe
     UpdateCheckResult {
         app_id: app_id.into(),
         status,
+        latest: None,
         update: None,
         error: Some(message),
     }
@@ -122,6 +123,7 @@ pub(crate) fn resolve_update(app: &InstalledApp, resolved: ResolvedUpdate) -> Up
         Some(_) => UpdateStatus::UpToDate,
         None => UpdateStatus::UnknownCurrent,
     };
+    let latest = Some(resolved.latest.clone());
     let update = if status == UpdateStatus::UpToDate {
         None
     } else {
@@ -139,6 +141,7 @@ pub(crate) fn resolve_update(app: &InstalledApp, resolved: ResolvedUpdate) -> Up
     UpdateCheckResult {
         app_id: app.id.clone(),
         status,
+        latest,
         update,
         error: None,
     }
@@ -277,6 +280,7 @@ mod tests {
         let current = resolve_update(&app(Some("2.0.0")), release("1.10.0"));
         assert_eq!(current.status, UpdateStatus::UpToDate);
         assert!(current.update.is_none());
+        assert_eq!(current.latest.as_deref(), Some("1.10.0"));
         let unknown = resolve_update(&app(None), release("1.10.0"));
         assert_eq!(unknown.status, UpdateStatus::UnknownCurrent);
         assert_eq!(unknown.update.unwrap().status, UpdateStatus::UnknownCurrent);
@@ -309,12 +313,14 @@ mod tests {
             UpdateCheckResult {
                 app_id: "current".into(),
                 status: UpdateStatus::UpToDate,
+                latest: Some("2.0.0".into()),
                 update: None,
                 error: None,
             },
             UpdateCheckResult {
                 app_id: "unknown".into(),
                 status: UpdateStatus::UnknownCurrent,
+                latest: Some("2.0.0".into()),
                 update: None,
                 error: None,
             },

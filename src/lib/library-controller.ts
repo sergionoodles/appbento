@@ -1,6 +1,6 @@
 import type { AppApi } from "./api.ts";
 import { createLibraryActions } from "./library-actions.ts";
-import type { InstalledApp, ScanWarning, Settings, UpdateReport } from "./types";
+import type { InstalledApp, ScanWarning, Settings, UpdateCheckResult, UpdateReport } from "./types";
 
 export interface LibraryState {
   reviewIds: string[];
@@ -8,6 +8,7 @@ export interface LibraryState {
   apps: InstalledApp[];
   settings: Settings | null;
   updateReport: UpdateReport | null;
+  appUpdateChecks: Record<string, UpdateCheckResult | undefined>;
   scanWarnings: ScanWarning[];
   isLoading: boolean;
   isCheckingUpdates: boolean;
@@ -23,7 +24,7 @@ function errorMessage(error: unknown): string {
 export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
     reviewIds: [], launchAfterReview: false,
-    apps: [], settings: null, updateReport: null, scanWarnings: [],
+    apps: [], settings: null, updateReport: null, appUpdateChecks: {}, scanWarnings: [],
     isLoading: true, isCheckingUpdates: false, operation: null, updatingAppIds: [], error: null,
   };
   let hasInitialized = false;
@@ -72,7 +73,7 @@ export function createLibraryController(backend: AppApi) {
       revision += 1;
       needsUpdateCheck = true;
     }
-    publish({ operation, error: null, ...(changesLibrary ? { updateReport: null } : {}) });
+    publish({ operation, error: null, ...(changesLibrary ? { updateReport: null, appUpdateChecks: {} } : {}) });
     try {
       await action();
       return true;
@@ -89,7 +90,9 @@ export function createLibraryController(backend: AppApi) {
     if (state.isLoading || state.operation || state.updatingAppIds.includes(id)) return false;
     revision += 1;
     needsUpdateCheck = true;
-    publish({ updatingAppIds: [...state.updatingAppIds, id], error: null });
+    publish({ updatingAppIds: [...state.updatingAppIds, id], error: null,
+      appUpdateChecks: { ...state.appUpdateChecks, [id]: undefined },
+    });
     try {
       const updated = await backend.updatesInstall(id);
       const report = state.updateReport;

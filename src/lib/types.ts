@@ -92,6 +92,7 @@ export interface UpdateReport {
 export interface UpdateCheckResult {
   app_id: string;
   status: "available" | "up-to-date" | "unknown-current" | "unsupported" | "error";
+  latest: string | null;
   update: UpdateInfo | null;
   error: string | null;
 }

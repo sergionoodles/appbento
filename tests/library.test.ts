@@ -265,9 +265,31 @@ test("updating one app permits other apps to launch and update while refusing co
 });
 
 
+test("per-app checks retain the discovered version and clear it on retry or source changes", async () => {
+  let shouldFail = false;
+  const controller = createLibraryController({ ...createPreviewApi(), async updatesCheck(appId) {
+    if (shouldFail) throw new Error("Repository unavailable");
+    return { app_id: appId, status: "up-to-date", latest: "1.5.2", update: null, error: null };
+  } });
+  await controller.initialize();
+  const app = controller.getState().apps[0];
+  assert.equal(await controller.checkAppUpdates(app.id), true);
+  assert.equal(controller.getState().appUpdateChecks[app.id]?.latest, "1.5.2");
+  assert.equal(controller.getState().updateReport?.updates.length, 0);
+
+  shouldFail = true;
+  assert.equal(await controller.checkAppUpdates(app.id), false);
+  assert.equal(controller.getState().appUpdateChecks[app.id], undefined);
+
+  shouldFail = false;
+  await controller.checkAppUpdates(app.id);
+  await controller.configureUpdates(app.id, null);
+  assert.equal(controller.getState().appUpdateChecks[app.id], undefined);
+});
+
 test("failed per-app checks clear stale releases and show the source error", async () => {
   const controller = createLibraryController({ ...createPreviewApi(), async updatesCheck(appId) {
-    return { app_id: appId, status: "error", update: null, error: "Repository unavailable" };
+    return { app_id: appId, status: "error", latest: null, update: null, error: "Repository unavailable" };
   } });
   await controller.initialize();
   const app = controller.getState().apps[0];

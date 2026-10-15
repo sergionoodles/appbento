@@ -270,6 +270,16 @@ describe("custom app icons", () => {
 
 
 describe("app update sources", () => {
+  it("shows the discovered version when a check confirms the app is up to date", async () => {
+    const user = await openHome({ ...createPreviewApi(), async updatesCheck(appId) {
+      return { app_id: appId, status: "up-to-date", latest: "1.5.2", update: null, error: null };
+    } });
+    await openAppUpdates(user, "Obsidian");
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(await screen.findByText("App is up to date. Latest version found: 1.5.2.")).toHaveClass("text-[var(--ok)]");
+    expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
+  });
+
   it("configures a direct source, checks it, and installs while retaining settings", async () => {
     const preview = createPreviewApi();
     const app = (await preview.libraryList())[1];
@@ -290,6 +300,8 @@ describe("app update sources", () => {
     expect(installed?.file_path).toEqual(app.file_path);
     expect(installed?.version_current).toEqual(app.version_current);
     expect((await preview.updatesCheck(app.id)).status).toEqual("up-to-date");
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(await screen.findByText("App is up to date.")).toHaveClass("text-[var(--ok)]");
     expect(screen.getByRole("dialog", { name: "Settings for Joplin" })).toBeInTheDocument();
   });
 
@@ -325,6 +337,7 @@ describe("app update sources", () => {
     const user = await openHome({ ...preview, async updatesCheckAll() { return report; } });
     await openAppUpdates(user, "Obsidian");
     expect(screen.getByRole("button", { name: "Install latest" })).toBeEnabled();
+    expect(screen.getByText("Installed version unknown. Latest version found: 1.6.7.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
   });
 
