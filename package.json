@@ -2,7 +2,7 @@
   "name": "appbento",
   "private": true,
   "license": "MIT",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "type": "module",
   "scripts": {
     "release": "node scripts/release.ts",
