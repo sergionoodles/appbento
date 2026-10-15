@@ -12,6 +12,8 @@ const releaseScript = fileURLToPath(new URL("../scripts/release.ts", import.meta
 const temporaryDirectories: string[] = [];
 const INITIAL_VERSION = "0.6.5";
 const NEXT_TAG = "v0.6.6";
+// Cold Rust compilation on CI can exceed Vitest's default five seconds.
+const RUST_TEST_TIMEOUT_MS = 30_000;
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -87,7 +89,7 @@ test("synchronizes all versions, commits, and pushes the branch and tag", () => 
   assert.equal(git("rev-parse", NEXT_TAG), head);
   assert.equal(git("ls-remote", "origin", "refs/heads/main"), `${head}\trefs/heads/main`);
   assert.equal(git("ls-remote", "origin", `refs/tags/${NEXT_TAG}`), `${head}\trefs/tags/${NEXT_TAG}`);
-});
+}, RUST_TEST_TIMEOUT_MS);
 
 test("refuses a dirty working tree without changing versions", () => {
   const { repository, write, runRelease } = createRepository();
@@ -135,4 +137,4 @@ test("an atomic push rejection leaves both remote branch and release tag untouch
   assert.equal(git("ls-remote", "origin", "refs/heads/main"), remoteBefore);
   assert.equal(git("ls-remote", "origin", `refs/tags/${NEXT_TAG}`), "");
   assert.equal(git("rev-parse", NEXT_TAG), git("rev-parse", "HEAD"));
-});
+}, RUST_TEST_TIMEOUT_MS);
