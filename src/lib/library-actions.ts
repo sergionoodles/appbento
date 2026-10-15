@@ -18,10 +18,16 @@ export function createLibraryActions(
   const publishApps = (apps: InstalledApp[]) => {
     publishState({ apps, updateReport: null });
   };
-  const launchAndRefresh = async (id: string) => {
+  const launchAndRefresh = async (id: string, makeExecutable = false) => {
     try {
+      const prepared = await backend.libraryPrepareLaunch(id, makeExecutable);
+      publishState({ apps: getState().apps.map((app) => app.id === id ? prepared : app) });
+      if (!prepared.executable) {
+        publishState({ executablePromptId: id, error: null });
+        return;
+      }
       const launched = await backend.libraryLaunch(id);
-      publishState({ apps: getState().apps.map((app) => app.id === id ? launched : app) });
+      publishState({ apps: getState().apps.map((app) => app.id === id ? launched : app), executablePromptId: null });
     } catch (error) {
       try {
         const apps = await backend.libraryList();
@@ -48,6 +54,12 @@ export function createLibraryActions(
   };
 
   return {
+    dismissExecutablePrompt: () => publishState({ executablePromptId: null, error: null }),
+    confirmExecutable: () => {
+      const id = getState().executablePromptId;
+      if (!id) return Promise.resolve(false);
+      return runAppOperation(id, "Make executable and launch", () => launchAndRefresh(id, true));
+    },
     setIcon: (id: string, source: string) => runAppOperation(id, "Save icon", async () => {
       const updated = await backend.librarySetIcon(id, source);
       publishState({ apps: getState().apps.map((app) => app.id === id ? updated : app) });

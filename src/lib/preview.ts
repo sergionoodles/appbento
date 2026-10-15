@@ -84,6 +84,12 @@ export function createPreviewApi(): AppApi {
       const app = findApp(id);
       return app.last_launched ? { started_at: app.last_launched, text: `[AppBento preview] Launched ${app.name}` } : null;
     },
+    async libraryPrepareLaunch(id, makeExecutable) {
+      const app = findApp(id);
+      const prepared = { ...app, executable: app.executable || makeExecutable };
+      apps = apps.map((entry) => entry.id === id ? prepared : entry);
+      return structuredClone(prepared);
+    },
     async libraryLaunch(id) {
       const app = findApp(id);
       if (!app.launch_config) throw new Error("Review launch permissions first.");

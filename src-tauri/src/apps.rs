@@ -101,6 +101,16 @@ pub async fn library_set_menu_entry(id: String, enabled: bool) -> Result<Install
 }
 
 #[tauri::command]
+pub async fn library_prepare_launch(
+    id: String,
+    make_executable: bool,
+) -> Result<InstalledApp, String> {
+    tokio::task::spawn_blocking(move || lifecycle()?.prepare_launch(&id, make_executable))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn library_launch(id: String) -> Result<InstalledApp, String> {
     tokio::task::spawn_blocking(move || crate::sandbox::launch(&id, &[]))
         .await

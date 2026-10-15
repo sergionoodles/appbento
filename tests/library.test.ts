@@ -313,3 +313,31 @@ test("restored launch settings awaiting review are retained and shown before lau
   assert.deepEqual(controller.getState().apps[0].launch_config, configured.launch_config);
   assert.equal(controller.getState().error, null);
 });
+
+test("save-and-launch asks for execute permission after reviewing an AppImage", async () => {
+  const original = (await createPreviewApi().libraryList())[0];
+  let app = { ...original, executable: false };
+  let launchCount = 0;
+  const controller = createLibraryController({
+    ...createPreviewApi(),
+    async libraryList() { return [app]; },
+    async libraryConfigure(_id, config) { app = { ...app, launch_config: config }; return app; },
+    async libraryPrepareLaunch(_id, makeExecutable) {
+      app = { ...app, executable: app.executable || makeExecutable };
+      return app;
+    },
+    async libraryLaunch() { launchCount += 1; return app; },
+  });
+  await controller.initialize();
+  controller.requestReview(app.id);
+  const config = original.launch_config;
+  assert.ok(config);
+
+  await controller.configure(app.id, config, true);
+  assert.equal(controller.getState().executablePromptId, app.id);
+  assert.deepEqual(controller.getState().reviewIds, []);
+  assert.equal(launchCount, 0);
+  await controller.confirmExecutable();
+  assert.equal(launchCount, 1);
+  assert.equal(controller.getState().executablePromptId, null);
+});

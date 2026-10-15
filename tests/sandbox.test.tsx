@@ -18,7 +18,7 @@ function unreviewedBackend(patch: Partial<AppApi> = {}) {
     app = { ...app, launch_config: config };
     return app;
   });
-  const backend: AppApi = { ...createPreviewApi(), async libraryList() { return [app]; }, libraryLaunch, libraryConfigure, ...patch };
+  const backend: AppApi = { ...createPreviewApi(), async libraryList() { return [app]; }, async libraryPrepareLaunch() { return app; }, libraryLaunch, libraryConfigure, ...patch };
   return { backend, libraryLaunch, libraryConfigure };
 }
 

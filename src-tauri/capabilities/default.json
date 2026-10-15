@@ -29,6 +29,7 @@
     "allow-library-import",
     "allow-library-set-menu-entry",
     "allow-library-add-url",
+    "allow-library-prepare-launch",
     "allow-library-launch",
     "allow-library-launch-log",
     "allow-library-configure",

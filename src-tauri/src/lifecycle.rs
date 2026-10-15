@@ -127,6 +127,33 @@ fn file_created_at(metadata: &fs::Metadata) -> Option<DateTime<Utc>> {
 }
 
 impl Lifecycle {
+    pub fn prepare_launch(&self, id: &str, make_executable: bool) -> Result<InstalledApp, String> {
+        const OWNER_EXECUTE: u32 = 0o100;
+        const EXECUTE_BITS: u32 = 0o111;
+
+        persistence::with_repository(
+            &self.library_path,
+            |repository: &mut persistence::Repository<Library>| {
+                recovery::recover(repository)?;
+                let app = repository.state.get_mut(id).ok_or("app not found")?;
+                let file = open_appimage(Path::new(&app.file_path))?;
+                let mut permissions = file
+                    .metadata()
+                    .map_err(|error| error.to_string())?
+                    .permissions();
+                if make_executable && permissions.mode() & EXECUTE_BITS == 0 {
+                    permissions.set_mode(permissions.mode() | OWNER_EXECUTE);
+                    file.set_permissions(permissions.clone())
+                        .map_err(|error| format!("Cannot make AppImage executable: {error}"))?;
+                }
+                app.executable = permissions.mode() & EXECUTE_BITS != 0;
+                let prepared = app.clone();
+                repository.commit().map_err(|error| error.message)?;
+                Ok(prepared)
+            },
+        )
+    }
+
     pub fn configure(
         &self,
         id: &str,

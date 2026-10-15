@@ -112,3 +112,19 @@ test("native URL imports send the URL and propagate download failures", async ()
   assert.deepEqual(calls, [{ command: "library_add_url", args: { url: "https://example.org/App.AppImage" } }]);
   await assert.rejects(createNativeApi(async () => { throw new Error("Download failed"); }).libraryAddUrl("https://example.org/App.AppImage"), /Download failed/);
 });
+
+test("native launch preparation sends execute permission consent explicitly", async () => {
+  const app = createPreviewApp("Portable", "1.0");
+  const calls: unknown[] = [];
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return app as Commands[Command]["result"];
+  };
+  const backend = createNativeApi(transport);
+  await backend.libraryPrepareLaunch(app.id, false);
+  await backend.libraryPrepareLaunch(app.id, true);
+  assert.deepEqual(calls, [
+    { command: "library_prepare_launch", args: { id: app.id, makeExecutable: false } },
+    { command: "library_prepare_launch", args: { id: app.id, makeExecutable: true } },
+  ]);
+});

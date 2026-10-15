@@ -29,6 +29,7 @@ export interface Commands {
   library_set_menu_entry: { args: { id: string; enabled: boolean }; result: InstalledApp };
   library_import: { args: { sourcePath: string }; result: InstalledApp };
   library_launch_log: { args: { id: string }; result: LaunchLog | null };
+  library_prepare_launch: { args: { id: string; makeExecutable: boolean }; result: InstalledApp };
   library_launch: { args: { id: string }; result: InstalledApp };
   library_remove: { args: { id: string; deleteFile: boolean }; result: null };
   settings_get: { args: undefined; result: Settings };
@@ -64,6 +65,7 @@ export interface AppApi extends SelfUpdateBackend {
   librarySetMenuEntry(id: string, enabled: boolean): Promise<InstalledApp>;
   libraryImport(sourcePath: string): Promise<InstalledApp>;
   libraryLaunchLog(id: string): Promise<LaunchLog | null>;
+  libraryPrepareLaunch(id: string, makeExecutable: boolean): Promise<InstalledApp>;
   libraryLaunch(id: string): Promise<InstalledApp>;
   libraryRemove(id: string, deleteFile: boolean): Promise<void>;
   settingsGet(): Promise<Settings>;
@@ -127,6 +129,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     librarySetMenuEntry: (id, enabled) => transport("library_set_menu_entry", { id, enabled }),
     libraryImport: (sourcePath) => transport("library_import", { sourcePath }),
     libraryLaunchLog: (id) => transport("library_launch_log", { id }),
+    libraryPrepareLaunch: (id, makeExecutable) => transport("library_prepare_launch", { id, makeExecutable }),
     libraryLaunch: (id) => transport("library_launch", { id }),
     libraryRemove: async (id, deleteFile) => {
       await transport("library_remove", { id, deleteFile });

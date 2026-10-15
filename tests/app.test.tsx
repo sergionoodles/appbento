@@ -537,3 +537,59 @@ it("validates URL imports and preserves the URL after a failed download", async 
   expect(input).toHaveValue("https://example.org/App.AppImage");
   expect(within(dialog).getByRole("button", { name: "Download and add" })).toBeEnabled();
 });
+
+
+it("asks before making an AppImage executable and launching it", async () => {
+  let app = { ...(await createPreviewApi().libraryList())[0], name: "Portable", executable: false };
+  const choices: boolean[] = [];
+  const user = await openHome({
+    ...createPreviewApi(),
+    async libraryList() { return [app]; },
+    async libraryPrepareLaunch(_id, makeExecutable) {
+      choices.push(makeExecutable);
+      if (makeExecutable) app = { ...app, executable: true };
+      return app;
+    },
+    async libraryLaunch() {
+      app = { ...app, launch_count: app.launch_count + 1 };
+      return app;
+    },
+  });
+
+  await user.click(screen.getByRole("button", { name: "Launch Portable" }));
+  const dialog = await screen.findByRole("dialog", { name: "Make Portable executable?" });
+  expect(app.launch_count).toBe(0);
+  expect(app.executable).toBe(false);
+  await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(app.executable).toBe(false);
+  expect(app.launch_count).toBe(0);
+
+  await user.click(screen.getByRole("button", { name: "Launch Portable" }));
+  await user.click(await screen.findByRole("button", { name: "Make executable and launch" }));
+  await waitFor(() => expect(app.launch_count).toBe(1));
+  expect(app.executable).toBe(true);
+  expect(choices).toEqual([false, false, true]);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+
+it("keeps execute permission failures visible without launching", async () => {
+  const app = { ...(await createPreviewApi().libraryList())[0], executable: false };
+  let launchCount = 0;
+  const user = await openHome({
+    ...createPreviewApi(),
+    async libraryList() { return [app]; },
+    async libraryPrepareLaunch(_id, makeExecutable) {
+      if (makeExecutable) throw new Error("Cannot make AppImage executable: Permission denied");
+      return app;
+    },
+    async libraryLaunch() { launchCount += 1; return app; },
+  });
+
+  await user.click(screen.getByRole("button", { name: "Launch Obsidian" }));
+  await user.click(await screen.findByRole("button", { name: "Make executable and launch" }));
+  const dialog = screen.getByRole("dialog", { name: "Make Obsidian executable?" });
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Permission denied");
+  expect(launchCount).toBe(0);
+  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeEnabled();
+});

@@ -19,6 +19,7 @@ import { FoldersDialog } from "@/components/dialogs/folders-dialog";
 import { AppSettingsDialog, type SettingsTarget } from "@/components/dialogs/app-settings-dialog";
 import { IconBackendContext } from "@/components/icon-backend-context";
 import { LaunchLogsDialog } from "@/components/dialogs/launch-logs-dialog";
+import { ExecutableDialog } from "@/components/dialogs/executable-dialog";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -69,7 +70,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const { apps, settings, updateReport, appUpdateChecks, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, reviewIds, launchAfterReview, controller } = useLibrary(backend);
+  const { apps, settings, updateReport, appUpdateChecks, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, executablePromptId, reviewIds, launchAfterReview, controller } = useLibrary(backend);
   const selfUpdate = useSelfUpdate(backend);
   const selfLauncher = useSelfLauncher(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
@@ -87,11 +88,12 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const isSelfUpdateOpen = showSelfUpdate || selfUpdate.progress !== null;
   const logsApp = displayApps.find((app) => app.id === logsId);
   const removingApp = apps.find((app) => app.id === removingId);
+  const executableApp = displayApps.find((app) => app.id === executablePromptId);
   const reviewingApp = apps.find((app) => app.id === reviewIds[0]);
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasOtherModal = !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || isSelfUpdateOpen || showAbout || !!removingApp || !!reviewingApp;
+  const hasOtherModal = !!executableApp || !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || isSelfUpdateOpen || showAbout || !!removingApp || !!reviewingApp;
   const showLauncher = !hasOtherModal && !isLoading && (selfLauncher.isRequested || selfLauncher.shouldPrompt);
   const hasModal = hasOtherModal || showLauncher;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -182,7 +184,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         </div>
         <StatusBar status={statusText} appCount={apps.length} groupCount={layout.groups.length} warning={layoutError} />
       </div>
-      {configuringApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
+      {configuringApp && !executableApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
         openTo={settingsApp ? settingsTarget : "permissions"} originalName={configuringOriginalName} launchAfterSave={launchAfterReview}
         onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
         onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
@@ -191,6 +193,8 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         update={updates.find((update) => update.app_id === configuringApp.id)} updateCheck={appUpdateChecks[configuringApp.id]} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
         isSaving={disabled} isUpdating={updatingAppIds.includes(configuringApp.id)} error={error} returnFocusElement={returnFocusElement} /> : null}
+      {executableApp ? <ExecutableDialog app={executableApp} onClose={controller.dismissExecutablePrompt}
+        onConfirm={controller.confirmExecutable} isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
       {logsApp ? <LaunchLogsDialog key={logsApp.id} app={logsApp} backend={backend} onClose={() => setLogsId(null)} returnFocusElement={returnFocusElement} /> : null}
       {showConfiguration ? <ConfigurationDialog backend={backend} onClose={() => setShowConfiguration(false)} onRestored={onRestored} returnFocusElement={returnFocusElement} /> : null}
       {isSelfUpdateOpen ? <SelfUpdateDialog state={selfUpdate} isBlocked={isSelfUpdateBlocked}

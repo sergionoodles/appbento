@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "library_import",
     "library_set_menu_entry",
     "library_add_url",
+    "library_prepare_launch",
     "library_launch",
     "library_launch_log",
     "library_configure",

@@ -800,3 +800,48 @@ fn downloaded_appimage_cannot_overwrite_existing_files_or_import_invalid_content
     assert!(service.integrate_download(&source).is_err());
     assert!(service.list().unwrap().is_empty());
 }
+
+#[test]
+fn preparing_launch_requires_consent_to_add_execute_permission() {
+    let (directory, service, source) = fixture();
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+
+    assert!(!service.prepare_launch(&app.id, false).unwrap().executable);
+    assert_eq!(
+        fs::metadata(&source).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+    assert!(service.prepare_launch(&app.id, true).unwrap().executable);
+    assert_eq!(
+        fs::metadata(&source).unwrap().permissions().mode() & 0o777,
+        0o740
+    );
+    assert!(service.list().unwrap()[0].executable);
+
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(!service.prepare_launch(&app.id, false).unwrap().executable);
+}
+
+#[test]
+fn preparing_launch_rejects_invalid_files_before_changing_permissions() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    fs::write(&source, b"invalid").unwrap();
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
+
+    assert!(service.prepare_launch(&app.id, true).is_err());
+    assert_eq!(
+        fs::metadata(&source).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(service.prepare_launch("missing", true).is_err());
+}

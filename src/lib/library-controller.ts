@@ -3,6 +3,7 @@ import { createLibraryActions } from "./library-actions.ts";
 import type { InstalledApp, ScanWarning, Settings, UpdateCheckResult, UpdateReport } from "./types";
 
 export interface LibraryState {
+  executablePromptId: string | null;
   reviewIds: string[];
   launchAfterReview: boolean;
   apps: InstalledApp[];
@@ -23,7 +24,7 @@ function errorMessage(error: unknown): string {
 
 export function createLibraryController(backend: AppApi) {
   let state: LibraryState = {
-    reviewIds: [], launchAfterReview: false,
+    executablePromptId: null, reviewIds: [], launchAfterReview: false,
     apps: [], settings: null, updateReport: null, appUpdateChecks: {}, scanWarnings: [],
     isLoading: true, isCheckingUpdates: false, operation: null, updatingAppIds: [], error: null,
   };

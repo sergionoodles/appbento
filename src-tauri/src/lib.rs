@@ -134,6 +134,7 @@ pub fn run() {
             apps::library_import,
             apps::library_set_menu_entry,
             apps::library_add_url,
+            apps::library_prepare_launch,
             apps::library_launch,
             apps::library_launch_log,
             apps::library_configure,
