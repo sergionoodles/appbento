@@ -17,7 +17,8 @@ use crate::models::{InstalledApp, LaunchConfig, LaunchMode, PathAccess, SandboxP
 
 #[path = "sandbox_launch.rs"]
 mod execution;
-pub use execution::{launch, launch_with_wait};
+pub use crate::launch_monitor::launch;
+pub(crate) use execution::launch_observed;
 
 #[path = "launch_options.rs"]
 mod launch_options;
@@ -245,6 +246,7 @@ pub fn plan(
             "Bubblewrap supports Type 2 AppImages only; Type 1 is not supported by this sandbox launcher".into(),
         );
     }
+    // The detached monitor owns this sandbox, so closing the UI leaves it alive.
     let mut arguments = vec![
         "--unshare-all",
         "--unshare-user",
@@ -409,6 +411,10 @@ mod tests;
 #[cfg(test)]
 #[path = "sandbox_lifetime_tests.rs"]
 mod lifetime_tests;
+
+#[cfg(test)]
+#[path = "launch_detachment_tests.rs"]
+mod detachment_tests;
 
 #[cfg(test)]
 #[path = "sandbox_gpu_tests.rs"]

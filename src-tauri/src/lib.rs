@@ -6,6 +6,7 @@ mod github;
 mod icons;
 mod import_download;
 mod launch_logs;
+mod launch_monitor;
 mod lifecycle;
 mod models;
 mod persistence;
@@ -77,6 +78,17 @@ async fn updates_install(app_id: String) -> Result<models::InstalledApp, String>
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
+    if arguments.first().map(String::as_str) == Some(launch_monitor::ARGUMENT) {
+        let result = arguments
+            .get(1)
+            .ok_or_else(|| "app id missing".to_owned())
+            .and_then(|id| launch_monitor::run(id, &arguments[2..]));
+        if let Err(error) = result {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "--launch")
@@ -86,7 +98,7 @@ pub fn run() {
                 .and_then(|mut library| library.remove(id).ok_or("app not found".into()))
             {
                 Ok(app) if app.launch_config.is_some() && app.reviewed_digest.is_some() => {
-                    if let Err(error) = sandbox::launch_with_wait(id, &arguments[2..], true) {
+                    if let Err(error) = sandbox::launch(id, &arguments[2..]) {
                         eprintln!("{error}");
                         std::process::exit(1);
                     }
