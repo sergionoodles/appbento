@@ -77,6 +77,9 @@ fn default_plan_denies_host_access_and_preserves_uri_arguments() {
     ]));
 }
 
+#[path = "sandbox_display_tests.rs"]
+mod display_tests;
+
 #[test]
 fn sandbox_plan_creates_xdg_directories_after_mounting_home() {
     let (directory, mut app) = fixture();
@@ -164,7 +167,7 @@ fn grants_are_explicit_and_protected_paths_and_traversal_are_rejected() {
     });
     let policy = directory.0.join("policy");
     let planned = plan(&app, &[], &policy, &Runtime::default()).unwrap();
-    assert!(planned.arguments.contains(&"--share-net".into()));
+    assert!(!planned.arguments.contains(&"--unshare-net".into()));
     assert!(planned.arguments.windows(3).any(|arguments| arguments
         == [
             "--ro-bind",

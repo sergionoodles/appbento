@@ -248,8 +248,10 @@ pub fn plan(
     }
     // The detached monitor owns this sandbox, so closing the UI leaves it alive.
     let mut arguments = vec![
-        "--unshare-all",
         "--unshare-user",
+        "--unshare-pid",
+        "--unshare-uts",
+        "--unshare-cgroup-try",
         "--die-with-parent",
         "--new-session",
         "--cap-drop",
@@ -299,8 +301,14 @@ pub fn plan(
             bind(&mut arguments, "--ro-bind", path, path);
         }
     }
+    // X11 MIT-SHM uses the host IPC namespace; keep other launches isolated.
+    if !config.permissions.display || runtime.available_x11_display().is_none() {
+        arguments.push("--unshare-ipc".into());
+    }
+    if !config.permissions.network {
+        arguments.push("--unshare-net".into());
+    }
     if config.permissions.network {
-        arguments.push("--share-net".into());
         for path in ["/etc/nsswitch.conf", "/etc/hosts"] {
             if Path::new(path).exists() {
                 bind(&mut arguments, "--ro-bind", path, path);

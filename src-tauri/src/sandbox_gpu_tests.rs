@@ -29,17 +29,37 @@ fn gpu_permission_exposes_device_metadata_read_only() {
             },
         });
         let planned = plan(&app, &[], &directory.0.join("policy"), &Runtime::default()).unwrap();
-        for path in ["/sys/dev/char", "/sys/devices"] {
+        for path in ["/sys/dev/char", "/sys/devices", "/sys/module/nvidia"] {
             let is_mounted = planned
                 .arguments
                 .windows(3)
                 .any(|arguments| arguments == ["--ro-bind", path, path]);
-            assert_eq!(
-                is_mounted,
-                gpu && Path::new("/dev/dri").exists() && Path::new(path).exists()
-            );
+            assert_eq!(is_mounted, gpu && Path::new(path).exists());
             assert!(!planned.arguments.windows(3).any(|arguments| {
                 arguments == ["--bind", path, path] || arguments == ["--dev-bind", path, path]
+            }));
+        }
+        for path in ["/dev/nvidiactl", "/dev/nvidia-modeset", "/dev/nvidia0"] {
+            assert_eq!(
+                planned
+                    .arguments
+                    .windows(3)
+                    .any(|arguments| { arguments == ["--dev-bind", path, path] }),
+                gpu && Path::new(path).exists(),
+                "incorrect GPU device access for {path}"
+            );
+        }
+        for path in [
+            "/dev/nvidia-uvm",
+            "/dev/nvidia-uvm-tools",
+            "/dev/nvidia-caps",
+            "/dev",
+            "/sys",
+        ] {
+            assert!(!planned.arguments.windows(3).any(|arguments| {
+                arguments[1] == path
+                    && arguments[2] == path
+                    && matches!(arguments[0].as_str(), "--bind" | "--ro-bind" | "--dev-bind")
             }));
         }
     }

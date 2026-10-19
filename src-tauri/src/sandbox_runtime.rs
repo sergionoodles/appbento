@@ -1,5 +1,7 @@
 use super::bind;
 use crate::models::SandboxPermissions;
+use std::fs;
+use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default)]
@@ -22,6 +24,21 @@ impl Runtime {
                 .or_else(|| dirs::home_dir().map(|home| home.join(".Xauthority"))),
             pulse_cookie: dirs::home_dir().map(|home| home.join(".config/pulse/cookie")),
         }
+    }
+
+    pub(super) fn available_x11_display(&self) -> Option<String> {
+        let number = self
+            .x11_display
+            .as_deref()?
+            .strip_prefix(':')?
+            .split('.')
+            .next()
+            .filter(|number| {
+                !number.is_empty() && number.chars().all(|character| character.is_ascii_digit())
+            })?;
+        Path::new(&format!("/tmp/.X11-unix/X{number}"))
+            .exists()
+            .then(|| number.to_owned())
     }
 }
 
@@ -53,26 +70,16 @@ pub(super) fn add_devices(
                 }
             }
         }
-        if let Some(display) = &runtime.x11_display {
-            let number = display
-                .strip_prefix(':')
-                .and_then(|value| value.split('.').next())
-                .filter(|number| {
-                    !number.is_empty() && number.chars().all(|character| character.is_ascii_digit())
-                });
-            if let Some(number) = number {
-                let socket = format!("/tmp/.X11-unix/X{number}");
-                if Path::new(&socket).exists() {
-                    bind(arguments, "--ro-bind", &socket, &socket);
-                    arguments.extend(["--setenv".into(), "DISPLAY".into(), format!(":{number}")]);
-                    bind_credential(
-                        arguments,
-                        runtime.xauthority.as_deref(),
-                        "/run/user/app/Xauthority",
-                        "XAUTHORITY",
-                    )?;
-                }
-            }
+        if let Some(number) = runtime.available_x11_display() {
+            let socket = format!("/tmp/.X11-unix/X{number}");
+            bind(arguments, "--ro-bind", &socket, &socket);
+            arguments.extend(["--setenv".into(), "DISPLAY".into(), format!(":{number}")]);
+            bind_credential(
+                arguments,
+                runtime.xauthority.as_deref(),
+                "/run/user/app/Xauthority",
+                "XAUTHORITY",
+            )?;
         }
     }
     if permissions.audio {
@@ -99,14 +106,41 @@ pub(super) fn add_devices(
             }
         }
     }
-    if permissions.gpu && Path::new("/dev/dri").exists() {
-        bind(arguments, "--dev-bind", "/dev/dri", "/dev/dri");
-        // Drivers resolve DRM device numbers through sysfs to identify the GPU.
-        for path in ["/sys/dev/char", "/sys/devices"] {
+    if permissions.gpu {
+        if Path::new("/dev/dri").exists() {
+            bind(arguments, "--dev-bind", "/dev/dri", "/dev/dri");
+        }
+        add_nvidia_devices(arguments)?;
+        // Drivers resolve DRM devices and NVIDIA module metadata through sysfs.
+        for path in ["/sys/dev/char", "/sys/devices", "/sys/module/nvidia"] {
             if Path::new(path).exists() {
                 bind(arguments, "--ro-bind", path, path);
             }
         }
+    }
+    Ok(())
+}
+
+fn add_nvidia_devices(arguments: &mut Vec<String>) -> Result<(), String> {
+    for entry in fs::read_dir("/dev").map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let is_graphics_device = matches!(name.as_ref(), "nvidiactl" | "nvidia-modeset")
+            || name.strip_prefix("nvidia").is_some_and(|number| {
+                !number.is_empty() && number.chars().all(|character| character.is_ascii_digit())
+            });
+        if !is_graphics_device
+            || !entry
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_char_device()
+        {
+            continue;
+        }
+        let path = entry.path();
+        let path = path.to_str().ok_or("invalid NVIDIA device path")?;
+        bind(arguments, "--dev-bind", path, path);
     }
     Ok(())
 }
