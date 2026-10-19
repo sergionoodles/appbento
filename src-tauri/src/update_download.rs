@@ -132,10 +132,9 @@ fn content_result(
     }
 }
 
-fn reserve_download() -> Result<(PathBuf, std::fs::File), String> {
-    let directory = persistence::data_path("update-downloads")?;
-    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    persistence::create_temporary(&directory)
+fn reserve_download(directory: &Path) -> Result<(PathBuf, std::fs::File), String> {
+    std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    persistence::create_temporary(directory)
 }
 
 pub async fn install(app: InstalledApp, lifecycle: Lifecycle) -> Result<InstalledApp, String> {
@@ -163,7 +162,8 @@ pub async fn install(app: InstalledApp, lifecycle: Lifecycle) -> Result<Installe
                 .unwrap_or_else(|| "no newer release is available".into()));
         }
     }
-    let (path, file) = tokio::task::spawn_blocking(reserve_download)
+    let managed_dir = lifecycle.managed_dir.clone();
+    let (path, file) = tokio::task::spawn_blocking(move || reserve_download(&managed_dir))
         .await
         .map_err(|error| error.to_string())??;
     let mut file = tokio::fs::File::from_std(file);
@@ -207,13 +207,29 @@ async fn install_download(
     let path = path.to_owned();
     let expected_digest = expected_digest.to_owned();
     let latest = (!is_direct).then(|| resolved.latest.clone());
+    let asset_name = if is_direct
+        && !resolved
+            .asset_name
+            .to_ascii_lowercase()
+            .ends_with(".appimage")
+    {
+        app.file_name.clone()
+    } else {
+        resolved.asset_name.clone()
+    };
     let lifecycle = Lifecycle {
         library_path: lifecycle.library_path.clone(),
         managed_dir: lifecycle.managed_dir.clone(),
         desktop_dir: lifecycle.desktop_dir.clone(),
     };
     tokio::task::spawn_blocking(move || {
-        lifecycle.replace_update(&app, &path, latest.as_deref(), &expected_digest)
+        lifecycle.replace_update(
+            &app,
+            &path,
+            &asset_name,
+            latest.as_deref(),
+            &expected_digest,
+        )
     })
     .await
     .map_err(|error| error.to_string())?
@@ -223,6 +239,22 @@ async fn install_download(
 mod tests {
     use super::*;
     use std::io::{Read, Write};
+
+    #[test]
+    fn download_staging_uses_configured_managed_folder_without_overwriting_files() {
+        let directory = persistence::tests::TemporaryDirectory::new();
+        let managed = directory.0.join("custom-apps");
+        let (first, first_file) = reserve_download(&managed).unwrap();
+        let (second, second_file) = reserve_download(&managed).unwrap();
+
+        assert_eq!(first.parent(), Some(managed.as_path()));
+        assert_eq!(second.parent(), Some(managed.as_path()));
+        assert_ne!(first, second);
+        assert!(first.exists());
+        assert!(second.exists());
+        drop(first_file);
+        drop(second_file);
+    }
 
     async fn response(body: &[u8], advertised_size: u64) -> reqwest::Response {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

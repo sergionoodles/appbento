@@ -68,7 +68,7 @@ fn update_refreshes_embedded_metadata_and_saved_icon() {
         };
 
         let updated = service
-            .replace_update(&app, &staged, Some("3.0.0"), &digest)
+            .replace_update(&app, &staged, "Example.AppImage", Some("3.0.0"), &digest)
             .unwrap();
 
         assert_ne!(updated.icon_path, app.icon_path);
@@ -102,7 +102,7 @@ fn direct_update_reads_embedded_version_and_keeps_icon_when_new_icon_is_invalid(
     };
 
     let updated = service
-        .replace_update(&app, &staged, None, &digest)
+        .replace_update(&app, &staged, "Example.AppImage", None, &digest)
         .unwrap();
 
     assert_eq!(updated.version_current.as_deref(), Some("2.0.0"));
@@ -124,7 +124,7 @@ fn update_keeps_saved_metadata_when_embedded_metadata_is_unavailable() {
     let staged = tests::staged_update(&directory.0, &source);
 
     let updated = service
-        .replace_update(&app, &staged, None, &digest)
+        .replace_update(&app, &staged, "Example.AppImage", None, &digest)
         .unwrap();
 
     assert_eq!(updated.name, app.name);
@@ -145,7 +145,7 @@ fn failed_icon_save_leaves_installed_app_and_library_unchanged() {
     fs::write(directory.0.join("icons"), b"blocked icon directory").unwrap();
 
     assert!(service
-        .replace_update(&app, &staged, Some("2.0.0"), &digest)
+        .replace_update(&app, &staged, "Example.AppImage", Some("2.0.0"), &digest)
         .is_err());
 
     assert_eq!(fs::read(&app.file_path).unwrap(), before);

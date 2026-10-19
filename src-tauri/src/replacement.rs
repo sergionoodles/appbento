@@ -3,8 +3,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use sha2::{Digest, Sha256};
-
 use super::{file_created_at, open_appimage, recovery, Lifecycle};
 use crate::models::InstalledApp;
 use crate::persistence::{self, Repository};
@@ -17,6 +15,7 @@ impl Lifecycle {
         &self,
         expected: &InstalledApp,
         staged: &Path,
+        asset_name: &str,
         latest: Option<&str>,
         expected_digest: &str,
     ) -> Result<InstalledApp, String> {
@@ -27,16 +26,16 @@ impl Lifecycle {
                 recovery::recover(repository)?;
                 let current = repository.state.get(&expected.id).ok_or("app not found")?;
                 validate_snapshot(expected, current, expected_digest)?;
-                let directory = self
-                    .library_path
-                    .parent()
-                    .ok_or("invalid library path")?
-                    .join("updates");
-                let destination = update_destination(current, &directory)?;
+                let destination = update_destination(&self.managed_dir, asset_name)?;
+                // Portable updates keep the original path as their ID while using an owned copy.
+                let owns_current = current.integrated
+                    || current.file_path != current.id
+                    || Path::new(&current.file_path).parent() == Some(&self.managed_dir);
                 if destination != Path::new(&current.file_path)
-                    && destination
-                        .try_exists()
-                        .map_err(|error| error.to_string())?
+                    && (recovery::identity(&destination)?.is_some()
+                        || repository.state.values().any(|app| {
+                            app.id != current.id && Path::new(&app.file_path) == destination
+                        }))
                 {
                     return Err("update destination already exists".into());
                 }
@@ -51,6 +50,7 @@ impl Lifecycle {
                     &destination,
                     latest,
                     &icon_directory,
+                    owns_current,
                 )?;
                 let preparation =
                     validate_snapshot(expected, current, expected_digest).and_then(|_| {
@@ -59,7 +59,7 @@ impl Lifecycle {
                             &destination,
                             &temporary,
                             app,
-                            destination == Path::new(&current.file_path),
+                            owns_current.then(|| Path::new(&current.file_path)),
                         )
                     });
                 let journal = match preparation {
@@ -73,7 +73,9 @@ impl Lifecycle {
                     recovery::finish(&self.library_path, &journal, false)?;
                     return Err(error);
                 }
-                let installation = if matches!(journal.operation, recovery::Operation::Replace) {
+                let replaces_in_place = matches!(journal.operation, recovery::Operation::Replace)
+                    && journal.artifacts[0].original == destination;
+                let installation = if replaces_in_place {
                     fs::rename(&temporary, &destination)
                 } else {
                     fs::hard_link(&temporary, &destination)
@@ -126,15 +128,17 @@ fn validate_snapshot(
     Ok(())
 }
 
-fn update_destination(app: &InstalledApp, directory: &Path) -> Result<PathBuf, String> {
-    let current = Path::new(&app.file_path);
-    if app.integrated {
-        return Ok(current.to_owned());
+fn update_destination(directory: &Path, asset_name: &str) -> Result<PathBuf, String> {
+    if asset_name.is_empty()
+        || asset_name.contains(['/', '\\'])
+        || asset_name.chars().any(char::is_control)
+        || !asset_name.to_ascii_lowercase().ends_with(".appimage")
+    {
+        return Err(
+            "update asset must have a valid AppImage filename without path separators".into(),
+        );
     }
-    if current.parent() == Some(directory) {
-        return Ok(current.to_owned());
-    }
-    Ok(directory.join(format!("{:x}.AppImage", Sha256::digest(app.id.as_bytes()))))
+    Ok(directory.join(asset_name))
 }
 
 fn prepare_journal(
@@ -142,15 +146,15 @@ fn prepare_journal(
     destination: &Path,
     temporary: &Path,
     app: InstalledApp,
-    is_owned_destination: bool,
+    owned_current: Option<&Path>,
 ) -> Result<recovery::Journal, String> {
     let replacement = recovery::Artifact {
         original: destination.to_owned(),
         stage: temporary.to_owned(),
         identity: recovery::identity(temporary)?,
     };
-    let (operation, artifacts) = if is_owned_destination {
-        let backup = reserve_backup(destination)?;
+    let (operation, artifacts) = if let Some(current) = owned_current {
+        let backup = reserve_backup(current)?;
         (recovery::Operation::Replace, vec![backup, replacement])
     } else {
         (recovery::Operation::Integrate, vec![replacement])
@@ -189,6 +193,7 @@ fn stage_update(
     destination: &Path,
     latest: Option<&str>,
     icon_directory: &Path,
+    owns_current: bool,
 ) -> Result<(PathBuf, InstalledApp), String> {
     let parent = destination.parent().ok_or("invalid update destination")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -206,7 +211,8 @@ fn stage_update(
                 .ok_or("update path must be UTF-8")?
                 .into(),
             source_path: current.source_path.clone().or_else(|| {
-                (destination != Path::new(&current.file_path)).then(|| current.file_path.clone())
+                (!owns_current && destination != Path::new(&current.file_path))
+                    .then(|| current.file_path.clone())
             }),
             file_name: destination
                 .file_name()
@@ -245,7 +251,7 @@ fn refresh_metadata(
         eprintln!("update metadata unavailable for {}: {error}", app.id);
         Default::default()
     });
-    // Staging and managed filenames do not describe the new release's identity.
+    // Temporary staging filenames do not describe the new release's identity.
     let identity = crate::app_identity::resolve(&embedded, "");
     let metadata = crate::embedded_icon::discover(path).unwrap_or_else(|error| {
         eprintln!("update icon unavailable for {}: {error}", app.id);

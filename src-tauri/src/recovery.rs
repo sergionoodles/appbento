@@ -201,6 +201,9 @@ fn finish_replacement(journal: &Journal, committed: bool) -> Result<(), String> 
             return Err("replacement recovery staging file was changed".into());
         }
     }
+    if backup.original != replacement.original {
+        return finish_relocation(backup, replacement, committed);
+    }
     let current = identity(&backup.original)?;
     if current.is_some() && current != backup.identity && current != replacement.identity {
         return Err("replacement recovery destination was changed".into());
@@ -217,4 +220,32 @@ fn finish_replacement(journal: &Journal, committed: bool) -> Result<(), String> 
     remove_if_present(&backup.stage)?;
     remove_if_present(&replacement.stage)?;
     sync_parent(&backup.original)
+}
+
+fn finish_relocation(
+    backup: &Artifact,
+    replacement: &Artifact,
+    committed: bool,
+) -> Result<(), String> {
+    let original = identity(&backup.original)?;
+    let destination = identity(&replacement.original)?;
+    if original.is_some() && original != backup.identity {
+        return Err("replacement recovery original was changed".into());
+    }
+    if destination.is_some() && destination != replacement.identity {
+        return Err("replacement recovery destination was changed".into());
+    }
+    if committed {
+        if destination != replacement.identity {
+            return Err("committed replacement is missing".into());
+        }
+        remove_if_present(&backup.original)?;
+        remove_if_present(&backup.stage)?;
+        remove_if_present(&replacement.stage)?;
+    } else {
+        restore_removed_artifact(backup)?;
+        remove_created_artifact(replacement)?;
+    }
+    sync_parent(&backup.original)?;
+    sync_parent(&replacement.original)
 }

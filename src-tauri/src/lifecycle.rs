@@ -395,3 +395,7 @@ mod tests;
 #[cfg(test)]
 #[path = "update_metadata_tests.rs"]
 mod update_metadata_tests;
+
+#[cfg(test)]
+#[path = "update_path_tests.rs"]
+mod update_path_tests;

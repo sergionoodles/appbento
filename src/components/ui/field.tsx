@@ -55,9 +55,11 @@ export function Notice({ tone = "info", icon, children, action }: {
     ok: "border-[color-mix(in_oklab,var(--ok)_35%,transparent)] bg-[color-mix(in_oklab,var(--ok)_7%,transparent)] text-[var(--ok)]",
   }[tone];
   return (
-    <div className={cn("flex items-start gap-3 rounded-lg border px-4 py-3 text-[13px] leading-snug", toneClass)}>
-      {icon ? <span className="shrink-0 mt-px">{icon}</span> : null}
-      <div className="flex-1 min-w-0">{children}</div>
+    <div className={cn("flex items-center gap-3 rounded-lg border px-4 py-3 text-[13px] leading-snug", toneClass)}>
+      <div className="flex flex-1 min-w-0 items-start gap-3">
+        {icon ? <span className="shrink-0 mt-px">{icon}</span> : null}
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
       {action ? <div className="shrink-0 -my-1">{action}</div> : null}
     </div>
   );
