@@ -168,6 +168,44 @@ fn data_url_rejects_paths_outside_icons_and_svg_active_content() {
 }
 
 #[test]
+fn svg_icons_accept_same_document_url_references() {
+    let rawmakase_icon = br##"<svg xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="mk"><circle cx="512" cy="512" r="158"/></clipPath></defs><g clip-path="url(#mk)"><path d="M0 0"/></g></svg>"##;
+    assert_eq!(
+        image_format(rawmakase_icon).unwrap(),
+        ("svg", "image/svg+xml")
+    );
+    for reference in ["url(#mk)", "url( #mk )", "url('#mk')", "URL(\"#mk\")"] {
+        let svg = format!(
+            "<svg><defs><linearGradient id='mk'/></defs><style>path {{ fill: {reference}; }}</style><path d='M0 0'/></svg>"
+        );
+        assert_eq!(
+            image_format(svg.as_bytes()).unwrap(),
+            ("svg", "image/svg+xml")
+        );
+    }
+}
+
+#[test]
+fn svg_icons_reject_external_and_malformed_url_references() {
+    for reference in [
+        "url(icon.svg#mk)",
+        "url(/tmp/icon.svg#mk)",
+        "url(file:///tmp/icon.svg#mk)",
+        "url(https://example.com/icon.svg#mk)",
+        "url(//example.com/icon.svg#mk)",
+        "url(data:image/svg+xml,example)",
+        "url('#mk\")",
+        "url(#)",
+        "url(#mk) url(icon.svg#mk)",
+        "url(#mk) url(&#35;mk)",
+        "url(#mk) @import 'icon.css'",
+    ] {
+        let svg = format!("<svg><style>path {{ fill: {reference}; }}</style></svg>");
+        assert!(image_format(svg.as_bytes()).is_err(), "{reference}");
+    }
+}
+
+#[test]
 fn base64_handles_padding() {
     assert_eq!(base64(b""), "");
     assert_eq!(base64(b"f"), "Zg==");
@@ -285,7 +323,6 @@ fn ordinary_svg_comments_namespaces_and_static_styles_are_supported() {
     for svg in [
         "<svg><style>@import 'https://example.com/style.css';</style></svg>",
         "<svg><style>.icon{fill:url(https://example.com/icon)}</style></svg>",
-        "<svg><style>.icon{fill:url(#gradient)}</style></svg>",
         "<svg><style>@\\69mport 'external.css';</style></svg>",
         "<svg><style>.icon{fill:u&#114;l(external)}</style></svg>",
         "<svg xmlns:svg='http://www.w3.org/2000/svg'><svg:script>alert(1)</svg:script></svg>",

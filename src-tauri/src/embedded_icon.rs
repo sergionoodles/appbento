@@ -559,7 +559,7 @@ mod tests {
             NEXT_ID.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(temporary.join("root/usr/share/icons")).unwrap();
-        let icon = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"><rect width=\"1\" height=\"1\"/></svg>";
+        let icon = br##"<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><defs><clipPath id="mk"><circle r="1"/></clipPath></defs><g clip-path="url(#mk)"><rect width="1" height="1"/></g></svg>"##;
         fs::write(temporary.join("root/usr/share/icons/sample.svg"), icon).unwrap();
         let fallback = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"2\"/>";
         fs::write(temporary.join("root/fallback.svg"), fallback).unwrap();

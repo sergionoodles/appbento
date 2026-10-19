@@ -227,6 +227,10 @@ fn is_standalone_svg(text: &str) -> Result<bool, String> {
         .map_err(|error| error.to_string())?;
     let imports_or_urls =
         Regex::new(r"(?i)@\s*import\b|url\s*\(").map_err(|error| error.to_string())?;
+    // Fragment references stay inside the copied SVG; other URLs depend on external resources.
+    let local_urls = Regex::new(r##"(?i)url\s*\(\s*(?:#[\w.:-]+|"#[\w.:-]+"|'#[\w.:-]+')\s*\)"##)
+        .map_err(|error| error.to_string())?;
+    let text_without_local_urls = local_urls.replace_all(&text, "");
     let lower = text.to_ascii_lowercase();
     let forbidden = [
         "<!",
@@ -242,7 +246,7 @@ fn is_standalone_svg(text: &str) -> Result<bool, String> {
     ];
     Ok(!active_tags.is_match(&text)
         && !active_attributes.is_match(&text)
-        && !imports_or_urls.is_match(&text)
+        && !imports_or_urls.is_match(&text_without_local_urls)
         && !forbidden.iter().any(|value| lower.contains(value)))
 }
 
