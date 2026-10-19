@@ -27,7 +27,7 @@ export interface Commands {
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
   library_add_url: { args: { url: string }; result: InstalledApp };
   library_set_menu_entry: { args: { id: string; enabled: boolean }; result: InstalledApp };
-  library_import: { args: { sourcePath: string }; result: InstalledApp };
+  library_import: { args: { sourcePath: string; moveToManaged: boolean }; result: InstalledApp };
   library_launch_log: { args: { id: string }; result: LaunchLog | null };
   library_prepare_launch: { args: { id: string; makeExecutable: boolean }; result: InstalledApp };
   library_launch: { args: { id: string }; result: InstalledApp };
@@ -63,7 +63,7 @@ export interface AppApi extends SelfUpdateBackend {
   libraryScan(): Promise<ScanReport>;
   libraryAddUrl(url: string): Promise<InstalledApp>;
   librarySetMenuEntry(id: string, enabled: boolean): Promise<InstalledApp>;
-  libraryImport(sourcePath: string): Promise<InstalledApp>;
+  libraryImport(sourcePath: string, moveToManaged: boolean): Promise<InstalledApp>;
   libraryLaunchLog(id: string): Promise<LaunchLog | null>;
   libraryPrepareLaunch(id: string, makeExecutable: boolean): Promise<InstalledApp>;
   libraryLaunch(id: string): Promise<InstalledApp>;
@@ -127,7 +127,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
     libraryAddUrl: (url) => transport("library_add_url", { url }),
     librarySetMenuEntry: (id, enabled) => transport("library_set_menu_entry", { id, enabled }),
-    libraryImport: (sourcePath) => transport("library_import", { sourcePath }),
+    libraryImport: (sourcePath, moveToManaged) => transport("library_import", { sourcePath, moveToManaged }),
     libraryLaunchLog: (id) => transport("library_launch_log", { id }),
     libraryPrepareLaunch: (id, makeExecutable) => transport("library_prepare_launch", { id, makeExecutable }),
     libraryLaunch: (id) => transport("library_launch", { id }),

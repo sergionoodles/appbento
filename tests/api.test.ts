@@ -16,6 +16,20 @@ test("native library failures remain errors instead of displaying sample apps", 
 import { createNativeApi, validateExternalUrl } from "../src/lib/api.ts";
 import { createPreviewApi } from "../src/lib/preview.ts";
 
+test("native imports explicitly choose between registering in place and moving", async () => {
+  const calls: unknown[] = [];
+  const backend = createNativeApi(async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return createPreviewApp("Imported", null) as Commands[Command]["result"];
+  });
+  await backend.libraryImport("/Downloads/Imported.AppImage", false);
+  await backend.libraryImport("/Downloads/Imported.AppImage", true);
+  assert.deepEqual(calls, [
+    { command: "library_import", args: { sourcePath: "/Downloads/Imported.AppImage", moveToManaged: false } },
+    { command: "library_import", args: { sourcePath: "/Downloads/Imported.AppImage", moveToManaged: true } },
+  ]);
+});
+
 test("all native read failures propagate without fabricating state", async () => {
   const backend = createNativeApi(async () => { throw new Error("IPC unavailable"); });
   for (const read of [backend.libraryList, backend.settingsGet, backend.updatesCheckAll]) {

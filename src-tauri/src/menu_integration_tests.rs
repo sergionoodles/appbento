@@ -9,7 +9,7 @@ fn importing_and_discovering_apps_never_creates_launchers() {
         .apps
         .remove(0);
     assert!(discovered.desktop_id.is_none());
-    let imported = service.integrate(&source).unwrap();
+    let imported = service.integrate(&source, false).unwrap();
     assert!(imported.desktop_id.is_none());
     assert!(!service.desktop_dir.exists());
     service.configure(&imported.id, &direct_config()).unwrap();
@@ -33,7 +33,7 @@ fn menu_creation_and_removal_preserve_portable_and_managed_apps() {
     for is_imported in [false, true] {
         let (directory, service, source) = fixture();
         let app = if is_imported {
-            service.integrate(&source).unwrap()
+            service.integrate(&source, false).unwrap()
         } else {
             service
                 .scan(vec![directory.0.clone()])
@@ -62,7 +62,7 @@ fn menu_creation_and_removal_preserve_portable_and_managed_apps() {
 #[test]
 fn menu_changes_refuse_foreign_entries_and_unknown_apps() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     fs::create_dir_all(&service.desktop_dir).unwrap();
     let path = service
         .desktop_dir
@@ -84,7 +84,7 @@ fn menu_changes_refuse_foreign_entries_and_unknown_apps() {
 #[test]
 fn launch_config_changes_refresh_existing_menu_entries_without_exposing_environment_values() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let path = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let mut previous = fs::read_to_string(&path).unwrap();
@@ -133,7 +133,7 @@ fn interrupted_menu_changes_recover_according_to_library_commit() {
     for enabled in [false, true] {
         for committed in [false, true] {
             let (_directory, service, source) = fixture();
-            let imported = service.integrate(&source).unwrap();
+            let imported = service.integrate(&source, false).unwrap();
             let previous = if enabled {
                 imported
             } else {

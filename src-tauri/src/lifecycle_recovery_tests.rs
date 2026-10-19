@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn startup_recovers_interrupted_removal_before_commit() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let app_path = PathBuf::from(&app.file_path);
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
@@ -86,7 +86,7 @@ fn startup_rolls_back_uncommitted_integration_and_preserves_source() {
 #[test]
 fn startup_preserves_committed_integration_and_cleans_stages() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let artifacts = vec![
@@ -114,7 +114,7 @@ fn startup_preserves_committed_integration_and_cleans_stages() {
 #[test]
 fn startup_cleans_committed_removal_stages() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
     let artifacts = vec![
@@ -150,7 +150,7 @@ fn startup_cleans_committed_removal_stages() {
 #[test]
 fn startup_conflicts_do_not_overwrite_foreign_files() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let artifact = crash_artifact(Path::new(&app.file_path));
     fs::remove_file(&artifact.original).unwrap();
@@ -212,7 +212,7 @@ fn startup_restores_permissions_after_uncommitted_in_place_integration() {
 #[test]
 fn idempotent_integration_restores_owner_execution_and_persists_metadata() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     fs::set_permissions(&app.file_path, fs::Permissions::from_mode(0o645)).unwrap();
     persistence::mutate(&service.library_path, |library: &mut Library| {
@@ -220,7 +220,7 @@ fn idempotent_integration_restores_owner_execution_and_persists_metadata() {
         Ok(())
     })
     .unwrap();
-    let refreshed = service.integrate(Path::new(&app.file_path)).unwrap();
+    let refreshed = service.integrate(Path::new(&app.file_path), false).unwrap();
     assert!(refreshed.executable);
     assert_eq!(
         fs::metadata(&app.file_path).unwrap().permissions().mode() & 0o777,
@@ -252,7 +252,7 @@ fn scan_reports_invalid_candidates_without_losing_valid_apps() {
 #[test]
 fn startup_distinguishes_uncommitted_integration_with_unchanged_metadata() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     fs::set_permissions(&app.file_path, fs::Permissions::from_mode(0o700)).unwrap();
     let desktop = service.desktop_dir.join(app.desktop_id.as_ref().unwrap());
@@ -320,7 +320,7 @@ fn interrupted_replacement(
 #[test]
 fn interrupted_update_rolls_back_bytes_and_library_before_commit() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     assert_eq!(service.list().unwrap(), vec![app.clone()]);
@@ -334,7 +334,7 @@ fn interrupted_update_rolls_back_bytes_and_library_before_commit() {
 #[test]
 fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     let updated = journal.installed_app.as_ref().unwrap().clone();
@@ -354,7 +354,7 @@ fn interrupted_committed_update_preserves_new_bytes_and_cleans_backup() {
 #[test]
 fn interrupted_update_does_not_overwrite_foreign_destination() {
     let (_directory, service, source) = fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let app = service.set_menu_entry(&app.id, true).unwrap();
     let (journal, original) = interrupted_replacement(&service, &app);
     let destination = Path::new(&app.file_path);

@@ -42,7 +42,7 @@ export function FoldersDialog({ pickFolder, isNative, initial, onClose, onSaved,
         <fieldset disabled={isSaving} className="flex flex-col gap-4">
           <div>
             <label htmlFor="managed-folder" className="block font-medium mb-1">Managed folder</label>
-            <p className="text-[13px] text-[var(--muted)] mb-2">Integrated AppImages are copied here. This folder is always scanned. Enter an absolute path.</p>
+            <p className="text-[13px] text-[var(--muted)] mb-2">Downloaded AppImages and apps you choose to move are stored here. This folder is always scanned. Enter an absolute path.</p>
             <div className="flex gap-2">
               <Input id="managed-folder" required value={managed} onChange={(event) => setManaged(event.target.value)} />
               <Button type="button" onClick={() => void browse(true)} disabled={!isNative}>Browse</Button>

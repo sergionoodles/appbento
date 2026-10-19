@@ -32,7 +32,7 @@ fn fixture() -> (TemporaryDirectory, ConfigurationBackup) {
         managed_dir: home.join("Applications"),
         desktop_dir: directory.0.join("old-desktop"),
     };
-    let app = lifecycle.integrate(&source).unwrap();
+    let app = lifecycle.integrate(&source, false).unwrap();
     let app = lifecycle.set_menu_entry(&app.id, true).unwrap();
     let grant = home.join("Documents");
     fs::create_dir(&grant).unwrap();

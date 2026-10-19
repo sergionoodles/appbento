@@ -21,6 +21,7 @@ import { IconBackendContext } from "@/components/icon-backend-context";
 import { LaunchLogsDialog } from "@/components/dialogs/launch-logs-dialog";
 import { ExecutableDialog } from "@/components/dialogs/executable-dialog";
 import { RemoveDialog } from "@/components/dialogs/remove-dialog";
+import { ImportLocationDialog } from "@/components/dialogs/import-location-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSelfUpdate } from "@/lib/use-self-update";
@@ -70,7 +71,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [hasEntered, setHasEntered] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const { apps, settings, updateReport, appUpdateChecks, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, executablePromptId, reviewIds, launchAfterReview, controller } = useLibrary(backend);
+  const { apps, settings, updateReport, appUpdateChecks, scanWarnings, isLoading, isCheckingUpdates, operation, updatingAppIds, error, executablePromptId, reviewIds, importPromptIds, launchAfterReview, controller } = useLibrary(backend);
   const selfUpdate = useSelfUpdate(backend);
   const selfLauncher = useSelfLauncher(backend);
   const markEntered = useCallback(() => setHasEntered(true), []);
@@ -93,7 +94,10 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   const settingsApp = displayApps.find((app) => app.id === settingsId);
   const configuringApp = settingsApp ?? (reviewingApp ? displayApps.find((app) => app.id === reviewingApp.id) : undefined);
   const configuringOriginalName = apps.find((app) => app.id === configuringApp?.id)?.name ?? "";
-  const hasOtherModal = !!executableApp || !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || isSelfUpdateOpen || showAbout || !!removingApp || !!reviewingApp;
+  const importingApp = apps.find((app) => app.id === importPromptIds[0]);
+  const hasExistingModal = !!executableApp || !!logsApp || !!settingsApp || showAddUrl || showFolders || showConfiguration || isSelfUpdateOpen || showAbout || !!removingApp || !!reviewingApp;
+  const showImport = !!importingApp && !hasExistingModal;
+  const hasOtherModal = hasExistingModal || !!importingApp;
   const showLauncher = !hasOtherModal && !isLoading && (selfLauncher.isRequested || selfLauncher.shouldPrompt);
   const hasModal = hasOtherModal || showLauncher;
   const captureFocus = () => setReturnFocusElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -207,6 +211,9 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
       {showAddUrl ? <AddUrlDialog returnFocusElement={returnFocusElement} managedDir={settings?.managed_dir} onClose={() => setShowAddUrl(false)} onAdd={controller.addUrl} isDownloading={operation !== null} error={error} /> : null}
       {showFolders && settings ? <FoldersDialog returnFocusElement={returnFocusElement} pickFolder={backend.pickFolder} isNative={backend.isTauri} initial={settings} onClose={() => setShowFolders(false)} onSaved={controller.saveFolders} isSaving={operation !== null} error={error} /> : null}
       {removingApp ? <RemoveDialog returnFocusElement={returnFocusElement} app={removingApp} onClose={() => setRemovingId(null)} onRemove={(deleteFile) => controller.remove(removingApp.id, deleteFile)} isRemoving={operation !== null} error={error} /> : null}
+      {showImport && settings ? <ImportLocationDialog key={importingApp.id} app={importingApp} managedDir={settings.managed_dir}
+        onKeep={controller.keepImportLocation} onMove={() => controller.moveImport(importingApp.id)} isMoving={operation !== null}
+        error={error} returnFocusElement={returnFocusElement} /> : null}
     </>
   );
 }

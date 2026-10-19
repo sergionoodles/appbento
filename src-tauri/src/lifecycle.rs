@@ -269,7 +269,11 @@ impl Lifecycle {
                         let existing = library
                             .get(&id)
                             .or_else(|| library.values().find(|app| app.file_path == id));
-                        let app = discovered_app(&path, &file, existing, identity)?;
+                        let app = InstalledApp {
+                            integrated: existing.is_some_and(|app| app.integrated)
+                                || is_managed_path(&self.managed_dir, &path)?,
+                            ..discovered_app(&path, &file, existing, identity)?
+                        };
                         library.insert(app.id.clone(), app.clone());
                         if !found
                             .iter()
@@ -367,6 +371,15 @@ fn candidate_path(path: &Path) -> Result<PathBuf, String> {
     fs::canonicalize(path).map_err(|error| error.to_string())
 }
 
+fn is_managed_path(managed_dir: &Path, path: &Path) -> Result<bool, String> {
+    let managed = match fs::canonicalize(managed_dir) {
+        Ok(managed) => managed,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.to_string()),
+    };
+    Ok(path.parent() == Some(managed.as_path()))
+}
+
 fn removal_artifact(path: &Path) -> Result<recovery::Artifact, String> {
     let parent = path.parent().ok_or("invalid removal path")?;
     loop {
@@ -399,3 +412,7 @@ mod update_metadata_tests;
 #[cfg(test)]
 #[path = "update_path_tests.rs"]
 mod update_path_tests;
+
+#[cfg(test)]
+#[path = "import_tests.rs"]
+mod import_tests;

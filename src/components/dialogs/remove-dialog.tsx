@@ -28,8 +28,8 @@ export function RemoveDialog({ app, onClose, onRemove, isRemoving, error, return
         Also delete the AppImage file permanently
       </label>
       <p id={deletionHintId} className="text-[13px] text-[var(--muted)]">{app.integrated
-        ? "This app was imported into AppBento’s managed folder. You can also delete its AppImage file from that folder."
-        : "File deletion is only available for apps imported into AppBento’s managed folder. This app hasn’t been imported. To delete its file, use your file manager at the location shown above."}</p>
+        ? "This AppImage is managed by AppBento. You can also delete its file when removing the app."
+        : "This AppImage is outside AppBento’s managed folder. To delete its file, use your file manager at the location shown above."}</p>
       {!deleteFile ? <p className="text-[13px] text-[var(--muted)]">The file stays on disk. A later scan can add it again.</p> : null}
       {error ? <p role="alert" className="text-[var(--bad)] text-[14px]">{error}</p> : null}
       <div className="flex justify-end gap-2">

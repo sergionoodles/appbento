@@ -7,7 +7,7 @@ fn updates_use_managed_folder_and_official_release_filename() {
     for is_integrated in [false, true] {
         let (directory, service, source) = tests::fixture();
         let app = if is_integrated {
-            service.integrate(&source).unwrap()
+            service.integrate(&source, false).unwrap()
         } else {
             service
                 .scan(vec![directory.0.clone()])
@@ -100,7 +100,7 @@ fn successive_releases_replace_old_managed_filename_and_preserve_original_source
 #[test]
 fn update_refuses_existing_destinations_and_unsafe_release_filenames() {
     let (directory, service, source) = tests::fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
     let staged = tests::staged_update(&directory.0, &source);
     let destination = service.managed_dir.join(RELEASE_NAME);

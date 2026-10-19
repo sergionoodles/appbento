@@ -169,7 +169,7 @@ fn prepare_journal(
     })
 }
 
-fn reserve_backup(destination: &Path) -> Result<recovery::Artifact, String> {
+pub(super) fn reserve_backup(destination: &Path) -> Result<recovery::Artifact, String> {
     loop {
         let stage = persistence::temporary_path(destination.parent().ok_or("invalid destination")?);
         match fs::hard_link(destination, &stage) {
@@ -222,6 +222,7 @@ fn stage_update(
             size_bytes: metadata.len(),
             file_created_at: file_created_at(&metadata),
             executable: true,
+            integrated: true,
             reviewed_digest: current
                 .launch_config
                 .as_ref()

@@ -79,11 +79,15 @@ pub async fn library_add_url(url: String) -> Result<InstalledApp, String> {
 }
 
 #[tauri::command]
-pub async fn library_import(source_path: String) -> Result<InstalledApp, String> {
-    let app =
-        tokio::task::spawn_blocking(move || lifecycle()?.integrate(&PathBuf::from(source_path)))
-            .await
-            .map_err(|error| error.to_string())??;
+pub async fn library_import(
+    source_path: String,
+    move_to_managed: bool,
+) -> Result<InstalledApp, String> {
+    let app = tokio::task::spawn_blocking(move || {
+        lifecycle()?.import_appimage(&PathBuf::from(source_path), move_to_managed)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
     match discover_icon(&app).await {
         Ok(discovered) => Ok(discovered),
         Err(error) => {

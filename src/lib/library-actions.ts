@@ -18,6 +18,16 @@ export function createLibraryActions(
   const publishApps = (apps: InstalledApp[]) => {
     publishState({ apps, updateReport: null });
   };
+
+  const offerMove = async (apps: InstalledApp[]) => {
+    const settings = getState().settings ?? await backend.settingsGet();
+    const managedDirectory = settings.managed_dir.replace(/\/+$/, "");
+    const externalIds = apps.filter((app) => {
+      const directory = app.file_path.slice(0, app.file_path.lastIndexOf("/"));
+      return directory !== managedDirectory;
+    }).map((app) => app.id);
+    publishState({ settings, importPromptIds: [...new Set([...getState().importPromptIds, ...externalIds])] });
+  };
   const launchAndRefresh = async (id: string, makeExecutable = false) => {
     try {
       const prepared = await backend.libraryPrepareLaunch(id, makeExecutable);
@@ -48,12 +58,22 @@ export function createLibraryActions(
   };
 
   const scan = async () => {
+    const previousIds = new Set(getState().apps.map((app) => app.id));
     const report = await backend.libraryScan();
     publishApps(await backend.libraryList());
     publishState({ scanWarnings: report.warnings });
+    await offerMove(report.apps.filter((app) => !previousIds.has(app.id)));
   };
 
   return {
+    keepImportLocation: () => publishState({ importPromptIds: getState().importPromptIds.slice(1), error: null }),
+    moveImport: (id: string) => runAppOperation(id, "Move AppImage", async () => {
+      const app = getState().apps.find((entry) => entry.id === id);
+      if (!app) throw new Error("App not found");
+      await backend.libraryImport(app.file_path, true);
+      publishApps(await backend.libraryList());
+      publishState({ importPromptIds: getState().importPromptIds.filter((appId) => appId !== id) });
+    }, true),
     dismissExecutablePrompt: () => publishState({ executablePromptId: null, error: null }),
     confirmExecutable: () => {
       const id = getState().executablePromptId;
@@ -124,8 +144,9 @@ export function createLibraryActions(
       const selected = await backend.pickAppImage();
       if (!selected) return;
 
-      await backend.libraryImport(selected);
+      const imported = await backend.libraryImport(selected, false);
       publishApps(await backend.libraryList());
+      await offerMove([imported]);
     }, true),
     saveFolders: (settings: Settings) => runOperation("Save folders", async () => {
       const saved = await backend.settingsSet(settings);
@@ -134,7 +155,7 @@ export function createLibraryActions(
     }, true),
     remove: (id: string, deleteFile: boolean) => runAppOperation(id, "Remove app", async () => {
       await backend.libraryRemove(id, deleteFile);
-      publishState({ apps: getState().apps.filter((app) => app.id !== id), reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), updateReport: null });
+      publishState({ apps: getState().apps.filter((app) => app.id !== id), reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), importPromptIds: getState().importPromptIds.filter((appId) => appId !== id), updateReport: null });
     }, true),
     async openExternal(url: string) {
       try {

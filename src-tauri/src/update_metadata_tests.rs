@@ -53,7 +53,7 @@ fn update_refreshes_embedded_metadata_and_saved_icon() {
     for is_integrated in [false, true] {
         let (directory, service, source) = tests::fixture();
         let app = if is_integrated {
-            service.integrate(&source).unwrap()
+            service.integrate(&source, false).unwrap()
         } else {
             service
                 .scan(vec![directory.0.clone()])
@@ -136,7 +136,7 @@ fn update_keeps_saved_metadata_when_embedded_metadata_is_unavailable() {
 #[test]
 fn failed_icon_save_leaves_installed_app_and_library_unchanged() {
     let (directory, service, source) = tests::fixture();
-    let app = service.integrate(&source).unwrap();
+    let app = service.integrate(&source, false).unwrap();
     let before = fs::read(&app.file_path).unwrap();
     let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
     let Some(staged) = metadata_update(&directory.0, &source, NEW_ICON) else {
