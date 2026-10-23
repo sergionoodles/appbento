@@ -2,6 +2,7 @@ mod app_identity;
 mod apps;
 mod configuration;
 mod embedded_icon;
+mod file_association;
 mod github;
 mod icons;
 mod import_download;
@@ -113,13 +114,18 @@ pub fn run() {
         }
     }
 
+    let open_request =
+        file_association::OpenRequest::new(file_association::requested_path(&arguments));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(self_update::SelfUpdateState::default())
+        .manage(open_request)
         .setup(|_| {
             self_update_installation::notify_startup()?;
+            file_association::register_at_startup();
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -141,6 +147,7 @@ pub fn run() {
             self_launcher::self_launcher_dismiss,
             self_update::self_update_check,
             self_update::self_update_install,
+            file_association::open_request_take,
             apps::library_list,
             apps::library_scan,
             apps::library_import,
@@ -203,6 +210,7 @@ mod permission_tests {
             "self_launcher_dismiss",
             "self_update_check",
             "self_update_install",
+            "open_request_take",
         ] {
             assert!(
                 authority

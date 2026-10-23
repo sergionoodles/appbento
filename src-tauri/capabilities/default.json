@@ -12,6 +12,7 @@
     "allow-self-launcher-dismiss",
     "allow-self-update-check",
     "allow-self-update-install",
+    "allow-open-request-take",
     "dialog:allow-open",
     "dialog:allow-save",
     {

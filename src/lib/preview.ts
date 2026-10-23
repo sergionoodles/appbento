@@ -56,6 +56,7 @@ export function createPreviewApi(): AppApi {
     async selfLauncherStatus() { return { ...launcherStatus }; },
     async selfLauncherInstall() { launcherStatus = { installed: true, dismissed: true }; return { ...launcherStatus }; },
     async selfLauncherDismiss() { launcherStatus = { ...launcherStatus, dismissed: true }; return { ...launcherStatus }; },
+    async openRequestTake() { return null; },
     async selfUpdateCheck() { return { currentVersion: "0.6.5", update: null, unavailableReason: "Updating AppBento requires the desktop AppImage." }; },
     async selfUpdateInstall() { throw new Error("Updating AppBento requires the desktop AppImage."); },
     async configurationExport() { throw new Error("Exporting settings requires the desktop app."); },

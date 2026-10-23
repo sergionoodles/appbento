@@ -4,6 +4,7 @@ const COMMANDS: &[&str] = &[
     "self_launcher_dismiss",
     "self_update_check",
     "self_update_install",
+    "open_request_take",
     "library_list",
     "library_icon",
     "library_set_icon",

@@ -118,6 +118,16 @@ export function createLibraryController(backend: AppApi) {
     }
   };
 
+  const actions = createLibraryActions(backend, () => state, publish, runOperation);
+
+  const importRequestedAppImage = async () => {
+    try {
+      await actions.importRequestedAppImage();
+    } catch (error) {
+      publish({ error: `Open AppImage: ${errorMessage(error)}` });
+    }
+  };
+
   return {
     getState: () => state,
     subscribe(listener: () => void) {
@@ -129,12 +139,13 @@ export function createLibraryController(backend: AppApi) {
       hasInitialized = true;
       void checkUpdates();
       await loadLocal();
+      await importRequestedAppImage();
     },
     reload: () => runOperation("Reload library", loadLocal),
     checkUpdates,
     dismissError: () => publish({ error: null }),
     dismissScanWarnings: () => publish({ scanWarnings: [] }),
-    ...createLibraryActions(backend, () => state, publish, runOperation),
+    ...actions,
     installUpdate,
   };
 }

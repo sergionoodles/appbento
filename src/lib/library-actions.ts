@@ -57,6 +57,12 @@ export function createLibraryActions(
     }
   };
 
+  const importPath = async (path: string) => {
+    const imported = await backend.libraryImport(path, false);
+    publishApps(await backend.libraryList());
+    await offerMove([imported]);
+  };
+
   const scan = async () => {
     const previousIds = new Set(getState().apps.map((app) => app.id));
     const report = await backend.libraryScan();
@@ -144,10 +150,14 @@ export function createLibraryActions(
       const selected = await backend.pickAppImage();
       if (!selected) return;
 
-      const imported = await backend.libraryImport(selected, false);
-      publishApps(await backend.libraryList());
-      await offerMove([imported]);
+      await importPath(selected);
     }, true),
+    importRequestedAppImage: async () => {
+      const requested = await backend.openRequestTake();
+      if (!requested) return false;
+
+      return runOperation("Add AppImage", () => importPath(requested), true);
+    },
     saveFolders: (settings: Settings) => runOperation("Save folders", async () => {
       const saved = await backend.settingsSet(settings);
       publishState({ settings: saved });

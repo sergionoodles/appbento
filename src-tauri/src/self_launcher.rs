@@ -7,7 +7,7 @@ use crate::{lifecycle::desktop, persistence};
 
 const ENTRY_NAME: &str = "appbento.desktop";
 const OWNERSHIP_MARKER: &str = "X-AppBento-Self=true";
-const ICON: &[u8] = include_bytes!("../icons/128x128.png");
+pub(crate) const ICON: &[u8] = include_bytes!("../icons/128x128.png");
 
 #[derive(Default, Deserialize, Serialize)]
 struct Preferences {
@@ -98,7 +98,7 @@ impl Launcher {
                 .ok_or("data directory unavailable")?
                 .join("applications")
                 .join(ENTRY_NAME),
-            icon: persistence::data_path("launcher-icon.png")?,
+            icon: icon_path()?,
         })
     }
 
@@ -161,6 +161,10 @@ impl Launcher {
         })?;
         self.status()
     }
+}
+
+pub(crate) fn icon_path() -> Result<PathBuf, String> {
+    persistence::data_path("launcher-icon.png")
 }
 
 pub(crate) fn update_executable(executable: &Path) -> Result<Option<LauncherUpdate>, String> {
