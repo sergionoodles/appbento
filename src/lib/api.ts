@@ -15,6 +15,7 @@ export interface Commands {
   self_launcher_dismiss: { args: undefined; result: SelfLauncherStatus };
   self_update_check: { args: undefined; result: SelfUpdateCheck };
   self_update_install: { args: { onProgress: Channel<SelfUpdateProgress> }; result: null };
+  open_request_take: { args: undefined; result: string | null };
   configuration_export: { args: { path: string; preferences: ConfigurationPreferences }; result: null };
   configuration_read: { args: { path: string }; result: ConfigurationPreview };
   configuration_restore: { args: { request: ConfigurationRestoreRequest }; result: ConfigurationPreferences };
@@ -50,6 +51,7 @@ export interface AppApi extends SelfUpdateBackend {
   selfLauncherStatus(): Promise<SelfLauncherStatus>;
   selfLauncherInstall(): Promise<SelfLauncherStatus>;
   selfLauncherDismiss(): Promise<SelfLauncherStatus>;
+  openRequestTake(): Promise<string | null>;
   configurationExport(preferences: ConfigurationPreferences): Promise<boolean>;
   configurationRead(): Promise<ConfigurationPreview | null>;
   configurationRestore(request: ConfigurationRestoreRequest): Promise<ConfigurationPreferences>;
@@ -94,6 +96,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     selfLauncherInstall: () => transport("self_launcher_install", undefined),
     selfLauncherDismiss: () => transport("self_launcher_dismiss", undefined),
     selfUpdateCheck: () => transport("self_update_check", undefined),
+    openRequestTake: () => transport("open_request_take", undefined),
     async selfUpdateInstall(onProgress) {
       const { Channel } = await import("@tauri-apps/api/core");
       const channel = new Channel<SelfUpdateProgress>();

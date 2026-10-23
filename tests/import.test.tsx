@@ -10,10 +10,11 @@ import { chooseFromMenu } from "./menu-helpers";
 const emptyReport: UpdateReport = { updates: [], errors: [], checked_count: 0, unknown_versions: [], unsupported_count: 0 };
 const externalPath = "/Downloads/Example.AppImage";
 
-async function importFixture({ isManaged = false, hasMoveError = false, scanApps = [] }: {
+async function importFixture({ isManaged = false, hasMoveError = false, scanApps = [], openRequest = null }: {
   isManaged?: boolean;
   hasMoveError?: boolean;
   scanApps?: InstalledApp[];
+  openRequest?: string | null;
 } = {}) {
   const preview = createPreviewApi();
   const settings = await preview.settingsGet();
@@ -25,6 +26,11 @@ async function importFixture({ isManaged = false, hasMoveError = false, scanApps
     async updatesCheckAll() { return emptyReport; },
     async libraryList() { return structuredClone(apps); },
     async pickAppImage() { return selectedPath; },
+    async openRequestTake() {
+      const requested = openRequest;
+      openRequest = null;
+      return requested;
+    },
     async libraryScan() {
       apps = structuredClone(scanApps);
       return { apps: structuredClone(apps), warnings: [] };
@@ -61,6 +67,30 @@ it("offers to move an external manual import and preserves its library identity"
   expect(app.id).toBe(externalPath);
   expect(app.file_path).toBe(`${settings.managed_dir}/Example.AppImage`);
   expect(imports).toEqual([{ path: externalPath, move: false }, { path: externalPath, move: true }]);
+});
+
+it("imports an AppImage opened with AppBento from the file manager", async () => {
+  const { user, imports } = await importFixture({ openRequest: externalPath });
+  const dialog = await screen.findByRole("dialog", { name: "Move Example to your managed folder?" });
+  expect(imports).toEqual([{ path: externalPath, move: false }]);
+
+  await user.click(within(dialog).getByRole("button", { name: "Keep current location" }));
+
+  expect(await screen.findByText("Example")).toBeInTheDocument();
+  expect(imports).toEqual([{ path: externalPath, move: false }]);
+});
+
+it("reports an AppImage opened with AppBento that cannot be imported", async () => {
+  const preview = createPreviewApi();
+  const backend: AppApi = {
+    ...preview, isTauri: true,
+    async updatesCheckAll() { return emptyReport; },
+    async openRequestTake() { return "/Downloads/broken.AppImage"; },
+    async libraryImport() { throw new Error("not an AppImage"); },
+  };
+  render(<App backend={backend} />);
+
+  expect(await screen.findByText(/Add AppImage: not an AppImage/)).toBeInTheDocument();
 });
 
 it("keeps an external import in place when the user declines the move", async () => {
