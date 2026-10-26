@@ -3,6 +3,35 @@ use super::*;
 const RELEASE_NAME: &str = "Example-2.0.0-x86_64.AppImage";
 
 #[test]
+fn unversioned_updates_replace_current_file_through_managed_folder_alias() {
+    let (directory, mut service, source) = tests::fixture();
+    let alias = directory.0.join("managed-alias");
+    fs::create_dir_all(&service.managed_dir).unwrap();
+    std::os::unix::fs::symlink(&service.managed_dir, &alias).unwrap();
+    service.managed_dir = alias;
+    let mut app = service.integrate_download(&source).unwrap();
+    let original_path = app.file_path.clone();
+
+    for version in ["2.0.0", "3.0.0"] {
+        let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+        let staged = tests::staged_update(&directory.0, Path::new(&app.file_path));
+        let downloaded = fs::read(&staged).unwrap();
+
+        let updated = service
+            .replace_update(&app, &staged, "Example.AppImage", Some(version), &digest)
+            .unwrap();
+
+        assert_eq!(updated.file_path, original_path);
+        assert_eq!(updated.id, app.id);
+        assert_eq!(updated.version_current.as_deref(), Some(version));
+        assert_eq!(fs::read(&updated.file_path).unwrap(), downloaded);
+        assert_eq!(service.list().unwrap(), vec![updated.clone()]);
+        assert_eq!(fs::read_dir(&service.managed_dir).unwrap().count(), 1);
+        app = updated;
+    }
+}
+
+#[test]
 fn updates_use_managed_folder_and_official_release_filename() {
     for is_integrated in [false, true] {
         let (directory, service, source) = tests::fixture();

@@ -414,5 +414,9 @@ mod update_metadata_tests;
 mod update_path_tests;
 
 #[cfg(test)]
+#[path = "legacy_update_tests.rs"]
+mod legacy_update_tests;
+
+#[cfg(test)]
 #[path = "import_tests.rs"]
 mod import_tests;

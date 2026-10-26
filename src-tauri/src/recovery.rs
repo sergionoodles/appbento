@@ -192,15 +192,45 @@ pub fn sync_parent(path: &Path) -> Result<(), String> {
 }
 
 fn finish_replacement(journal: &Journal, committed: bool) -> Result<(), String> {
-    let [backup, replacement] = journal.artifacts.as_slice() else {
-        return Err("invalid replacement journal".into());
+    let (backup, replacement, obsolete) = match journal.artifacts.as_slice() {
+        [backup, replacement] => (backup, replacement, None),
+        [backup, replacement, obsolete] if backup.original == replacement.original => {
+            (backup, replacement, Some(obsolete))
+        }
+        _ => return Err("invalid replacement journal".into()),
     };
-    for artifact in [backup, replacement] {
+    for artifact in &journal.artifacts {
         let stage = identity(&artifact.stage)?;
         if stage.is_some() && stage != artifact.identity {
             return Err("replacement recovery staging file was changed".into());
         }
     }
+    finish_replacement_files(backup, replacement, committed)?;
+    if let Some(obsolete) = obsolete {
+        finish_obsolete_update(obsolete, committed)?;
+    }
+    Ok(())
+}
+
+fn finish_obsolete_update(artifact: &Artifact, committed: bool) -> Result<(), String> {
+    let original = identity(&artifact.original)?;
+    if original.is_some() && original != artifact.identity {
+        return Err("replacement recovery original was changed".into());
+    }
+    if committed {
+        remove_if_present(&artifact.original)?;
+        remove_if_present(&artifact.stage)?;
+    } else {
+        restore_removed_artifact(artifact)?;
+    }
+    sync_parent(&artifact.original)
+}
+
+fn finish_replacement_files(
+    backup: &Artifact,
+    replacement: &Artifact,
+    committed: bool,
+) -> Result<(), String> {
     if backup.original != replacement.original {
         return finish_relocation(backup, replacement, committed);
     }

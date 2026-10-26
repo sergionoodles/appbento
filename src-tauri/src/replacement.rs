@@ -30,9 +30,11 @@ impl Lifecycle {
                 // Portable updates keep the original path as their ID while using an owned copy.
                 let owns_current = current.integrated
                     || current.file_path != current.id
-                    || Path::new(&current.file_path).parent() == Some(&self.managed_dir);
+                    || Path::new(&current.file_path).parent() == destination.parent();
+                let replaces_source = destination != Path::new(&current.file_path)
+                    && current.source_path.as_deref().map(Path::new) == Some(destination.as_path());
                 if destination != Path::new(&current.file_path)
-                    && (recovery::identity(&destination)?.is_some()
+                    && ((recovery::identity(&destination)?.is_some() && !replaces_source)
                         || repository.state.values().any(|app| {
                             app.id != current.id && Path::new(&app.file_path) == destination
                         }))
@@ -60,6 +62,7 @@ impl Lifecycle {
                             &temporary,
                             app,
                             owns_current.then(|| Path::new(&current.file_path)),
+                            replaces_source,
                         )
                     });
                 let journal = match preparation {
@@ -138,6 +141,9 @@ fn update_destination(directory: &Path, asset_name: &str) -> Result<PathBuf, Str
             "update asset must have a valid AppImage filename without path separators".into(),
         );
     }
+    fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    // Imports store canonical paths, so resolve folder aliases before comparing destinations.
+    let directory = fs::canonicalize(directory).map_err(|error| error.to_string())?;
     Ok(directory.join(asset_name))
 }
 
@@ -147,15 +153,30 @@ fn prepare_journal(
     temporary: &Path,
     app: InstalledApp,
     owned_current: Option<&Path>,
+    replaces_source: bool,
 ) -> Result<recovery::Journal, String> {
     let replacement = recovery::Artifact {
         original: destination.to_owned(),
         stage: temporary.to_owned(),
         identity: recovery::identity(temporary)?,
     };
+    let has_existing_source = replaces_source && recovery::identity(destination)?.is_some();
     let (operation, artifacts) = if let Some(current) = owned_current {
         let backup = reserve_backup(current)?;
-        (recovery::Operation::Replace, vec![backup, replacement])
+        let artifacts = if has_existing_source {
+            let source_backup = match reserve_backup(destination) {
+                Ok(artifact) => artifact,
+                Err(error) => {
+                    recovery::remove_if_present(&backup.stage)?;
+                    return Err(error);
+                }
+            };
+            // Replace the recorded source in place and retire the cached copy after commit.
+            vec![source_backup, replacement, backup]
+        } else {
+            vec![backup, replacement]
+        };
+        (recovery::Operation::Replace, artifacts)
     } else {
         (recovery::Operation::Integrate, vec![replacement])
     };
