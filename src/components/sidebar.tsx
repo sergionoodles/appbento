@@ -35,7 +35,7 @@ function Count({ value, isHighlighted = false }: { value: number; isHighlighted?
   return <span className="text-[12px] tabular-nums text-[var(--muted)]">{value}</span>;
 }
 
-export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, canAdd, onHome, onGroup, onNewGroup, onUpdates, onAdd, onAddUrl }: {
+export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, canAdd, onHome, onGroup, onNewGroup, onUpdates, onAdd, onAddExecutable, onAddUrl }: {
   page: SidebarPage;
   appCount: number;
   groups: AppGroup[];
@@ -49,6 +49,7 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, ca
   onNewGroup: () => void;
   onUpdates: () => void;
   onAdd: () => void;
+  onAddExecutable: () => void;
   onAddUrl: () => void;
 }) {
   return (
@@ -71,6 +72,7 @@ export function Sidebar({ page, appCount, groups, updateCount, dropSectionId, ca
           <NavItem icon={<Sparkles size={16} />} label="Updates" ariaLabel="Updates" isCurrent={page.name === "updates"}
             count={updateCount > 0 ? <Count value={updateCount} isHighlighted /> : null} onClick={onUpdates} />
           <NavItem icon={<PackagePlus size={16} />} label="Add an AppImage" isCurrent={false} isDisabled={!canAdd} onClick={onAdd} />
+          <NavItem icon={<PackagePlus size={16} />} label="Add an executable" isCurrent={false} isDisabled={!canAdd} onClick={onAddExecutable} />
           <NavItem icon={<Download size={16} />} label="Download from URL" isCurrent={false} isDisabled={!canAdd} onClick={onAddUrl} />
         </div>
       </nav>

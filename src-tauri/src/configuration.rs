@@ -8,13 +8,13 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::models::InstalledApp;
+use crate::models::{AppKind, InstalledApp};
 use crate::persistence::{self, FileChange, Repository};
 use crate::settings::Settings;
 use crate::store::Library;
 
 const FORMAT: &str = "appbento-configuration";
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 const BACKUP_LIMIT: u64 = 128 * 1024 * 1024;
 const ICON_LIMIT: usize = 5 * 1024 * 1024;
 const NONBLOCKING: i32 = 0x800;
@@ -82,7 +82,7 @@ pub struct RestoreRequest {
 }
 
 fn validate_backup(backup: &ConfigurationBackup) -> Result<(), String> {
-    if backup.format != FORMAT || backup.version != FORMAT_VERSION {
+    if backup.format != FORMAT || ![1, FORMAT_VERSION].contains(&backup.version) {
         return Err("Unsupported AppBento configuration format or version".into());
     }
     let home = Path::new(&backup.home_directory);
@@ -91,6 +91,10 @@ fn validate_backup(backup: &ConfigurationBackup) -> Result<(), String> {
     }
     let mut ids = HashSet::new();
     for entry in &backup.apps {
+        entry.app.validate_kind()?;
+        if backup.version == 1 && entry.app.kind != AppKind::AppImage {
+            return Err("Version 1 backups support AppImages only".into());
+        }
         if entry.app.id.is_empty() || !ids.insert(&entry.app.id) {
             return Err("Backup contains empty or duplicate app identities".into());
         }
@@ -227,7 +231,7 @@ fn restore_at(
             let selected = request
                 .app_paths
                 .get(&entry.app.id)
-                .ok_or_else(|| format!("Locate the AppImage for {}", entry.app.name))?;
+                .ok_or_else(|| format!("Locate the app file for {}", entry.app.name))?;
             let (app, app_changes) = prepare_app(
                 entry,
                 selected,
@@ -239,7 +243,7 @@ fn restore_at(
                 &request.permission_paths,
             )?;
             if !used_paths.insert(app.file_path.clone()) {
-                return Err("Each app must use a different AppImage file".into());
+                return Err("Each app must use a different file".into());
             }
             identities.insert(entry.app.id.clone(), app.id.clone());
             library.insert(app.id.clone(), app);
@@ -273,12 +277,12 @@ fn prepare_app(
     library: &Library,
     permission_paths: &BTreeMap<String, String>,
 ) -> Result<(InstalledApp, Vec<FileChange>), String> {
-    crate::lifecycle::open_appimage(Path::new(selected))?;
+    crate::lifecycle::open_app(Path::new(selected), entry.app.kind)?;
     let path = fs::canonicalize(selected).map_err(|error| error.to_string())?;
-    let file = crate::lifecycle::open_appimage(&path)?;
+    let file = crate::lifecycle::open_app(&path, entry.app.kind)?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
     let mut app = entry.app.clone();
-    app.file_path = path.to_str().ok_or("AppImage path must be UTF-8")?.into();
+    app.file_path = path.to_str().ok_or("App path must be UTF-8")?.into();
     app.id = library
         .values()
         .find(|existing| existing.file_path == app.file_path)
@@ -289,7 +293,7 @@ fn prepare_app(
         .and_then(|existing| existing.desktop_id.clone());
     if library
         .get(&app.id)
-        .is_some_and(|existing| existing.file_path != app.file_path)
+        .is_some_and(|existing| existing.file_path != app.file_path || existing.kind != app.kind)
     {
         return Err("Restored app identity conflicts with an existing app".into());
     }
@@ -304,8 +308,12 @@ fn prepare_app(
         .as_deref()
         .map(|value| remap_path(value, old_home, home));
     app.size_bytes = metadata.len();
-    app.executable = entry.app.executable;
-    let digest = crate::sandbox::appimage_digest(&path)?;
+    app.executable = if app.kind == AppKind::Binary {
+        metadata.permissions().mode() & 0o111 != 0
+    } else {
+        entry.app.executable
+    };
+    let digest = crate::lifecycle::app_digest(&path, app.kind)?;
     app.reviewed_digest = entry
         .app
         .reviewed_digest
@@ -347,15 +355,18 @@ fn prepare_app(
             Ok::<_, String>(path.to_string_lossy().into_owned())
         })
         .transpose()?;
-    let mode = metadata.permissions().mode() & 0o777;
-    changes.push(FileChange::SetPermissions {
-        path: path.clone(),
-        mode: if app.executable {
-            mode | 0o111
-        } else {
-            mode & !0o111
-        },
-    });
+    if app.kind == AppKind::AppImage {
+        let mode = metadata.permissions().mode() & 0o777;
+        changes.push(FileChange::SetPermissions {
+            path: path.clone(),
+            mode: if app.executable {
+                mode | 0o111
+            } else {
+                mode & !0o111
+            },
+        });
+    }
+    app.validate_kind()?;
     let desktop = prepare_desktop(&app, desktop_directory, library)?;
     app.desktop_id = desktop.as_ref().map(|(id, _)| id.clone());
     if let Some((_, change)) = desktop {

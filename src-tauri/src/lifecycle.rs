@@ -1,21 +1,29 @@
 //! Filesystem lifecycle operations, independent of Tauri and injected for tests.
-use std::fs::{self, File};
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 
-use crate::app_identity::{self, AppIdentity};
-use crate::models::{InstalledApp, ScanReport, ScanWarning};
+use crate::models::{AppKind, InstalledApp, ScanReport, ScanWarning};
 use crate::persistence;
 use crate::store::Library;
 
+#[path = "app_discovery.rs"]
+mod app_discovery;
+use app_discovery::{discovered_app, path_id, read_identity};
+#[path = "app_file.rs"]
+pub(crate) mod app_file;
 #[path = "appimage.rs"]
 mod appimage;
 #[path = "desktop.rs"]
 pub(crate) mod desktop;
+#[path = "executable.rs"]
+mod executable;
 #[path = "integration.rs"]
 mod integration;
+#[path = "local_import.rs"]
+mod local_import;
 #[path = "menu_integration.rs"]
 mod menu_integration;
 #[path = "recovery.rs"]
@@ -25,6 +33,7 @@ mod replacement;
 #[path = "self_appimage.rs"]
 mod self_appimage;
 
+pub use app_file::{app_digest, digest_file, open_app};
 pub use appimage::open_appimage;
 #[cfg(test)]
 use desktop::desktop_content;
@@ -35,87 +44,6 @@ pub struct Lifecycle {
     pub library_path: PathBuf,
     pub managed_dir: PathBuf,
     pub desktop_dir: PathBuf,
-}
-
-fn path_id(path: &Path) -> Result<String, String> {
-    path.to_str()
-        .map(str::to_owned)
-        .ok_or("AppImage path must be UTF-8".into())
-}
-
-fn discovered_app(
-    path: &Path,
-    file: &File,
-    existing: Option<&InstalledApp>,
-    identity: AppIdentity,
-) -> Result<InstalledApp, String> {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("invalid filename")?
-        .to_owned();
-    let metadata = file.metadata().map_err(|error| error.to_string())?;
-    if let Some(existing) = existing {
-        let needs_name =
-            app_identity::is_legacy_file_name_default(&existing.name, &existing.file_name);
-        let has_current_review = existing.launch_config.is_none()
-            || existing.reviewed_digest.as_deref()
-                == Some(crate::sandbox::appimage_digest(path)?.as_str());
-        return Ok(InstalledApp {
-            launch_config: existing.launch_config.clone(),
-            reviewed_digest: if has_current_review {
-                existing.reviewed_digest.clone()
-            } else {
-                None
-            },
-            size_bytes: metadata.len(),
-            file_created_at: file_created_at(&metadata),
-            executable: metadata.permissions().mode() & 0o111 != 0,
-            name: if needs_name {
-                identity.name
-            } else {
-                existing.name.clone()
-            },
-            version_current: existing.version_current.clone().or(identity.version),
-            ..existing.clone()
-        });
-    }
-    Ok(InstalledApp {
-        update_config: None,
-        id: path_id(path)?,
-        name: identity.name,
-        file_path: path_id(path)?,
-        file_name,
-        size_bytes: metadata.len(),
-        file_created_at: file_created_at(&metadata),
-        executable: metadata.permissions().mode() & 0o111 != 0,
-        integrated: false,
-        version_current: identity.version,
-        icon_path: None,
-        desktop_id: None,
-        source_path: None,
-        launch_count: 0,
-        last_launched: None,
-        added_at: Utc::now(),
-        launch_config: None,
-        reviewed_digest: None,
-    })
-}
-
-/// Unreadable metadata (Type 1 AppImages, missing squashfs-tools) falls back to the filename.
-fn read_identity(path: &Path) -> Result<AppIdentity, String> {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("invalid filename")?;
-    let embedded = crate::embedded_icon::discover_identity(path).unwrap_or_else(|error| {
-        eprintln!(
-            "embedded metadata unavailable for {}: {error}",
-            path.display()
-        );
-        Default::default()
-    });
-    Ok(app_identity::resolve(&embedded, file_name))
 }
 
 fn file_created_at(metadata: &fs::Metadata) -> Option<DateTime<Utc>> {
@@ -136,7 +64,7 @@ impl Lifecycle {
             |repository: &mut persistence::Repository<Library>| {
                 recovery::recover(repository)?;
                 let app = repository.state.get_mut(id).ok_or("app not found")?;
-                let file = open_appimage(Path::new(&app.file_path))?;
+                let file = open_app(Path::new(&app.file_path), app.kind)?;
                 let mut permissions = file
                     .metadata()
                     .map_err(|error| error.to_string())?
@@ -144,7 +72,7 @@ impl Lifecycle {
                 if make_executable && permissions.mode() & EXECUTE_BITS == 0 {
                     permissions.set_mode(permissions.mode() | OWNER_EXECUTE);
                     file.set_permissions(permissions.clone())
-                        .map_err(|error| format!("Cannot make AppImage executable: {error}"))?;
+                        .map_err(|error| format!("Cannot make app executable: {error}"))?;
                 }
                 app.executable = permissions.mode() & EXECUTE_BITS != 0;
                 let prepared = app.clone();
@@ -168,8 +96,7 @@ impl Lifecycle {
             |repository: &mut persistence::Repository<Library>| {
                 recovery::recover(repository)?;
                 let app = repository.state.get_mut(id).ok_or("app not found")?;
-                app.reviewed_digest =
-                    Some(crate::sandbox::appimage_digest(Path::new(&app.file_path))?);
+                app.reviewed_digest = Some(app_digest(Path::new(&app.file_path), app.kind)?);
                 app.launch_config = Some(config);
                 let configured = app.clone();
                 if let Some(path) = desktop::entry_path(&self.desktop_dir, &configured)? {
@@ -261,6 +188,13 @@ impl Lifecycle {
                             }
                         };
                         let id = path_id(&path)?;
+                        if library
+                            .values()
+                            .any(|app| app.file_path == id && app.kind != AppKind::AppImage)
+                        {
+                            warnings.push(ScanWarning { path: id, message: "Saved app kind differs from the scanned AppImage; remove the old entry before adding it again".into() });
+                            continue;
+                        }
                         let identity = read_identity(&path)?;
                         if self_appimage::is_self_appimage(&path, &identity) {
                             library.retain(|_, app| app.file_path != id);
@@ -272,7 +206,7 @@ impl Lifecycle {
                         let app = InstalledApp {
                             integrated: existing.is_some_and(|app| app.integrated)
                                 || is_managed_path(&self.managed_dir, &path)?,
-                            ..discovered_app(&path, &file, existing, identity)?
+                            ..discovered_app(&path, &file, existing, identity, AppKind::AppImage)?
                         };
                         library.insert(app.id.clone(), app.clone());
                         if !found
@@ -300,7 +234,7 @@ impl Lifecycle {
                 let app = repository.state.get(id).ok_or("app not found")?;
                 let path = PathBuf::from(&app.file_path);
                 let desktop_path = desktop::entry_path(&self.desktop_dir, app)?;
-                if delete_file && !app.integrated {
+                if delete_file && (app.kind == AppKind::Binary || !app.integrated) {
                     return Err("only owned integrated AppImages can be deleted".into());
                 }
                 if let Some(desktop) = &desktop_path {
@@ -366,7 +300,7 @@ impl Lifecycle {
 fn candidate_path(path: &Path) -> Result<PathBuf, String> {
     let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if !metadata.file_type().is_file() {
-        return Err("AppImage must be a regular non-symlink file".into());
+        return Err("App file must be a regular non-symlink file".into());
     }
     fs::canonicalize(path).map_err(|error| error.to_string())
 }
@@ -420,3 +354,7 @@ mod legacy_update_tests;
 #[cfg(test)]
 #[path = "import_tests.rs"]
 mod import_tests;
+
+#[cfg(test)]
+#[path = "executable_tests.rs"]
+pub(crate) mod executable_tests;

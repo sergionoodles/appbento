@@ -31,9 +31,31 @@ pub enum UpdateConfig {
     DirectUrl { url: String },
 }
 
-/// Local library state for AppImages actually on disk.
+#[derive(Debug, Clone, Copy, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AppKind {
+    #[default]
+    AppImage,
+    Binary,
+}
+
+impl<'de> Deserialize<'de> for AppKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match String::deserialize(deserializer)?.as_str() {
+            "appimage" => Ok(Self::AppImage),
+            "binary" => Ok(Self::Binary),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid app kind: {value}"
+            ))),
+        }
+    }
+}
+
+/// Local library state for applications actually on disk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InstalledApp {
+    #[serde(default)]
+    pub kind: AppKind,
     #[serde(default)]
     pub update_config: Option<UpdateConfig>,
     pub id: String,
@@ -58,6 +80,24 @@ pub struct InstalledApp {
     pub launch_config: Option<LaunchConfig>,
     #[serde(default)]
     pub reviewed_digest: Option<String>,
+}
+
+impl InstalledApp {
+    pub fn validate_kind(&self) -> Result<(), String> {
+        if self.kind == AppKind::Binary
+            && (self.integrated || self.source_path.is_some() || self.update_config.is_some())
+        {
+            return Err("Executable entries cannot be integrated, have a source path, or have update settings".into());
+        }
+        Ok(())
+    }
+
+    pub fn require_appimage_update(&self) -> Result<(), String> {
+        if self.kind == AppKind::Binary {
+            return Err("Executable updates are not supported yet".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

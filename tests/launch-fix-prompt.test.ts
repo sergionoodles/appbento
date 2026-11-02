@@ -19,3 +19,10 @@ it.each([
   expect(diagnostics.latest_launch).toEqual({ ...log, text: lines.slice(-15).join("\n") });
   expect(log.text).toBe(text);
 });
+
+it("includes binary kind and adjacent resources and loader diagnostics", () => {
+  const prompt = createLaunchFixPrompt(createPreviewApp("Native Editor", null, "binary"), null);
+  expect(prompt).toContain('"kind": "binary"');
+  expect(prompt).toContain("default read-only folder grant");
+  expect(prompt).toContain("missing support files or a missing program loader");
+});

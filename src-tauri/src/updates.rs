@@ -148,6 +148,9 @@ pub(crate) fn resolve_update(app: &InstalledApp, resolved: ResolvedUpdate) -> Up
 }
 
 pub async fn check_app(app: &InstalledApp) -> UpdateCheckResult {
+    if let Err(message) = app.require_appimage_update() {
+        return failure(&app.id, UpdateStatus::Unsupported, message);
+    }
     let Some(config) = app.update_config.as_ref() else {
         return failure(
             &app.id,
@@ -241,6 +244,7 @@ mod tests {
 
     fn app(current: Option<&str>) -> InstalledApp {
         InstalledApp {
+            kind: crate::models::AppKind::AppImage,
             id: "app".into(),
             name: "App".into(),
             file_path: "/tmp/App.AppImage".into(),

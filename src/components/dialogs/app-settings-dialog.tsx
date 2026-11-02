@@ -13,7 +13,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "./dialog";
 import { GeneralPage } from "./app-settings/general-page";
 import { IntegrationPage } from "./app-settings/integration-page";
-import { PermissionsPage, initialLaunchConfig, useSandboxStatus } from "./app-settings/permissions-page";
+import { PermissionsPage, initialLaunchConfig, useLaunchConfig, useSandboxStatus } from "./app-settings/permissions-page";
 import { UpdatesPage } from "./app-settings/updates-page";
 
 type Page = "general" | "permissions" | "launch" | "updates" | "integration";
@@ -55,7 +55,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const [page, setPage] = useState<Page>(openTo === "icon" ? "general" : openTo);
   const [isEditingIcon, setIsEditingIcon] = useState(openTo === "icon");
   const [name, setName] = useState(app.name);
-  const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(() => initialLaunchConfig(app));
+  const { config: launchConfig, setConfig: setLaunchConfig, isLoading: isLoadingDefaults, error: defaultsError } = useLaunchConfig(app, backend);
   const [launchDraft, setLaunchDraft] = useState(() => launchDraftFromConfig(initialLaunchConfig(app)));
   const [updateDraft, setUpdateDraft] = useState(() => draftFromConfig(app.update_config));
   const [localError, setLocalError] = useState<string | null>(null);
@@ -70,8 +70,8 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const hasUpdateChange = isDraftChanged(updateDraft, app.update_config);
   const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange, integration: false };
   const isPermissionsBlocked = hasConfigChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
-  const isBusy = isSaving || isUpdating;
-  const canSave = !isBusy && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
+  const isBusy = isSaving || isUpdating || isLoadingDefaults;
+  const canSave = !isBusy && !defaultsError && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
     && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft));
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
@@ -137,20 +137,21 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
           <div key={page} className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
             {page === "general" ? <GeneralPage app={app} backend={backend} name={name} originalName={originalName} onNameChange={setName}
               isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isBusy} /> : null}
-            {page === "permissions" ? <PermissionsPage backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
+            {page === "permissions" ? <PermissionsPage app={app} backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
               isReview={isReview} isSaving={isBusy} onError={setLocalError} /> : null}
             {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isBusy} /> : null}
             {page === "integration" ? <IntegrationPage app={app} isSaving={isBusy} onSetMenuEntry={onSetMenuEntry} /> : null}
-            {page === "updates" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isBusy}
+            {page === "updates" && app.kind === "binary" ? <p className="text-[13px] text-[var(--muted)]">Executable updates are not supported yet. Replace the file yourself, then review its permissions again.</p> : null}
+            {page === "updates" && app.kind === "appimage" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isBusy}
               hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} updateCheck={updateCheck} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
               onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}
           </div>
 
           <footer className="flex items-center gap-3 border-t border-[var(--border)] px-8 py-4">
             <div className="flex-1 min-w-0 text-[13px]">
-              {localError || error
-                ? <p role="alert" className="text-[var(--bad)]">{localError ?? error}</p>
-                : <p className="text-[var(--muted)]">{isReview ? "Confirm permissions before launching this AppImage." : canSave ? "You have unsaved changes." : null}</p>}
+              {localError || defaultsError || error
+                ? <p role="alert" className="text-[var(--bad)]">{localError ?? defaultsError ?? error}</p>
+                : <p className="text-[var(--muted)]">{isLoadingDefaults ? "Loading default permissions…" : isReview ? "Confirm permissions before launching this app." : canSave ? "You have unsaved changes." : null}</p>}
             </div>
             <Button variant="ghost" disabled={isSaving} onClick={onClose}>Cancel</Button>
             <Button variant="accent" disabled={!canSave} onClick={() => void save()}>{isSaving ? "Saving…" : launchAfterSave ? "Save and launch" : "Save changes"}</Button>

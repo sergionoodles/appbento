@@ -143,6 +143,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
   };
   const statusText = operation ?? (isCheckingUpdates ? "Checking for updates" : null);
   const openAddUrl = () => { captureFocus(); controller.dismissError(); setShowAddUrl(true); };
+  const addExecutable = () => { captureFocus(); void controller.importExecutable(); };
   const addAppImage = () => { captureFocus(); void controller.importAppImage(); };
 
   return (
@@ -151,7 +152,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
         <div className="flex-1 min-h-0 flex">
           <Sidebar page={sidebarPage(view)} appCount={apps.length} groups={layout.groups} updateCount={confirmedUpdateCount} dropSectionId={drag?.target.sectionId ?? null}
             onHome={() => goTo(HOME)} onGroup={(groupId) => goTo({ name: "home", groupId })} onNewGroup={createGroup}
-            onUpdates={() => goTo({ name: "updates" })} canAdd={backend.isTauri && !disabled} onAdd={addAppImage} onAddUrl={openAddUrl} />
+            onUpdates={() => goTo({ name: "updates" })} canAdd={backend.isTauri && !disabled} onAdd={addAppImage} onAddExecutable={addExecutable} onAddUrl={openAddUrl} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header isNative={backend.isTauri} query={query} onQuery={setQuery} disabled={disabled} canEditFolders={settings !== null}
               canAddLauncher={selfLauncher.canAdd} onAddLauncher={() => { captureFocus(); selfLauncher.open(); }}
@@ -164,7 +165,7 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
                 controller.dismissError();
                 setShowFolders(true);
               }}
-              onAddUrl={openAddUrl} onAdd={addAppImage} onScan={() => { captureFocus(); void controller.scan(); }} />
+              onAddUrl={openAddUrl} onAdd={addAppImage} onAddExecutable={addExecutable} onScan={() => { captureFocus(); void controller.scan(); }} />
             <main data-scroll-container className="flex-1 min-h-0 overflow-y-auto">
               <div className="px-6 pt-5 pb-10 max-w-[1600px]">
                 {error ? <div role="alert" className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--bad)] p-4 text-[var(--bad)]">

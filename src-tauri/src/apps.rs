@@ -84,7 +84,7 @@ pub async fn library_import(
     move_to_managed: bool,
 ) -> Result<InstalledApp, String> {
     let app = tokio::task::spawn_blocking(move || {
-        lifecycle()?.import_appimage(&PathBuf::from(source_path), move_to_managed)
+        lifecycle()?.import_app(&PathBuf::from(source_path), move_to_managed)
     })
     .await
     .map_err(|error| error.to_string())??;
@@ -151,8 +151,26 @@ pub async fn library_configure(id: String, config: LaunchConfig) -> Result<Insta
         .map_err(|error| error.to_string())?
 }
 
+#[tauri::command]
+pub async fn library_default_permissions(
+    id: String,
+) -> Result<crate::models::SandboxPermissions, String> {
+    tokio::task::spawn_blocking(move || {
+        let app = crate::store::load_all()?
+            .remove(&id)
+            .ok_or("app not found")?;
+        let path = persistence::data_path("library.json")?;
+        Ok(crate::sandbox::default_permissions(
+            &app,
+            path.parent().ok_or("invalid policy path")?,
+        ))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 async fn discover_icon(app: &InstalledApp) -> Result<InstalledApp, String> {
-    if app.icon_path.is_some() {
+    if app.kind == crate::models::AppKind::Binary || app.icon_path.is_some() {
         return Ok(app.clone());
     }
     let path = PathBuf::from(&app.file_path);

@@ -86,7 +86,7 @@ it("shows an editable prompt with app settings and logs, copies edits, and retur
   const prompt = (editor as HTMLTextAreaElement).value;
   const diagnostics = JSON.parse(prompt.split("Diagnostics (JSON):\n")[1]);
   expect(diagnostics).toEqual({
-    app: { name: app.name, version: app.version_current, file_path: app.file_path },
+    app: { kind: app.kind, name: app.name, version: app.version_current, file_path: app.file_path },
     current_launch_config: app.launch_config,
     latest_launch: log,
   });

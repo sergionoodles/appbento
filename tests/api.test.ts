@@ -142,3 +142,14 @@ test("native launch preparation sends execute permission consent explicitly", as
     { command: "library_prepare_launch", args: { id: app.id, makeExecutable: true } },
   ]);
 });
+
+test("native default permissions come from the saved entry's backend policy", async () => {
+  const permissions = { ...restrictedPermissions(), paths: [{ path: "/apps/editor", access: "read-only" as const }] };
+  const calls: unknown[] = [];
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return permissions as Commands[Command]["result"];
+  };
+  assert.deepEqual(await createNativeApi(transport).libraryDefaultPermissions("/apps/editor/editor"), permissions);
+  assert.deepEqual(calls, [{ command: "library_default_permissions", args: { id: "/apps/editor/editor" } }]);
+});

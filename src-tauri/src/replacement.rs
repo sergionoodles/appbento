@@ -19,6 +19,7 @@ impl Lifecycle {
         latest: Option<&str>,
         expected_digest: &str,
     ) -> Result<InstalledApp, String> {
+        expected.require_appimage_update()?;
         let mut download = open_appimage(staged)?;
         persistence::with_repository(
             &self.library_path,
@@ -121,10 +122,12 @@ fn validate_snapshot(
     {
         return Err("app configuration changed while downloading; check for updates again".into());
     }
+    current.require_appimage_update()?;
     let file = open_appimage(Path::new(&current.file_path))?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
     if metadata.len() != expected.size_bytes
-        || crate::sandbox::appimage_digest(Path::new(&current.file_path))? != expected_digest
+        || crate::lifecycle::app_file::appimage_digest(Path::new(&current.file_path))?
+            != expected_digest
     {
         return Err("AppImage changed while downloading; check for updates again".into());
     }
@@ -247,7 +250,7 @@ fn stage_update(
             reviewed_digest: current
                 .launch_config
                 .as_ref()
-                .map(|_| crate::sandbox::appimage_digest(&temporary))
+                .map(|_| crate::lifecycle::app_file::appimage_digest(&temporary))
                 .transpose()?,
             ..current.clone()
         };

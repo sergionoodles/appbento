@@ -4,7 +4,7 @@ import { Input } from "./ui/card";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
 import { ThemeSwatches } from "./theme";
 
-export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddUrl, onScan, updateVersion, onSelfUpdate, onAbout, canAddLauncher, onAddLauncher }: {
+export function Header({ isNative, query, onQuery, disabled, canEditFolders, onFolders, onConfiguration, onAdd, onAddExecutable, onAddUrl, onScan, updateVersion, onSelfUpdate, onAbout, canAddLauncher, onAddLauncher }: {
   isNative: boolean;
   canAddLauncher: boolean;
   onAddLauncher: () => void;
@@ -15,6 +15,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
   onFolders: () => void;
   onConfiguration: () => void;
   onAdd: () => void;
+  onAddExecutable: () => void;
   onAddUrl: () => void;
   onScan: () => void;
   updateVersion?: string;
@@ -46,6 +47,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
       <div className="ml-auto flex items-center gap-1">
         <Menu label="Add apps" icon={<Plus size={17} />} disabled={disabled}>
           <MenuItem icon={<PackagePlus size={15} />} onSelect={onAdd} disabled={!isNative}>Add an AppImage</MenuItem>
+          <MenuItem icon={<PackagePlus size={15} />} onSelect={onAddExecutable} disabled={!isNative}>Add an executable</MenuItem>
           <MenuItem icon={<Download size={15} />} onSelect={onAddUrl} disabled={!isNative}>Download from URL</MenuItem>
           <MenuItem icon={<ScanSearch size={15} />} onSelect={onScan}>Scan folders</MenuItem>
         </Menu>
@@ -53,6 +55,7 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
           {canAddLauncher ? <MenuItem icon={<AppWindow size={15} />} onSelect={onAddLauncher} disabled={disabled}>Add AppBento to launcher</MenuItem> : null}
           <MenuItem icon={<FolderCog size={15} />} onSelect={onFolders} disabled={!canEditFolders || disabled}>Folders</MenuItem>
           <MenuItem icon={<Archive size={15} />} onSelect={onConfiguration} disabled={!isNative || disabled}>Export / restore settings</MenuItem>
+          <MenuItem icon={<PackagePlus size={15} />} onSelect={onAddExecutable} disabled={!isNative}>Add an executable</MenuItem>
           <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>
           <MenuSeparator />
           <ThemeSwatches />

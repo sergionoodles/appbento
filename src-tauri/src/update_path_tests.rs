@@ -13,7 +13,8 @@ fn unversioned_updates_replace_current_file_through_managed_folder_alias() {
     let original_path = app.file_path.clone();
 
     for version in ["2.0.0", "3.0.0"] {
-        let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+        let digest =
+            crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
         let staged = tests::staged_update(&directory.0, Path::new(&app.file_path));
         let downloaded = fs::read(&staged).unwrap();
 
@@ -44,7 +45,8 @@ fn updates_use_managed_folder_and_official_release_filename() {
                 .apps
                 .remove(0)
         };
-        let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+        let digest =
+            crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
         let staged = tests::staged_update(&directory.0, &source);
         let named_download = directory.0.join(RELEASE_NAME);
         fs::rename(staged, &named_download).unwrap();
@@ -88,12 +90,14 @@ fn successive_releases_replace_old_managed_filename_and_preserve_original_source
                 .apps
                 .remove(0)
         };
-        let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+        let digest =
+            crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
         let staged = tests::staged_update(&directory.0, &source);
         let updated = service
             .replace_update(&app, &staged, RELEASE_NAME, Some("2.0.0"), &digest)
             .unwrap();
-        let digest = crate::sandbox::appimage_digest(Path::new(&updated.file_path)).unwrap();
+        let digest =
+            crate::lifecycle::app_file::appimage_digest(Path::new(&updated.file_path)).unwrap();
         let next_name = "Example-3.0.0-x86_64.AppImage";
         let staged = tests::staged_update(&directory.0, Path::new(&updated.file_path));
         let next = service
@@ -130,7 +134,7 @@ fn successive_releases_replace_old_managed_filename_and_preserve_original_source
 fn update_refuses_existing_destinations_and_unsafe_release_filenames() {
     let (directory, service, source) = tests::fixture();
     let app = service.integrate(&source, false).unwrap();
-    let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
     let staged = tests::staged_update(&directory.0, &source);
     let destination = service.managed_dir.join(RELEASE_NAME);
     fs::write(&destination, b"another user's file").unwrap();
@@ -197,7 +201,7 @@ fn update_moves_legacy_hashed_download_to_current_managed_folder() {
         Ok(())
     })
     .unwrap();
-    let digest = crate::sandbox::appimage_digest(&legacy).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&legacy).unwrap();
     let staged = tests::staged_update(&directory.0, &source);
 
     let updated = service

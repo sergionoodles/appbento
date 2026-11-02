@@ -62,7 +62,8 @@ fn update_refreshes_embedded_metadata_and_saved_icon() {
                 .remove(0)
         };
         let app = save_old_icon(&service, &app);
-        let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+        let digest =
+            crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
         let Some(staged) = metadata_update(&directory.0, &source, NEW_ICON) else {
             return;
         };
@@ -96,7 +97,7 @@ fn direct_update_reads_embedded_version_and_keeps_icon_when_new_icon_is_invalid(
         .apps
         .remove(0);
     let app = save_old_icon(&service, &app);
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let Some(staged) = metadata_update(&directory.0, &source, b"invalid icon") else {
         return;
     };
@@ -120,7 +121,7 @@ fn update_keeps_saved_metadata_when_embedded_metadata_is_unavailable() {
         .apps
         .remove(0);
     let app = save_old_icon(&service, &app);
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = tests::staged_update(&directory.0, &source);
 
     let updated = service
@@ -138,7 +139,7 @@ fn failed_icon_save_leaves_installed_app_and_library_unchanged() {
     let (directory, service, source) = tests::fixture();
     let app = service.integrate(&source, false).unwrap();
     let before = fs::read(&app.file_path).unwrap();
-    let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
     let Some(staged) = metadata_update(&directory.0, &source, NEW_ICON) else {
         return;
     };

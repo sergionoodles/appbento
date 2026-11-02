@@ -39,7 +39,10 @@ export interface ReleaseUpdateConfig {
 
 export type UpdateConfig = ReleaseUpdateConfig | { strategy: "direct-url"; url: string };
 
+export type AppKind = "appimage" | "binary";
+
 export interface InstalledApp {
+  kind: AppKind;
   reviewed_digest?: string | null;
   launch_config?: LaunchConfig | null;
   update_config?: UpdateConfig | null;

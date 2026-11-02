@@ -315,7 +315,7 @@ fn replacing_reviewed_appimage_requires_new_review() {
     service.scan(vec![directory.0.clone()]).unwrap();
     persistence::mutate(&service.library_path, |library: &mut Library| {
         let app = library.get_mut(source.to_str().unwrap()).unwrap();
-        app.reviewed_digest = Some(crate::sandbox::appimage_digest(&source)?);
+        app.reviewed_digest = Some(crate::lifecycle::app_file::appimage_digest(&source)?);
         app.launch_config = Some(crate::models::LaunchConfig {
             arguments: Vec::new(),
             environment: Default::default(),
@@ -553,7 +553,7 @@ fn manual_update_preserves_identity_permissions_history_and_desktop() {
         permissions: Default::default(),
     };
     let configured = service.configure(&app.id, &config).unwrap();
-    let digest = crate::sandbox::appimage_digest(Path::new(&app.file_path)).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
     let staged = staged_update(&directory.0, &source);
     let updated = service
         .replace_update(
@@ -583,7 +583,7 @@ fn portable_updates_keep_original_and_do_not_duplicate_scan_records() {
         .unwrap()
         .apps
         .remove(0);
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = staged_update(&directory.0, &source);
     let updated = service
         .replace_update(&app, &staged, "Example.AppImage", Some("2.0.0"), &digest)
@@ -595,7 +595,8 @@ fn portable_updates_keep_original_and_do_not_duplicate_scan_records() {
     let internal = Path::new(&updated.file_path).parent().unwrap().to_owned();
     service.scan(vec![directory.0.clone(), internal]).unwrap();
     assert_eq!(service.list().unwrap(), vec![updated.clone()]);
-    let next_digest = crate::sandbox::appimage_digest(Path::new(&updated.file_path)).unwrap();
+    let next_digest =
+        crate::lifecycle::app_file::appimage_digest(Path::new(&updated.file_path)).unwrap();
     let next = service
         .replace_update(
             &updated,
@@ -616,7 +617,7 @@ fn update_rejects_invalid_download_changed_config_and_changed_file() {
         .unwrap()
         .apps
         .remove(0);
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = directory.0.join("invalid.tmp");
     fs::write(&staged, "not AppImage").unwrap();
     assert!(service
@@ -692,7 +693,7 @@ fn update_inherits_permissions_and_history_changed_during_download() {
         .unwrap()
         .apps
         .remove(0);
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = staged_update(&directory.0, &source);
     let config = crate::models::LaunchConfig {
         arguments: Vec::new(),
@@ -722,7 +723,7 @@ fn update_inherits_permissions_and_history_changed_during_download() {
     assert_eq!(updated.launch_count, 7);
     assert_eq!(
         updated.reviewed_digest,
-        Some(crate::sandbox::appimage_digest(Path::new(&updated.file_path)).unwrap())
+        Some(crate::lifecycle::app_file::appimage_digest(Path::new(&updated.file_path)).unwrap())
     );
 }
 
@@ -741,7 +742,7 @@ fn integrating_updated_portable_preserves_identity_configuration_and_private_hom
         permissions: Default::default(),
     };
     let configured = service.configure(&app.id, &config).unwrap();
-    let digest = crate::sandbox::appimage_digest(&source).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = staged_update(&directory.0, &source);
     let updated = service
         .replace_update(
