@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::github::ResolvedUpdate;
 use crate::models::{InstalledApp, UpdateCheckResult, UpdateInfo, UpdateStatus};
-use crate::{lifecycle::Lifecycle, persistence, sandbox};
+use crate::{lifecycle::Lifecycle, persistence};
 
 const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
@@ -85,7 +85,7 @@ async fn consume_response(
 
 async fn installed_digest(app: &InstalledApp) -> Result<String, String> {
     let path = PathBuf::from(&app.file_path);
-    tokio::task::spawn_blocking(move || sandbox::appimage_digest(&path))
+    tokio::task::spawn_blocking(move || crate::lifecycle::app_file::appimage_digest(&path))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -94,6 +94,7 @@ pub async fn check_content(
     app: &InstalledApp,
     resolved: ResolvedUpdate,
 ) -> Result<UpdateCheckResult, String> {
+    app.require_appimage_update()?;
     let current_digest = installed_digest(app).await?;
     let remote_digest = transfer(&resolved.download_url, None, resolved.size_bytes).await?;
     Ok(content_result(
@@ -138,6 +139,7 @@ fn reserve_download(directory: &Path) -> Result<(PathBuf, std::fs::File), String
 }
 
 pub async fn install(app: InstalledApp, lifecycle: Lifecycle) -> Result<InstalledApp, String> {
+    app.require_appimage_update()?;
     let config = app
         .update_config
         .as_ref()

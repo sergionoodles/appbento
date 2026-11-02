@@ -78,7 +78,7 @@ describe("library management", () => {
     await waitFor(() => expect(screen.queryByText("Obsidian")).not.toBeInTheDocument());
     expect(choices).toEqual([false]);
     await chooseFromMenu(user, "More options for Joplin", "Remove Joplin");
-    await user.click(screen.getByRole("checkbox", { name: "Also delete the AppImage file permanently" }));
+    await user.click(screen.getByRole("checkbox", { name: "Also delete the app file permanently" }));
     await user.click(screen.getByRole("button", { name: "Delete file and remove" }));
     await waitFor(() => expect(screen.queryByText("Joplin")).not.toBeInTheDocument());
     expect(choices).toEqual([false, true]);

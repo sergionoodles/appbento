@@ -11,7 +11,7 @@ export interface ConfigurationPreferences {
 
 export interface ConfigurationBackup {
   format: "appbento-configuration";
-  version: 1;
+  version: 1 | 2;
   home_directory: string;
   settings: Settings;
   preferences: ConfigurationPreferences;

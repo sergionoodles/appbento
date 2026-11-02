@@ -367,6 +367,7 @@ fn direct_stdin_worker() {
         program: image.to_string_lossy().into_owned(),
         arguments: Vec::new(),
         clear_environment: false,
+        application_destination: None,
     };
     let output = execution::prepare_command(&planned).output().unwrap();
     assert!(output.status.success());

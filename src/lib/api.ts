@@ -1,5 +1,5 @@
 import type { ConfigurationPreferences, ConfigurationPreview, ConfigurationRestoreRequest } from "./configuration";
-import type { InstalledApp, LaunchConfig, LaunchLog, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
+import type { InstalledApp, LaunchConfig, LaunchLog, SandboxPermissions, SandboxStatus, ScanReport, Settings, UpdateCheckResult, UpdateConfig, UpdateReport } from "./types";
 import { createPreviewApi } from "./preview.ts";
 import type { Channel } from "@tauri-apps/api/core";
 import type { SelfUpdateBackend, SelfUpdateCheck, SelfUpdateProgress } from "./self-update";
@@ -23,6 +23,7 @@ export interface Commands {
   library_set_icon: { args: { id: string; source: string }; result: InstalledApp };
   library_icon: { args: { id: string }; result: string | null };
   sandbox_status: { args: undefined; result: SandboxStatus };
+  library_default_permissions: { args: { id: string }; result: SandboxPermissions };
   library_configure: { args: { id: string; config: LaunchConfig }; result: InstalledApp };
   library_list: { args: undefined; result: InstalledApp[] };
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
@@ -60,6 +61,7 @@ export interface AppApi extends SelfUpdateBackend {
   libraryIcon(id: string): Promise<string | null>;
   pickIcon(): Promise<string | null>;
   sandboxStatus(): Promise<SandboxStatus>;
+  libraryDefaultPermissions(id: string): Promise<SandboxPermissions>;
   libraryConfigure(id: string, config: LaunchConfig): Promise<InstalledApp>;
   libraryList(): Promise<InstalledApp[]>;
   libraryScan(): Promise<ScanReport>;
@@ -76,6 +78,7 @@ export interface AppApi extends SelfUpdateBackend {
   updatesInstall(appId: string): Promise<InstalledApp>;
   updatesCheck(appId: string): Promise<UpdateCheckResult>;
   updatesCheckAll(): Promise<UpdateReport>;
+  pickExecutable(): Promise<string | null>;
   pickAppImage(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   openExternal(url: string): Promise<void>;
@@ -125,6 +128,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
       return typeof selected === "string" ? selected : null;
     },
     sandboxStatus: () => transport("sandbox_status", undefined),
+    libraryDefaultPermissions: (id) => transport("library_default_permissions", { id }),
     libraryConfigure: (id, config) => transport("library_configure", { id, config }),
     libraryList: () => transport("library_list", undefined),
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
@@ -151,6 +155,11 @@ export function createNativeApi(transport: CommandTransport): AppApi {
       const selected = await open({ multiple: false, filters: [{ name: "AppImage", extensions: ["AppImage", "appimage"] }] });
       return typeof selected === "string" ? selected : null;
     },
+    async pickExecutable() {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ multiple: false, title: "Choose a Linux executable" });
+      return typeof selected === "string" ? selected : null;
+    },
     async pickFolder() {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const selected = await open({ multiple: false, directory: true });
@@ -170,7 +179,7 @@ const invoke: CommandTransport = async (command, args) => {
 };
 
 const nativeApi = createNativeApi(invoke);
-const previewApi = createPreviewApi();
+const previewApi = createPreviewApi(true);
 
 export const api: AppApi = new Proxy(nativeApi, {
   get(_target, property: keyof AppApi) {

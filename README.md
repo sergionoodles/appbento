@@ -1,8 +1,8 @@
 # AppBento
 
-AppBento is a desktop AppImage manager for Linux. Bring scattered AppImages into one searchable library, organize them into groups, manage updates, and launch them with per-app settings and permissions.
+AppBento is a desktop manager for AppImages and native Linux executables. Bring your apps into one searchable library, organize them into groups, manage AppImage updates, and launch them with per-app settings and permissions.
 
-**Choose what each app can access.** AppBento can run AppImages inside a **Bubblewrap (`bwrap`) sandbox container**, with an isolated filesystem and explicit access to your folders, network, display, audio, and GPU. Before an app's first launch, review its permissions and choose between sandboxed and unrestricted execution.
+**Choose what each app can access.** AppBento can run AppImages and native executables inside a **Bubblewrap (`bwrap`) sandbox container**, with an isolated filesystem and explicit access to your folders, network, display, audio, and GPU. Before an app's first launch, review its permissions and choose between sandboxed and unrestricted execution.
 
 ![AppBento's dark-themed library with AppImages organized into groups and per-app launch status](assets/appbento-screenshot.png)
 
@@ -14,29 +14,36 @@ To enable it, open an app's **Permissions** settings and select **Restrict with 
 
 ### What the sandbox restricts
 
-- **Files:** your personal home folder is not shared by default. The app gets a separate home directory and temporary storage, with the AppImage and required system runtime files mounted read-only. Share only the folders it needs, choosing read-only or read/write access for each.
+- **Files:** your personal home folder is not shared by default. The app gets a separate home directory and temporary storage, with a reviewed snapshot of the app executable and required system runtime files mounted read-only. Share only the folders it needs, choosing read-only or read/write access for each.
 - **Network:** internet and local network access are blocked unless enabled.
 - **Desktop and devices:** display, audio, and GPU access are separate permissions. Audio access allows both playback and microphone recording through the audio service.
 - **App data:** an optional private home directory preserves the app's settings and data between launches without exposing your personal home. Disable persistence to use an ephemeral home instead.
 - **Processes and environment:** separate user and process namespaces, dropped Linux capabilities, and a cleared inherited environment limit the app's access to the host.
 
-The initial sandbox permission preset enables **display and private persistent data**. Network, audio, GPU, and shared folders are disabled. You can adjust these permissions later; system app-menu shortcuts use the saved launch policy too.
+The initial sandbox permission preset enables **display and private persistent data**. Network, audio, and GPU are disabled. AppImages start without shared folders. For native executables, AppBento adds a **read-only grant for the containing folder and its subfolders**, when that folder passes the protected-path checks. This makes adjacent libraries and resources available to applications extracted from archives. A broad folder such as Downloads exposes all of its contents: review the grant, narrow it by placing the app in its own folder, or remove it. Use read/write access if a portable app must write next to its executable. A binary directly in your home folder or a reserved runtime location receives no automatic folder grant. You can adjust these permissions later; system app-menu shortcuts use the saved launch policy too.
+
+**Review covers only the executable file.** AppBento hashes that file and pins a read-only snapshot for sandboxed execution. Changing the executable requires permission review again. Support files in granted folders are not included in the digest and can change without triggering a new review.
 
 If Bubblewrap is unavailable or cannot create the sandbox, a sandboxed launch **fails instead of silently running unrestricted**. Choosing **Run without restrictions** explicitly runs the app with your account's normal access; sandbox permission toggles do not apply in that mode.
 
 ### Requirements and limits
 
-Sandboxed launching requires **Bubblewrap 0.13 or newer** with `--ro-bind-fd` support and a system that permits the required Linux namespaces. Install the `bubblewrap` package using your distribution's package manager. AppBento checks availability in the Permissions settings. The sandbox launcher supports **Type 2 AppImages** and uses their extract-and-run mode.
+Sandboxed launching requires **Bubblewrap 0.13 or newer** with `--ro-bind-fd` support and a system that permits the required Linux namespaces. Install the `bubblewrap` package using your distribution's package manager. AppBento checks availability in the Permissions settings. The sandbox launcher supports **Type 2 AppImages** using their extract-and-run mode, and **64-bit little-endian Linux ELF executables** for the host architecture (x86_64 or aarch64). Dynamically linked binaries need a compatible program loader installed on the host and visible through the mounted runtime or an explicit folder grant. Compatible libraries can come from system runtime mounts or granted folders; AppBento does not install dependencies.
 
-The sandbox limits access; it does not establish that an application is trustworthy. Permissions open real access to host resources: writable shared folders can be modified, network permission includes local services, and **X11 display access can expose other windows and keyboard input**. The container shares the host kernel rather than providing a virtual machine. Grant only the access an app needs and use AppImages from sources you trust.
+The sandbox limits access; it does not establish that an application is trustworthy. Permissions open real access to host resources: writable shared folders can be modified, network permission includes local services, and **X11 display access can expose other windows and keyboard input**. The container shares the host kernel rather than providing a virtual machine. Grant only the access an app needs and use apps from sources you trust.
+
+Native executables are registered **in place**; AppBento does not copy, move, update, or delete their files, even when they are in its managed directory. Use **Add an executable** to select a file, including one without an extension. Folder scans discover AppImages only. Scripts, archive extraction, installers, and terminal integration are not supported. GUI apps are the focus: console output is recorded in launch logs, and no terminal is opened.
+
+An executable entry is identified by its file path, and private data derives from that identity. Moving or renaming the file makes the old entry unusable. Add it again from its new location and remove the old entry; the new entry needs a new review and has new permissions and private data. AppBento does not relocate the old entry or migrate its private data automatically.
 
 ## Features
 
-- **One library:** scan folders for local AppImages, add a file, or download one from a direct HTTPS URL.
+- **One library:** scan folders for local AppImages, explicitly add an AppImage or native executable, or download an AppImage from a direct HTTPS URL.
 - **Groups and search:** organize apps into groups and launch them from a compact grid.
 - **Per-app launch settings:** configure permissions, command-line arguments, and environment variables; inspect launch logs when something goes wrong.
-- **Desktop integration:** add or remove system app-menu shortcuts while keeping your AppImages in the library.
-- **Updates:** configure GitHub Releases, GitLab Releases, or direct HTTPS sources, with release asset matching and architecture/channel options.
+- **Desktop integration:** add or remove system app-menu shortcuts while keeping your apps in the library. Shortcuts use the saved review and launch policy.
+- **AppImage updates:** configure GitHub Releases, GitLab Releases, or direct HTTPS sources, with release asset matching and architecture/channel options.
+- **Configuration backups:** export and restore both app kinds, launch permissions, custom icons, and library settings. App files and private app data are backed up separately; executable file permissions stay unchanged during restore.
 - **Themes:** choose from Tokyo Night, Gruvbox, Catppuccin, Nord, Dracula, Terminal green, and Paper.
 
 Inspired by [Gear Lever](https://github.com/mijorus/gearlever) for feature ideas; AppBento uses original code.
@@ -57,4 +64,4 @@ cargo check -p appbento # backend check
 pnpm check             # typecheck, lint, and tests
 ```
 
-The web preview uses mock data: it does not launch AppImages or enforce sandbox permissions.
+The web preview uses mock data: it does not launch apps or enforce sandbox permissions.

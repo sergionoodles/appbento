@@ -49,12 +49,13 @@ async fn updates_configure(
     app_id: String,
     config: Option<models::UpdateConfig>,
 ) -> Result<models::InstalledApp, String> {
-    if let Some(config) = &config {
-        update_sources::validate_config(config)?;
-    }
     tokio::task::spawn_blocking(move || {
         store::mutate_library(|library| {
             let app = library.get_mut(&app_id).ok_or("app not found")?;
+            app.require_appimage_update()?;
+            if let Some(config) = &config {
+                update_sources::validate_config(config)?;
+            }
             app.update_config = config;
             Ok(app.clone())
         })
@@ -70,6 +71,7 @@ async fn updates_install(app_id: String) -> Result<models::InstalledApp, String>
         .into_iter()
         .find(|app| app.id == app_id)
         .ok_or("app not found")?;
+    app.require_appimage_update()?;
     let lifecycle = tokio::task::spawn_blocking(|| apps::lifecycle())
         .await
         .map_err(|error| error.to_string())??;
@@ -157,6 +159,7 @@ pub fn run() {
             apps::library_launch,
             apps::library_launch_log,
             apps::library_configure,
+            apps::library_default_permissions,
             apps::library_set_icon,
             apps::library_icon,
             apps::sandbox_status,
@@ -203,6 +206,7 @@ mod permission_tests {
             "library_icon",
             "library_add_url",
             "library_set_icon",
+            "library_default_permissions",
             "updates_configure",
             "updates_install",
             "self_launcher_status",

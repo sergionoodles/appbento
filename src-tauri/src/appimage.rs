@@ -1,39 +1,16 @@
 //! Validate AppImage files without executing them.
-use std::fs::{File, OpenOptions};
+use crate::models::AppKind;
+use std::fs::File;
 use std::io::Read;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-const NO_FOLLOW: i32 = 0x20000;
-const NONBLOCKING: i32 = 0x800;
 const ELF_HEADER_LENGTH: usize = 20;
 
 pub fn open_appimage(path: &Path) -> Result<File, String> {
-    if !path.is_absolute()
-        || path.to_str().is_none()
-        || path.to_string_lossy().chars().any(char::is_control)
-    {
-        return Err("AppImage path must be absolute UTF-8 without control characters".into());
-    }
-    if !std::fs::symlink_metadata(path)
-        .map_err(|error| file_access_error(path, error))?
-        .file_type()
-        .is_file()
-    {
-        return Err("AppImage must be a regular non-symlink file".into());
-    }
-    let mut file = OpenOptions::new()
-        .read(true)
-        .custom_flags(NO_FOLLOW | NONBLOCKING)
-        .open(path)
-        .map_err(|error| file_access_error(path, error))?;
-    if !file
-        .metadata()
-        .map_err(|error| error.to_string())?
-        .is_file()
-    {
-        return Err("AppImage must be a regular non-symlink file".into());
-    }
+    super::app_file::open_app(path, AppKind::AppImage)
+}
+
+pub(super) fn validate(file: &mut File) -> Result<(), String> {
     let mut header = [0; ELF_HEADER_LENGTH];
     file.read_exact(&mut header)
         .map_err(|_| "invalid AppImage header")?;
@@ -59,16 +36,5 @@ pub fn open_appimage(path: &Path) -> Result<File, String> {
     }
     use std::io::Seek;
     file.rewind().map_err(|error| error.to_string())?;
-    Ok(file)
-}
-
-fn file_access_error(path: &Path, error: std::io::Error) -> String {
-    if error.kind() == std::io::ErrorKind::NotFound {
-        return format!(
-            "AppImage file is missing: {}. If it was moved or replaced, scan its current folder and remove the old library entry.",
-            path.display()
-        );
-    }
-
-    format!("cannot access AppImage {}: {error}", path.display())
+    Ok(())
 }

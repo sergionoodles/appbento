@@ -1,28 +1,29 @@
 import type { AppApi } from "./api.ts";
 import { restrictedPermissions } from "./sandbox";
-import type { InstalledApp, Settings, UpdateCheckResult, UpdateConfig, UpdateInfo, UpdateReport } from "./types";
+import type { AppKind, InstalledApp, Settings, UpdateCheckResult, UpdateConfig, UpdateInfo, UpdateReport } from "./types";
 
 const PREVIEW_DATE = "2026-01-01T12:00:00Z";
 const PREVIEW_MANAGED_DIRECTORY = "/preview/.local/share/appbento/apps";
 
-export function createPreviewApp(name: string, version: string | null): InstalledApp {
-  const fileName = `${name}${version ? `-${version}` : ""}.AppImage`;
-  const path = `${PREVIEW_MANAGED_DIRECTORY}/${fileName}`;
+export function createPreviewApp(name: string, version: string | null, kind: AppKind = "appimage"): InstalledApp {
+  const fileName = `${name}${version ? `-${version}` : ""}${kind === "appimage" ? ".AppImage" : ""}`;
+  const path = `${kind === "appimage" ? PREVIEW_MANAGED_DIRECTORY : "/preview/Applications"}/${fileName}`;
   return {
-    launch_config: null, update_config: null,
+    kind, launch_config: null, update_config: null,
     id: path, name, file_path: path, source_path: null, file_name: fileName, size_bytes: 180_000_000,
-    executable: true, integrated: true,
+    executable: true, integrated: kind === "appimage",
     version_current: version, icon_path: null, desktop_id: null,
     launch_count: 0, last_launched: null, added_at: PREVIEW_DATE, file_created_at: PREVIEW_DATE,
   };
 }
 
-export function createPreviewApi(): AppApi {
+export function createPreviewApi(includeBinary = false): AppApi {
   let apps: InstalledApp[] = [createPreviewApp("Obsidian", "1.5.3"), createPreviewApp("Joplin", "2.13.0")].map((app) => ({ ...app, launch_config: { mode: "direct" as const, permissions: restrictedPermissions() } }));
   apps = apps.map((app, index) => ({ ...app, update_config: index === 0 ? {
     strategy: "github-release" as const, repo: "obsidianmd/obsidian-releases", asset_regex: ".*AppImage$",
     architecture: "x86_64", tag_regex: "^v?(?P<version>.*)$", prerelease: false, channel: "stable",
   } : null }));
+  if (includeBinary) apps.push(createPreviewApp("Native Editor", "1.0", "binary"));
   const installedDirectUrls = new Map<string, string>();
   let launcherStatus = { installed: false, dismissed: true };
   let settings: Settings = { scan_dirs: [], managed_dir: PREVIEW_MANAGED_DIRECTORY };
@@ -33,7 +34,7 @@ export function createPreviewApi(): AppApi {
   };
 
   const checkApp = (app: InstalledApp): UpdateCheckResult => {
-    if (!app.update_config) return { app_id: app.id, status: "unsupported", latest: null, update: null, error: null };
+    if (app.kind === "binary" || !app.update_config) return { app_id: app.id, status: "unsupported", latest: null, update: null, error: null };
     const isDirect = app.update_config.strategy === "direct-url";
     const latest = isDirect ? "Updated file" : "1.6.7";
     if ((app.update_config.strategy === "direct-url" && installedDirectUrls.get(app.id) === app.update_config.url) || app.version_current === latest) return { app_id: app.id, status: "up-to-date", latest: isDirect ? null : latest, update: null, error: null };
@@ -46,6 +47,7 @@ export function createPreviewApi(): AppApi {
     return { app_id: app.id, status: update.status, latest: isDirect ? null : latest, update, error: null };
   };
   const configureUpdates = (id: string, config: UpdateConfig | null) => {
+    if (findApp(id).kind === "binary") throw new Error("Executable updates are not supported yet");
     const configured = { ...findApp(id), update_config: structuredClone(config) };
     apps = apps.map((app) => app.id === id ? configured : app);
     return structuredClone(configured);
@@ -67,6 +69,10 @@ export function createPreviewApi(): AppApi {
     async libraryIcon() { return null; },
     async pickIcon() { return null; },
     async sandboxStatus() { return { available: true, version: "sample", error: null }; },
+    async libraryDefaultPermissions(id) {
+      const app = findApp(id);
+      return { ...restrictedPermissions(), paths: app.kind === "binary" ? [{ path: app.file_path.slice(0, app.file_path.lastIndexOf("/")), access: "read-only" }] : [] };
+    },
     async libraryConfigure(id, config) {
       const configured = { ...findApp(id), launch_config: structuredClone(config) };
       apps = apps.map((app) => app.id === id ? configured : app);
@@ -111,6 +117,7 @@ export function createPreviewApi(): AppApi {
     async updatesCheck(id) { return checkApp(findApp(id)); },
     async updatesInstall(id) {
       const app = findApp(id);
+      if (app.kind === "binary") throw new Error("Executable updates are not supported yet");
       const update = checkApp(app).update;
       if (!update) throw new Error(app.update_config ? "No update available." : "Configure an update source first.");
       if (app.update_config?.strategy === "direct-url") installedDirectUrls.set(id, app.update_config.url);
@@ -128,6 +135,7 @@ export function createPreviewApi(): AppApi {
         unsupported_count: results.filter((result) => result.status === "unsupported").length,
       };
     },
+    async pickExecutable() { return null; },
     async pickAppImage() { return null; },
     async pickFolder() { return null; },
     async openExternal(value) {

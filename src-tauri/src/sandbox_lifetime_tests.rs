@@ -108,5 +108,5 @@ fn sandbox_lifetime_worker() {
         .join()
         .unwrap()
         .unwrap_err();
-    assert!(error.contains("AppImage launch failed"), "{error}");
+    assert!(error.contains("App launch failed"), "{error}");
 }

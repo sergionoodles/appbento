@@ -6,7 +6,7 @@ fn legacy_update_replaces_its_original_source_in_managed_folder() {
     fs::create_dir_all(&service.managed_dir).unwrap();
     let original = service.managed_dir.join("Example.AppImage");
     fs::copy(&source, &original).unwrap();
-    let app = service.import_appimage(&original, false).unwrap();
+    let app = service.import_app(&original, false).unwrap();
     let legacy = directory.0.join("cached.AppImage");
     fs::copy(&source, &legacy).unwrap();
     let app = InstalledApp {
@@ -21,10 +21,11 @@ fn legacy_update_replaces_its_original_source_in_managed_folder() {
         Ok(())
     })
     .unwrap();
-    let digest = crate::sandbox::appimage_digest(&legacy).unwrap();
+    let digest = crate::lifecycle::app_file::appimage_digest(&legacy).unwrap();
     let staged = tests::staged_update(&directory.0, &legacy);
     let downloaded = fs::read(&staged).unwrap();
     let other = InstalledApp {
+        kind: crate::models::AppKind::AppImage,
         id: "another-app".into(),
         file_path: original.to_str().unwrap().into(),
         ..app.clone()

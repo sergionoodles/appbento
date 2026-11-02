@@ -24,7 +24,7 @@ export function createLibraryActions(
     const managedDirectory = settings.managed_dir.replace(/\/+$/, "");
     const externalIds = apps.filter((app) => {
       const directory = app.file_path.slice(0, app.file_path.lastIndexOf("/"));
-      return directory !== managedDirectory;
+      return app.kind === "appimage" && directory !== managedDirectory;
     }).map((app) => app.id);
     publishState({ settings, importPromptIds: [...new Set([...getState().importPromptIds, ...externalIds])] });
   };
@@ -73,7 +73,7 @@ export function createLibraryActions(
 
   return {
     keepImportLocation: () => publishState({ importPromptIds: getState().importPromptIds.slice(1), error: null }),
-    moveImport: (id: string) => runAppOperation(id, "Move AppImage", async () => {
+    moveImport: (id: string) => runAppOperation(id, "Move app", async () => {
       const app = getState().apps.find((entry) => entry.id === id);
       if (!app) throw new Error("App not found");
       await backend.libraryImport(app.file_path, true);
@@ -151,6 +151,10 @@ export function createLibraryActions(
       if (!selected) return;
 
       await importPath(selected);
+    }, true),
+    importExecutable: () => runOperation("Add executable", async () => {
+      const selected = await backend.pickExecutable();
+      if (selected) await importPath(selected);
     }, true),
     importRequestedAppImage: async () => {
       const requested = await backend.openRequestTake();

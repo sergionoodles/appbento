@@ -58,7 +58,8 @@ export function useSandboxStatus(backend: AppApi) {
   return { status, isChecking, isReady, recheck };
 }
 
-export function PermissionsPage({ backend, config, onChange, sandbox, isReview, isSaving, onError }: {
+export function PermissionsPage({ app, backend, config, onChange, sandbox, isReview, isSaving, onError }: {
+  app: InstalledApp;
   backend: AppApi;
   config: LaunchConfig;
   onChange: (config: LaunchConfig) => void;
@@ -71,7 +72,8 @@ export function PermissionsPage({ backend, config, onChange, sandbox, isReview, 
 
   return (
     <div className="flex flex-col gap-7">
-      {isReview ? <Notice icon={<ShieldCheck size={16} />}>Review how this AppImage can access your computer before its first launch. You can change this later.</Notice> : null}
+      {isReview ? <Notice icon={<ShieldCheck size={16} />}>Review how this app can access your computer before its first launch. You can change this later.</Notice> : null}
+      {app.kind === "binary" ? <Notice icon={<Folder size={16} />}>AppBento uses this executable at its current location. GUI apps are the focus; console output appears in launch logs. The default read-only folder grant makes nearby libraries and resources available. Files in granted folders are not covered by the executable review and can change without a new review. Moving or renaming the executable requires a new entry with new permissions and private data.</Notice> : null}
       {!backend.isTauri ? <Notice tone="warn" icon={<TriangleAlert size={16} />}>Sample preview: permissions are simulated. No sandbox or app is launched here.</Notice> : null}
 
       <fieldset disabled={isSaving} className="grid grid-cols-2 gap-3">
@@ -105,6 +107,24 @@ export function PermissionsPage({ backend, config, onChange, sandbox, isReview, 
 
 export function initialLaunchConfig(app: InstalledApp): LaunchConfig {
   return structuredClone(app.launch_config ?? { mode: "direct", permissions: restrictedPermissions() });
+}
+
+export function useLaunchConfig(app: InstalledApp, backend: AppApi) {
+  const needsDefaults = app.kind === "binary" && !app.launch_config;
+  const [state, setState] = useState(() => ({ config: initialLaunchConfig(app), isLoading: needsDefaults, error: null as string | null }));
+  const id = app.id;
+  useEffect(() => {
+    if (!needsDefaults) return;
+    let isActive = true;
+    void backend.libraryDefaultPermissions(id).then((permissions) => {
+      if (isActive) setState((current) => ({ ...current, config: { ...current.config, permissions }, isLoading: false }));
+    }).catch((failure: unknown) => {
+      if (isActive) setState((current) => ({ ...current, isLoading: false, error: `Cannot load default permissions: ${errorMessage(failure)}` }));
+    });
+    return () => { isActive = false; };
+  }, [backend, id, needsDefaults]);
+  const setConfig = (config: LaunchConfig) => setState((current) => ({ ...current, config }));
+  return { ...state, setConfig };
 }
 
 function BubblewrapStatus({ status, isChecking, isSaving, onRecheck }: {

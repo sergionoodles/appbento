@@ -136,3 +136,25 @@ it("lets restored launch settings be confirmed unchanged before launching a chan
   expect(saved).toEqual([app.launch_config]);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+it("uses the unrestricted executable picker for binary backups", async () => {
+  const selected = importPreview();
+  const binary = createPreviewApp("Native Editor", null, "binary");
+  selected.backup.version = 2;
+  selected.backup.apps = [{ app: binary, icon: null }];
+  selected.app_paths = { [binary.id]: binary.file_path };
+  const requests: ConfigurationPreview[] = [];
+  const backend = { ...createPreviewApi(),
+    async configurationRead() { return selected; },
+    async pickAppImage() { throw new Error("Wrong picker"); },
+    async pickExecutable() { return "/elsewhere/editor"; },
+    async configurationRestore(request: ConfigurationPreview) { requests.push(request); return preferences; },
+  };
+  const user = userEvent.setup();
+  render(<ConfigurationDialog backend={backend} onClose={() => {}} onRestored={async () => {}} returnFocusElement={null} />);
+  await user.click(screen.getByRole("button", { name: "Choose settings file" }));
+  await screen.findByText("Executable for Native Editor");
+  await user.click(screen.getByRole("button", { name: "Browse" }));
+  await user.click(screen.getByRole("button", { name: "Restore settings" }));
+  expect(requests[0].app_paths[binary.id]).toBe("/elsewhere/editor");
+});

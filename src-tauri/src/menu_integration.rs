@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use super::{desktop, open_appimage, recovery, removal_artifact, stage_removal, Lifecycle};
+use super::{desktop, open_app, recovery, removal_artifact, stage_removal, Lifecycle};
 use crate::models::InstalledApp;
 use crate::persistence::{self, Repository};
 use crate::store::Library;
@@ -22,7 +22,7 @@ impl Lifecycle {
                 let destination = desktop::entry_path(&self.desktop_dir, &app)?
                     .unwrap_or_else(|| self.desktop_dir.join(&desktop_id));
                 let artifact = if enabled {
-                    open_appimage(Path::new(&app.file_path))?;
+                    open_app(Path::new(&app.file_path), app.kind)?;
                     if app.desktop_id.is_some() && recovery::identity(&destination)?.is_some() {
                         desktop::migrate(&destination, &app)?;
                         return Ok(app);

@@ -38,7 +38,7 @@ fn manual_import_from_managed_folder_only_registers_existing_file() {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
         let before = fs::metadata(&path).unwrap();
 
-        let app = service.import_appimage(&path, move_to_managed).unwrap();
+        let app = service.import_app(&path, move_to_managed).unwrap();
 
         assert_eq!(Path::new(&app.file_path), path);
         assert!(app.integrated);
@@ -60,7 +60,7 @@ fn external_import_can_stay_in_current_location_without_creating_managed_folder(
     let (_directory, service, source) = tests::fixture();
     let before = fs::metadata(&source).unwrap();
 
-    let app = service.import_appimage(&source, false).unwrap();
+    let app = service.import_app(&source, false).unwrap();
 
     assert_eq!(Path::new(&app.file_path), source);
     assert!(!app.integrated);
@@ -81,9 +81,9 @@ fn moving_external_import_removes_source_after_commit_and_keeps_filename_and_per
         let (directory, service, source) = tests::fixture();
         fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
         let bytes = fs::read(&source).unwrap();
-        let imported = register_first.then(|| service.import_appimage(&source, false).unwrap());
+        let imported = register_first.then(|| service.import_app(&source, false).unwrap());
 
-        let moved = service.import_appimage(&source, true).unwrap();
+        let moved = service.import_app(&source, true).unwrap();
 
         assert_eq!(
             Path::new(&moved.file_path),
@@ -121,14 +121,14 @@ fn moving_external_import_removes_source_after_commit_and_keeps_filename_and_per
 #[test]
 fn failed_move_preserves_original_and_library_without_overwriting_destination() {
     let (_directory, service, source) = tests::fixture();
-    let imported = service.import_appimage(&source, false).unwrap();
+    let imported = service.import_app(&source, false).unwrap();
     let bytes = fs::read(&source).unwrap();
     fs::create_dir(&service.managed_dir).unwrap();
     let destination = service.managed_dir.join("Example.AppImage");
     fs::write(&destination, b"existing file").unwrap();
 
     assert!(service
-        .import_appimage(&source, true)
+        .import_app(&source, true)
         .unwrap_err()
         .contains("destination already exists"));
     assert_eq!(fs::read(&source).unwrap(), bytes);
@@ -143,15 +143,15 @@ fn imports_reject_invalid_images_symlinks_and_appbento_without_moving_files() {
         let (directory, service, source) = tests::fixture();
         let link = directory.0.join("Link.AppImage");
         std::os::unix::fs::symlink(&source, &link).unwrap();
-        assert!(service.import_appimage(&link, move_to_managed).is_err());
+        assert!(service.import_app(&link, move_to_managed).is_err());
         let appbento = source.with_file_name("AppBento.AppImage");
         fs::copy(&source, &appbento).unwrap();
         assert!(service
-            .import_appimage(&appbento, move_to_managed)
+            .import_app(&appbento, move_to_managed)
             .unwrap_err()
             .contains("cannot add itself"));
         fs::write(&source, b"not an AppImage").unwrap();
-        assert!(service.import_appimage(&source, move_to_managed).is_err());
+        assert!(service.import_app(&source, move_to_managed).is_err());
         assert!(source.exists());
         assert!(appbento.exists());
         assert!(!service.managed_dir.exists());
@@ -162,7 +162,7 @@ fn imports_reject_invalid_images_symlinks_and_appbento_without_moving_files() {
 #[test]
 fn moving_a_registered_app_preserves_permissions_history_and_menu_shortcut() {
     let (_directory, service, source) = tests::fixture();
-    let app = service.import_appimage(&source, false).unwrap();
+    let app = service.import_app(&source, false).unwrap();
     let configured = service
         .configure(
             &app.id,
@@ -186,7 +186,7 @@ fn moving_a_registered_app_preserves_permissions_history_and_menu_shortcut() {
         .join(configured.desktop_id.as_ref().unwrap());
     let desktop_content = fs::read(&desktop).unwrap();
 
-    let moved = service.import_appimage(&source, true).unwrap();
+    let moved = service.import_app(&source, true).unwrap();
 
     assert_eq!(moved.id, configured.id);
     assert_eq!(moved.added_at, configured.added_at);
@@ -202,7 +202,7 @@ fn moving_a_registered_app_preserves_permissions_history_and_menu_shortcut() {
 fn interrupted_move_recovers_without_losing_the_source_or_committed_managed_copy() {
     for is_committed in [false, true] {
         let (_directory, service, source) = tests::fixture();
-        let app = service.import_appimage(&source, false).unwrap();
+        let app = service.import_app(&source, false).unwrap();
         fs::create_dir(&service.managed_dir).unwrap();
         let backup = persistence::temporary_path(source.parent().unwrap());
         fs::hard_link(&source, &backup).unwrap();

@@ -220,6 +220,7 @@ fn custom_icon_replaces_default_and_later_discovery_preserves_override() {
     let library_path = directory.0.join("library.json");
     let icons = directory.0.join("icons");
     let app = crate::models::InstalledApp {
+        kind: crate::models::AppKind::AppImage,
         id: "example".into(),
         name: "Example".into(),
         file_path: "/example.AppImage".into(),

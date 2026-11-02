@@ -103,7 +103,7 @@ export function Bento({ layout, apps, updates, updatingAppIds, activeGroupId, is
         );
       })}
       {!apps.length && (isFiltering || !hasGroups) ? (
-        <p className="flex items-center gap-2 text-[var(--muted)]"><PackageOpen size={16} />{isFiltering ? "No apps match your search." : "No apps yet. Add an AppImage or scan your folders from the + menu."}</p>
+        <p className="flex items-center gap-2 text-[var(--muted)]"><PackageOpen size={16} />{isFiltering ? "No apps match your search." : "No apps yet. Add an AppImage or executable or scan your folders from the + menu."}</p>
       ) : null}
       {drag && draggedApp ? (
         <TileGhost app={draggedApp} update={updatesById.get(draggedApp.id)}

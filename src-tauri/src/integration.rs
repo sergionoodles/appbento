@@ -4,11 +4,8 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 use super::recovery::{self, Artifact, Journal, Operation, OriginalMode};
-use super::{
-    candidate_path, discovered_app, is_managed_path, open_appimage, path_id, read_identity,
-    self_appimage, Lifecycle,
-};
-use crate::models::InstalledApp;
+use super::{discovered_app, open_appimage, path_id, read_identity, self_appimage, Lifecycle};
+use crate::models::{AppKind, InstalledApp};
 use crate::persistence::{self, Repository};
 use crate::store::Library;
 
@@ -29,46 +26,6 @@ struct IntegrationPlan {
 }
 
 impl Lifecycle {
-    pub fn import_appimage(
-        &self,
-        source: &Path,
-        move_to_managed: bool,
-    ) -> Result<InstalledApp, String> {
-        let source = candidate_path(source)?;
-        if move_to_managed && !is_managed_path(&self.managed_dir, &source)? {
-            return self.integrate(&source, true);
-        }
-        persistence::with_repository(
-            &self.library_path,
-            |repository: &mut Repository<Library>| {
-                recovery::recover(repository)?;
-                let file = open_appimage(&source)?;
-                let identity = read_identity(&source)?;
-                if self_appimage::is_self_appimage(&source, &identity) {
-                    return Err(self_appimage::IMPORT_WARNING.into());
-                }
-                let id = path_id(&source)?;
-                if let Some(existing) = repository.state.values().find(|app| {
-                    app.source_path.as_deref() == Some(id.as_str()) && app.file_path != id
-                }) {
-                    return Ok(existing.clone());
-                }
-                let existing = repository
-                    .state
-                    .get(&id)
-                    .or_else(|| repository.state.values().find(|app| app.file_path == id));
-                let app = InstalledApp {
-                    integrated: existing.is_some_and(|app| app.integrated)
-                        || is_managed_path(&self.managed_dir, &source)?,
-                    ..discovered_app(&source, &file, existing, identity)?
-                };
-                repository.state.insert(app.id.clone(), app.clone());
-                repository.commit().map_err(|error| error.message)?;
-                Ok(app)
-            },
-        )
-    }
-
     pub fn integrate(&self, source: &Path, move_source: bool) -> Result<InstalledApp, String> {
         self.integrate_source(
             source,
@@ -160,7 +117,7 @@ impl Lifecycle {
             .get(&destination_id)
             .or_else(|| library.get(&source_id))
             .or_else(|| library.values().find(|app| app.file_path == source_id));
-        let mut app = discovered_app(&source, source_file, existing, identity)?;
+        let mut app = discovered_app(&source, source_file, existing, identity, AppKind::AppImage)?;
         app.id = existing.map_or_else(|| destination_id.clone(), |app| app.id.clone());
         app.file_path = destination_id.clone();
         app.integrated = true;
@@ -276,8 +233,8 @@ fn install_artifacts(plan: &IntegrationPlan, source: &mut File) -> Result<(), St
         if matches!(plan.journal.operation, Operation::Replace) {
             let original = &plan.journal.artifacts[0];
             if recovery::identity(&original.original)? != original.identity
-                || crate::sandbox::appimage_digest(&original.original)?
-                    != crate::sandbox::appimage_digest(&artifact.stage)?
+                || crate::lifecycle::app_file::appimage_digest(&original.original)?
+                    != crate::lifecycle::app_file::appimage_digest(&artifact.stage)?
             {
                 return Err("AppImage changed while moving; import it again".into());
             }

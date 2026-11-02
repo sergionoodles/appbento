@@ -4,7 +4,7 @@ const MAX_PROMPT_LOG_LINES = 15;
 
 export function createLaunchFixPrompt(app: InstalledApp, log: LaunchLog | null): string {
   const diagnostics = {
-    app: { name: app.name, version: app.version_current, file_path: app.file_path },
+    app: { kind: app.kind, name: app.name, version: app.version_current, file_path: app.file_path },
     current_launch_config: app.launch_config ?? null,
     latest_launch: log ? {
       ...log,
@@ -12,9 +12,11 @@ export function createLaunchFixPrompt(app: InstalledApp, log: LaunchLog | null):
     } : { started_at: null, text: "No launch logs recorded yet." },
   };
 
-  return `Help me diagnose an AppImage launch problem in AppBento on Linux and suggest settings I can try.
+  return `Help me diagnose an app launch problem in AppBento on Linux and suggest settings I can try.
 
-AppBento can run AppImages directly or restrict them with Bubblewrap. The configuration below is the current saved configuration; it may have changed since the recorded launch. A null configuration means launch permissions have not been configured. Log output is limited to the latest ${MAX_PROMPT_LOG_LINES} lines.
+AppBento can run AppImages and native executables directly or restrict them with Bubblewrap. The configuration below is the current saved configuration; it may have changed since the recorded launch. A null configuration means launch permissions have not been configured. Log output is limited to the latest ${MAX_PROMPT_LOG_LINES} lines.
+
+${app.kind === "binary" ? "This native executable stays at its current path. Its default read-only folder grant exposes adjacent libraries and resources, which are not covered by the executable review. Check for missing support files or a missing program loader as possible causes; AppBento does not install dependencies." : "AppImages use the Type 2 extraction runtime in Bubblewrap."}
 
 Available controls in the app's Settings:
 - Permissions: "Restrict with bubblewrap" or "Run without restrictions".

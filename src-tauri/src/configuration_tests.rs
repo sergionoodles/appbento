@@ -519,3 +519,172 @@ fn restores_multiple_app_order_and_group_order_without_alphabetical_reordering()
     );
     assert!(preferences.layout.groups[1].is_collapsed);
 }
+
+#[test]
+fn legacy_v1_backups_without_kind_load_as_appimages() {
+    let (directory, mut backup) = fixture();
+    backup.version = 1;
+    let mut value = serde_json::to_value(backup).unwrap();
+    value["apps"][0]["app"]
+        .as_object_mut()
+        .unwrap()
+        .remove("kind");
+    let path = directory.0.join("legacy.json");
+    fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert_eq!(
+        read_backup(&path).unwrap().apps[0].app.kind,
+        AppKind::AppImage
+    );
+}
+
+#[test]
+fn binary_backups_roundtrip_and_restore_without_permission_changes() {
+    let (directory, backup) = fixture();
+    assert_eq!(backup.version, 2);
+    let lifecycle = Lifecycle {
+        library_path: directory.0.join("old-data/library.json"),
+        managed_dir: directory.0.join("old-home/Applications"),
+        desktop_dir: directory.0.join("old-desktop"),
+    };
+    let source = directory.0.join("old-home/Downloads/editor");
+    fs::write(&source, crate::lifecycle::executable_tests::binary_bytes()).unwrap();
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o555)).unwrap();
+    let binary = lifecycle.import_app(&source, false).unwrap();
+    let binary = lifecycle.set_menu_entry(&binary.id, true).unwrap();
+    let binary = lifecycle
+        .configure(
+            &binary.id,
+            &LaunchConfig {
+                mode: LaunchMode::Direct,
+                arguments: vec![],
+                environment: Default::default(),
+                permissions: SandboxPermissions::default(),
+            },
+        )
+        .unwrap();
+    let mut backup = export_at(
+        &lifecycle.library_path,
+        backup.preferences,
+        &directory.0.join("old-home"),
+    )
+    .unwrap();
+    assert_eq!(backup.apps.len(), 2);
+    assert!(backup
+        .apps
+        .iter()
+        .any(|entry| entry.app.kind == AppKind::AppImage));
+    // A saved flag cannot change a binary's actual mode on restore.
+    backup
+        .apps
+        .iter_mut()
+        .find(|entry| entry.app.id == binary.id)
+        .unwrap()
+        .app
+        .executable = false;
+    let serialized = serde_json::to_vec(&backup).unwrap();
+    let request = request(&directory, serde_json::from_slice(&serialized).unwrap());
+    let selected = &request.app_paths[&binary.id];
+    let entry = request
+        .backup
+        .apps
+        .iter()
+        .find(|entry| entry.app.id == binary.id)
+        .unwrap();
+    let (prepared, changes) = prepare_app(
+        entry,
+        selected,
+        &request.backup.home_directory,
+        &directory.0.join("new-home"),
+        &directory.0.join("new-data"),
+        &directory.0.join("new-desktop"),
+        &Library::default(),
+        &request.permission_paths,
+    )
+    .unwrap();
+    assert!(prepared.executable);
+    assert_eq!(prepared.reviewed_digest, binary.reviewed_digest);
+    assert!(changes
+        .iter()
+        .all(|change| !matches!(change, FileChange::SetPermissions { .. })));
+    let selected_path = selected.clone();
+    let path = directory.0.join("new-data/library.json");
+    restore_at(
+        &path,
+        &directory.0.join("new-desktop"),
+        &directory.0.join("new-home"),
+        request,
+    )
+    .unwrap();
+    let library: Library = persistence::load(&path).unwrap();
+    let restored = library
+        .values()
+        .find(|app| app.kind == AppKind::Binary)
+        .unwrap();
+    assert!(restored.executable);
+    assert_eq!(restored.reviewed_digest, binary.reviewed_digest);
+    assert_eq!(
+        fs::metadata(&selected_path).unwrap().permissions().mode() & 0o777,
+        0o555
+    );
+}
+
+#[test]
+fn rejects_binary_backup_invariants_v1_binaries_and_mismatched_files() {
+    let (_directory, mut backup) = fixture();
+    for field in ["integrated", "source_path", "update_config"] {
+        let mut value = serde_json::to_value(&backup.apps[0].app).unwrap();
+        value["kind"] = "binary".into();
+        value["integrated"] = false.into();
+        value["source_path"] = serde_json::Value::Null;
+        value["update_config"] = serde_json::Value::Null;
+        value[field] = match field {
+            "integrated" => true.into(),
+            "source_path" => "/source".into(),
+            _ => serde_json::json!({ "strategy": "direct-url", "url": "https://example.org/app" }),
+        };
+        backup.apps[0].app = serde_json::from_value(value).unwrap();
+        assert!(validate_backup(&backup)
+            .unwrap_err()
+            .contains("Executable entries"));
+    }
+    let app = &mut backup.apps[0].app;
+    app.integrated = false;
+    app.source_path = None;
+    app.update_config = None;
+    backup.version = 1;
+    assert!(validate_backup(&backup).unwrap_err().contains("Version 1"));
+    backup.version = 2;
+    let entry = &backup.apps[0];
+    let result = prepare_app(
+        entry,
+        &entry.app.file_path,
+        "/old",
+        Path::new("/new"),
+        Path::new("/policy"),
+        Path::new("/desktop"),
+        &Library::default(),
+        &BTreeMap::new(),
+    );
+    assert!(result
+        .err()
+        .unwrap()
+        .contains("AppImage, not a native executable"));
+    fs::write(
+        &entry.app.file_path,
+        crate::lifecycle::executable_tests::binary_bytes(),
+    )
+    .unwrap();
+    let mut entry = entry.clone();
+    entry.app.kind = AppKind::AppImage;
+    assert!(prepare_app(
+        &entry,
+        &entry.app.file_path,
+        "/old",
+        Path::new("/new"),
+        Path::new("/policy"),
+        Path::new("/desktop"),
+        &Library::default(),
+        &BTreeMap::new()
+    )
+    .is_err());
+}

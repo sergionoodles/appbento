@@ -1,7 +1,5 @@
-use super::{
-    appimage_digest, open_appimage, plan, private_home_path, status, validate_grant, LaunchPlan,
-    Runtime,
-};
+use super::{open_app, plan, private_home_path, status, validate_grant, LaunchPlan, Runtime};
+use crate::lifecycle::app_digest;
 use crate::models::{InstalledApp, LaunchMode};
 use crate::persistence;
 use std::fs::{self, File, OpenOptions};
@@ -43,14 +41,14 @@ fn launch_recorded(
         .ok_or("app not found")?;
     if app.launch_config.is_some()
         && app.reviewed_digest.as_deref()
-            != Some(appimage_digest(Path::new(&app.file_path))?.as_str())
+            != Some(app_digest(Path::new(&app.file_path), app.kind)?.as_str())
     {
         crate::store::mutate_library(|library| {
             let app = library.get_mut(id).ok_or("app not found")?;
             app.reviewed_digest = None;
             Ok(())
         })?;
-        return Err("AppImage changed since review. Review launch permissions again".into());
+        return Err("App changed since review. Review launch permissions again".into());
     }
     let policy_directory = persistence::data_path("library.json")?
         .parent()
@@ -102,7 +100,7 @@ fn spawn_checked(command: &mut Command) -> Result<Child, String> {
     std::thread::sleep(STARTUP_CHECK_DELAY);
     if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
         if !status.success() {
-            return Err(format!("AppImage launch failed: {status}"));
+            return Err(format!("App launch failed: {status}"));
         }
     }
     Ok(child)
@@ -111,9 +109,9 @@ fn spawn_checked(command: &mut Command) -> Result<Child, String> {
 fn wait_for_app(child: &mut Child) -> Result<(), String> {
     let status = child
         .wait()
-        .map_err(|error| format!("could not wait for AppImage: {error}"))?;
+        .map_err(|error| format!("could not wait for app: {error}"))?;
     if !status.success() {
-        return Err(format!("AppImage exited with {status}"));
+        return Err(format!("App exited with {status}"));
     }
     Ok(())
 }
@@ -155,13 +153,13 @@ pub(super) fn pin_launch_paths_in_place(
             snapshot_path: None,
         });
     }
-    let (mut image, snapshot_path) = snapshot_image(Path::new(&app.file_path), policy_directory)?;
+    let (mut image, snapshot_path) = snapshot_app(app, policy_directory)?;
     let mut pinned = PinnedLaunch {
         files: Vec::new(),
         snapshot_path: Some(snapshot_path),
     };
     if app.reviewed_digest.as_deref() != Some(super::digest_file(&mut image)?.as_str()) {
-        return Err("AppImage changed since review. Review launch permissions again".into());
+        return Err("App changed since review. Review launch permissions again".into());
     }
     let image_descriptor = image.as_raw_fd();
     pinned.files.push(image);
@@ -213,9 +211,11 @@ pub(super) fn pin_launch_paths_in_place(
         .arguments
         .windows(3)
         .position(|arguments| {
-            arguments[0] == "--ro-bind" && arguments[2] == "/app/application.AppImage"
+            arguments[0] == "--ro-bind"
+                && Some(arguments[2].as_str()) == plan.application_destination.as_deref()
+                && arguments[1] == app.file_path
         })
-        .ok_or("image mount missing")?;
+        .ok_or("application mount missing")?;
     plan.arguments[image_index] = "--ro-bind-fd".into();
     plan.arguments[image_index + 1] = image_descriptor.to_string();
     if app
@@ -260,11 +260,11 @@ pub(super) fn inherit_descriptors(command: &mut Command, pinned: &PinnedLaunch) 
     }
 }
 
-fn snapshot_image(
-    source: &Path,
+fn snapshot_app(
+    app: &InstalledApp,
     policy_directory: &Path,
 ) -> Result<(File, std::path::PathBuf), String> {
-    let mut original = open_appimage(source)?;
+    let mut original = open_app(Path::new(&app.file_path), app.kind)?;
     let (temporary, mut staged) = persistence::create_temporary(policy_directory)?;
     let preparation = (|| {
         std::io::copy(&mut original, &mut staged).map_err(|error| error.to_string())?;
@@ -272,7 +272,7 @@ fn snapshot_image(
             .set_permissions(fs::Permissions::from_mode(0o500))
             .map_err(|error| error.to_string())?;
         drop(staged);
-        open_appimage(&temporary)
+        open_app(&temporary, app.kind)
     })();
     match preparation {
         Ok(file) => Ok((file, temporary)),
