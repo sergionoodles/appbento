@@ -64,6 +64,7 @@ fn fixture() -> (TemporaryDirectory, ConfigurationBackup) {
                     ..Default::default()
                 },
             },
+            Some(&lifecycle.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     crate::icons::persist_icon(
@@ -560,6 +561,7 @@ fn binary_backups_roundtrip_and_restore_without_permission_changes() {
                 environment: Default::default(),
                 permissions: SandboxPermissions::default(),
             },
+            Some(&lifecycle.prepare_review(&binary.id).unwrap()),
         )
         .unwrap();
     let mut backup = export_at(

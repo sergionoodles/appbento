@@ -85,6 +85,7 @@ fn sandbox_lifetime_worker() {
                     ..Default::default()
                 },
             },
+            Some(&lifecycle.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     let launched = std::thread::spawn(move || launch(&app.id, &[]))
@@ -102,7 +103,9 @@ fn sandbox_lifetime_worker() {
         arguments: vec!["!fail".into()],
         ..launched.launch_config.unwrap()
     };
-    lifecycle.configure(&launched.id, &failed_config).unwrap();
+    lifecycle
+        .configure(&launched.id, &failed_config, None)
+        .unwrap();
     let id = launched.id;
     let error = std::thread::spawn(move || launch(&id, &[]))
         .join()

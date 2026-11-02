@@ -16,6 +16,7 @@ const COMMANDS: &[&str] = &[
     "library_launch",
     "library_launch_log",
     "library_configure",
+    "library_prepare_review",
     "library_default_permissions",
     "sandbox_status",
     "library_remove",

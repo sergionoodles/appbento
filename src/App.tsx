@@ -192,12 +192,12 @@ function Shell({ backend, onRestored }: { backend: AppApi; onRestored: (preferen
       {configuringApp && !executableApp && !showFolders && !removingApp ? <AppSettingsDialog key={configuringApp.id} app={configuringApp} backend={backend}
         openTo={settingsApp ? settingsTarget : "permissions"} originalName={configuringOriginalName} launchAfterSave={launchAfterReview}
         onClose={() => { setSettingsId(null); if (reviewingApp) controller.dismissReview(); }} onSaved={() => setSettingsId(null)}
-        onSavePermissions={(config, launch) => controller.configure(configuringApp.id, config, launch)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
+        onSavePermissions={(config, launch, reviewToken) => controller.configure(configuringApp.id, config, launch, reviewToken)} onSaveUpdates={(config) => controller.configureUpdates(configuringApp.id, config)}
         onSaveIcon={(source) => controller.setIcon(configuringApp.id, source)} onSaveName={(name) => saveDisplayName(configuringApp.id, configuringOriginalName, name)}
         onSetMenuEntry={(enabled) => controller.setMenuEntry(configuringApp.id, enabled)}
         update={updates.find((update) => update.app_id === configuringApp.id)} updateCheck={appUpdateChecks[configuringApp.id]} isCheckingUpdates={isCheckingUpdates}
         onCheckUpdate={() => void controller.checkAppUpdates(configuringApp.id)} onInstallUpdate={() => void controller.installUpdate(configuringApp.id)}
-        isSaving={disabled} isUpdating={updatingAppIds.includes(configuringApp.id)} error={error} returnFocusElement={returnFocusElement} /> : null}
+        isSaving={disabled} operation={operation} isUpdating={updatingAppIds.includes(configuringApp.id)} error={error} returnFocusElement={returnFocusElement} /> : null}
       {executableApp ? <ExecutableDialog app={executableApp} onClose={controller.dismissExecutablePrompt}
         onConfirm={controller.confirmExecutable} isSaving={disabled} error={error} returnFocusElement={returnFocusElement} /> : null}
       {logsApp ? <LaunchLogsDialog key={logsApp.id} app={logsApp} backend={backend} onClose={() => setLogsId(null)} returnFocusElement={returnFocusElement} /> : null}

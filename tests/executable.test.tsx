@@ -115,7 +115,7 @@ it("shows unavailable Bubblewrap and blocks sandbox saving without launching unr
 
 it("reopens binary permission review when changed content invalidates approval", async () => {
   const { binary, backend } = await binaryBackend();
-  await backend.libraryConfigure(binary.id, { mode: "direct", permissions: await backend.libraryDefaultPermissions(binary.id) });
+  await backend.libraryConfigure(binary.id, { mode: "direct", permissions: await backend.libraryDefaultPermissions(binary.id) }, await backend.libraryPrepareReview(binary.id));
   let hasChanged = false;
   const user = userEvent.setup();
   render(<App backend={{ ...backend,

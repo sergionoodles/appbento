@@ -12,7 +12,13 @@ fn importing_and_discovering_apps_never_creates_launchers() {
     let imported = service.integrate(&source, false).unwrap();
     assert!(imported.desktop_id.is_none());
     assert!(!service.desktop_dir.exists());
-    service.configure(&imported.id, &direct_config()).unwrap();
+    service
+        .configure(
+            &imported.id,
+            &direct_config(),
+            Some(&service.prepare_review(&imported.id).unwrap()),
+        )
+        .unwrap();
     assert!(!service.desktop_dir.exists());
     service.remove(&imported.id, true).unwrap();
     assert!(source.exists());
@@ -100,7 +106,13 @@ fn launch_config_changes_refresh_existing_menu_entries_without_exposing_environm
             2 => config.mode = crate::models::LaunchMode::Bubblewrap,
             _ => config.mode = crate::models::LaunchMode::Direct,
         }
-        service.configure(&app.id, &config).unwrap();
+        service
+            .configure(
+                &app.id,
+                &config,
+                Some(&service.prepare_review(&app.id).unwrap()),
+            )
+            .unwrap();
         let content = fs::read_to_string(&path).unwrap();
         assert_ne!(content, previous);
         assert!(content.contains(&format!(" --launch \"{}\"", app.id)));

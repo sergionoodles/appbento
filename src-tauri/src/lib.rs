@@ -1,4 +1,5 @@
 mod app_identity;
+mod app_review;
 mod apps;
 mod configuration;
 mod embedded_icon;
@@ -159,6 +160,7 @@ pub fn run() {
             apps::library_launch,
             apps::library_launch_log,
             apps::library_configure,
+            apps::library_prepare_review,
             apps::library_default_permissions,
             apps::library_set_icon,
             apps::library_icon,

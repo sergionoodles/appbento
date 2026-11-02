@@ -24,7 +24,8 @@ export interface Commands {
   library_icon: { args: { id: string }; result: string | null };
   sandbox_status: { args: undefined; result: SandboxStatus };
   library_default_permissions: { args: { id: string }; result: SandboxPermissions };
-  library_configure: { args: { id: string; config: LaunchConfig }; result: InstalledApp };
+  library_prepare_review: { args: { id: string }; result: string };
+  library_configure: { args: { id: string; config: LaunchConfig; reviewToken: string | null }; result: InstalledApp };
   library_list: { args: undefined; result: InstalledApp[] };
   library_scan: { args: { extraDirs: string[] }; result: ScanReport };
   library_add_url: { args: { url: string }; result: InstalledApp };
@@ -62,7 +63,8 @@ export interface AppApi extends SelfUpdateBackend {
   pickIcon(): Promise<string | null>;
   sandboxStatus(): Promise<SandboxStatus>;
   libraryDefaultPermissions(id: string): Promise<SandboxPermissions>;
-  libraryConfigure(id: string, config: LaunchConfig): Promise<InstalledApp>;
+  libraryPrepareReview(id: string): Promise<string>;
+  libraryConfigure(id: string, config: LaunchConfig, reviewToken?: string | null): Promise<InstalledApp>;
   libraryList(): Promise<InstalledApp[]>;
   libraryScan(): Promise<ScanReport>;
   libraryAddUrl(url: string): Promise<InstalledApp>;
@@ -129,7 +131,8 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     },
     sandboxStatus: () => transport("sandbox_status", undefined),
     libraryDefaultPermissions: (id) => transport("library_default_permissions", { id }),
-    libraryConfigure: (id, config) => transport("library_configure", { id, config }),
+    libraryPrepareReview: (id) => transport("library_prepare_review", { id }),
+    libraryConfigure: (id, config, reviewToken = null) => transport("library_configure", { id, config, reviewToken }),
     libraryList: () => transport("library_list", undefined),
     libraryScan: () => transport("library_scan", { extraDirs: [] }),
     libraryAddUrl: (url) => transport("library_add_url", { url }),

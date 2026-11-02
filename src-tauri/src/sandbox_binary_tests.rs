@@ -14,7 +14,13 @@ fn reviewed_binary() -> (crate::persistence::tests::TemporaryDirectory, Installe
             ..default_permissions(&app, &directory.0.join("policy"))
         },
     };
-    let app = service.configure(&app.id, &config).unwrap();
+    let app = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     (directory, app)
 }
 
