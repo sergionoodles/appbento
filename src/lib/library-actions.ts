@@ -30,12 +30,14 @@ export function createLibraryActions(
   };
   const launchAndRefresh = async (id: string, makeExecutable = false) => {
     try {
+      publishState({ operation: "Preparing app launch" });
       const prepared = await backend.libraryPrepareLaunch(id, makeExecutable);
       publishState({ apps: getState().apps.map((app) => app.id === id ? prepared : app) });
       if (!prepared.executable) {
         publishState({ executablePromptId: id, error: null });
         return;
       }
+      publishState({ operation: "Verifying app file and starting app" });
       const launched = await backend.libraryLaunch(id);
       publishState({ apps: getState().apps.map((app) => app.id === id ? launched : app), executablePromptId: null });
     } catch (error) {
@@ -121,8 +123,8 @@ export function createLibraryActions(
     scan: () => runOperation("Scan folders", scan, true),
     requestReview: (id: string) => publishState({ reviewIds: [id, ...getState().reviewIds.filter((reviewId) => reviewId !== id)], launchAfterReview: false, error: null }),
     dismissReview: () => publishState({ reviewIds: getState().reviewIds.slice(1), launchAfterReview: false, error: null }),
-    configure: (id: string, config: LaunchConfig, launch: boolean) => runAppOperation(id, "Save permissions", async () => {
-      const configured = await backend.libraryConfigure(id, config);
+    configure: (id: string, config: LaunchConfig, launch: boolean, reviewToken: string | null = null) => runAppOperation(id, "Saving settings", async () => {
+      const configured = await backend.libraryConfigure(id, config, reviewToken);
       publishState({ apps: getState().apps.map((app) => app.id === id ? configured : app) });
       if (launch) await launchAndRefresh(id);
       publishState({ reviewIds: getState().reviewIds.filter((reviewId) => reviewId !== id), launchAfterReview: false });

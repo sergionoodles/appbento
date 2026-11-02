@@ -218,6 +218,7 @@ fn launcher_worker() {
                     ..Default::default()
                 },
             },
+            Some(&lifecycle.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     assert_eq!(launch(&app.id, &[]).unwrap().launch_count, 1);

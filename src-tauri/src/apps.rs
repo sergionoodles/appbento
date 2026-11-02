@@ -145,10 +145,34 @@ pub async fn sandbox_status() -> Result<crate::sandbox::SandboxStatus, String> {
 }
 
 #[tauri::command]
-pub async fn library_configure(id: String, config: LaunchConfig) -> Result<InstalledApp, String> {
-    tokio::task::spawn_blocking(move || lifecycle()?.configure(&id, &config))
-        .await
-        .map_err(|error| error.to_string())?
+pub async fn library_prepare_review(id: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let review = lifecycle()?.prepare_review(&id)?;
+        crate::app_review::PREPARED_REVIEWS.insert(review)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn library_configure(
+    id: String,
+    config: LaunchConfig,
+    review_token: Option<String>,
+) -> Result<InstalledApp, String> {
+    tokio::task::spawn_blocking(move || {
+        let review = review_token
+            .as_deref()
+            .map(|token| crate::app_review::PREPARED_REVIEWS.get(token))
+            .transpose()?;
+        let configured = lifecycle()?.configure(&id, &config, review.as_ref())?;
+        if let Some(token) = review_token {
+            crate::app_review::PREPARED_REVIEWS.remove(&token)?;
+        }
+        Ok(configured)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

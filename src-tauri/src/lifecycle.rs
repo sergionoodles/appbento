@@ -86,6 +86,7 @@ impl Lifecycle {
         &self,
         id: &str,
         config: &crate::models::LaunchConfig,
+        review: Option<&crate::app_review::PreparedReview>,
     ) -> Result<InstalledApp, String> {
         let config = crate::sandbox::validate_config(
             config,
@@ -96,7 +97,11 @@ impl Lifecycle {
             |repository: &mut persistence::Repository<Library>| {
                 recovery::recover(repository)?;
                 let app = repository.state.get_mut(id).ok_or("app not found")?;
-                app.reviewed_digest = Some(app_digest(Path::new(&app.file_path), app.kind)?);
+                if let Some(review) = review {
+                    app.reviewed_digest = Some(review.digest_for(app)?);
+                } else if app.launch_config.is_none() || app.reviewed_digest.is_none() {
+                    return Err("Verify the app file before approving launch settings.".into());
+                }
                 app.launch_config = Some(config);
                 let configured = app.clone();
                 if let Some(path) = desktop::entry_path(&self.desktop_dir, &configured)? {

@@ -34,6 +34,7 @@
     "allow-library-launch",
     "allow-library-launch-log",
     "allow-library-configure",
+    "allow-library-prepare-review",
     "allow-library-default-permissions",
     "allow-sandbox-status",
     "allow-library-remove",

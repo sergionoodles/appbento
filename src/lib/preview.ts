@@ -18,7 +18,7 @@ export function createPreviewApp(name: string, version: string | null, kind: App
 }
 
 export function createPreviewApi(includeBinary = false): AppApi {
-  let apps: InstalledApp[] = [createPreviewApp("Obsidian", "1.5.3"), createPreviewApp("Joplin", "2.13.0")].map((app) => ({ ...app, launch_config: { mode: "direct" as const, permissions: restrictedPermissions() } }));
+  let apps: InstalledApp[] = [createPreviewApp("Obsidian", "1.5.3"), createPreviewApp("Joplin", "2.13.0")].map((app) => ({ ...app, reviewed_digest: "preview-approved", launch_config: { mode: "direct" as const, permissions: restrictedPermissions() } }));
   apps = apps.map((app, index) => ({ ...app, update_config: index === 0 ? {
     strategy: "github-release" as const, repo: "obsidianmd/obsidian-releases", asset_regex: ".*AppImage$",
     architecture: "x86_64", tag_regex: "^v?(?P<version>.*)$", prerelease: false, channel: "stable",
@@ -73,8 +73,12 @@ export function createPreviewApi(includeBinary = false): AppApi {
       const app = findApp(id);
       return { ...restrictedPermissions(), paths: app.kind === "binary" ? [{ path: app.file_path.slice(0, app.file_path.lastIndexOf("/")), access: "read-only" }] : [] };
     },
-    async libraryConfigure(id, config) {
-      const configured = { ...findApp(id), launch_config: structuredClone(config) };
+    async libraryPrepareReview(id) { return `preview-review:${id}`; },
+    async libraryConfigure(id, config, reviewToken) {
+      const app = findApp(id);
+      if (reviewToken && reviewToken !== `preview-review:${id}`) throw new Error("Invalid app approval");
+      if ((!app.launch_config || app.reviewed_digest === null) && !reviewToken) throw new Error("Verify the app file before approving launch settings.");
+      const configured = { ...app, launch_config: structuredClone(config), reviewed_digest: reviewToken ? "preview-approved" : app.reviewed_digest };
       apps = apps.map((app) => app.id === id ? configured : app);
       return structuredClone(configured);
     },

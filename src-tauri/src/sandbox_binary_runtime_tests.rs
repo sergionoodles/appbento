@@ -79,6 +79,7 @@ int main(int argc, char **argv) {
                     ..default_permissions(&app, policy)
                 },
             },
+            Some(&service.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     let home = private_home_path(policy, &app.id);
@@ -179,15 +180,28 @@ fn binary_review_worker() {
         environment: Default::default(),
         permissions: SandboxPermissions::default(),
     };
-    service.configure(&app.id, &config).unwrap();
+    service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     let mut bytes = fs::read(&path).unwrap();
     bytes.push(0);
     fs::write(&path, bytes).unwrap();
+    service.configure(&app.id, &config, None).unwrap();
     assert!(execution::launch_observed(&app.id, &[], |_| Ok(()))
         .unwrap_err()
         .contains("changed since review"));
     assert!(service.list().unwrap()[0].reviewed_digest.is_none());
-    service.configure(&app.id, &config).unwrap();
+    service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     let launched = execution::launch_observed(&app.id, &[], |_| Ok(())).unwrap();
     assert_eq!(launched.launch_count, 1);
     let log = serde_json::to_value(crate::launch_logs::read(&app.id).unwrap().unwrap()).unwrap();

@@ -73,7 +73,26 @@ test("native sandbox commands preserve config and return backend status", async 
   assert.deepEqual(await backend.libraryConfigure(app.id, config), app);
   assert.deepEqual(calls, [
     { command: "sandbox_status", args: undefined },
-    { command: "library_configure", args: { id: app.id, config } },
+    { command: "library_configure", args: { id: app.id, config, reviewToken: null } },
+  ]);
+});
+
+test("native app approval passes the prepared token separately from launch settings", async () => {
+  const app = createPreviewApp("Reviewed", null);
+  const config = { mode: "direct" as const, permissions: restrictedPermissions() };
+  const calls: unknown[] = [];
+  const transport: CommandTransport = async <Command extends keyof Commands>(command: Command, args: Commands[Command]["args"]) => {
+    calls.push({ command, args });
+    return (command === "library_prepare_review" ? "prepared-token" : app) as Commands[Command]["result"];
+  };
+  const backend = createNativeApi(transport);
+
+  const reviewToken = await backend.libraryPrepareReview(app.id);
+  await backend.libraryConfigure(app.id, config, reviewToken);
+
+  assert.deepEqual(calls, [
+    { command: "library_prepare_review", args: { id: app.id } },
+    { command: "library_configure", args: { id: app.id, config, reviewToken: "prepared-token" } },
   ]);
 });
 

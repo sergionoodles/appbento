@@ -4,6 +4,9 @@ use crate::persistence::tests::TemporaryDirectory;
 #[path = "menu_integration_tests.rs"]
 mod menu_integration_tests;
 
+#[path = "app_review_tests.rs"]
+mod app_review_tests;
+
 const ELF_HEADER_LENGTH: usize = 20;
 
 #[test]
@@ -484,6 +487,45 @@ fn packaged_launcher_uses_stable_outer_appimage_path() {
 }
 
 #[test]
+fn ordinary_settings_save_retains_approved_file_digest() {
+    let (directory, service, source) = fixture();
+    let app = service
+        .scan(vec![directory.0.clone()])
+        .unwrap()
+        .apps
+        .remove(0);
+    let config = crate::models::LaunchConfig {
+        arguments: Vec::new(),
+        environment: Default::default(),
+        mode: crate::models::LaunchMode::Direct,
+        permissions: Default::default(),
+    };
+    let approved = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
+    let mut changed_bytes = fs::read(&source).unwrap();
+    changed_bytes.extend_from_slice(b"replacement content");
+    fs::write(&source, changed_bytes).unwrap();
+    let edited = crate::models::LaunchConfig {
+        arguments: vec!["--profile=new".into()],
+        ..config
+    };
+
+    let saved = service.configure(&app.id, &edited, None).unwrap();
+
+    assert_eq!(saved.launch_config, Some(edited));
+    assert_eq!(saved.reviewed_digest, approved.reviewed_digest);
+    assert_ne!(
+        saved.reviewed_digest,
+        Some(app_digest(&source, app.kind).unwrap())
+    );
+}
+
+#[test]
 fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
     let (directory, service, source) = fixture();
     let app = service
@@ -497,7 +539,13 @@ fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };
-    let configured = service.configure(&app.id, &config).unwrap();
+    let configured = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     assert_eq!(configured.launch_config, Some(config.clone()));
     assert!(configured.reviewed_digest.is_some());
     assert_eq!(service.list().unwrap()[0], configured);
@@ -511,7 +559,7 @@ fn reviewed_configuration_persists_and_failed_validation_keeps_it() {
         },
         ..config
     };
-    assert!(service.configure(&app.id, &invalid).is_err());
+    assert!(service.configure(&app.id, &invalid, None).is_err());
     assert_eq!(service.list().unwrap()[0], configured);
     assert!(source.exists());
 }
@@ -552,7 +600,13 @@ fn manual_update_preserves_identity_permissions_history_and_desktop() {
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };
-    let configured = service.configure(&app.id, &config).unwrap();
+    let configured = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     let digest = crate::lifecycle::app_file::appimage_digest(Path::new(&app.file_path)).unwrap();
     let staged = staged_update(&directory.0, &source);
     let updated = service
@@ -659,7 +713,13 @@ fn old_library_records_keep_saved_settings_and_discard_removed_metadata() {
         mode: crate::models::LaunchMode::Direct,
         permissions: crate::models::SandboxPermissions::default(),
     };
-    let configured = service.configure(&imported.id, &config).unwrap();
+    let configured = service
+        .configure(
+            &imported.id,
+            &config,
+            Some(&service.prepare_review(&imported.id).unwrap()),
+        )
+        .unwrap();
     let mut record = serde_json::to_value(&configured).unwrap();
     record["update_config"] =
         serde_json::json!({ "strategy": "direct-url", "url": "https://example.com/app.AppImage" });
@@ -704,7 +764,13 @@ fn update_inherits_permissions_and_history_changed_during_download() {
             ..Default::default()
         },
     };
-    service.configure(&expected.id, &config).unwrap();
+    service
+        .configure(
+            &expected.id,
+            &config,
+            Some(&service.prepare_review(&expected.id).unwrap()),
+        )
+        .unwrap();
     persistence::mutate(&service.library_path, |library: &mut Library| {
         library.get_mut(&expected.id).unwrap().launch_count = 7;
         Ok(())
@@ -741,7 +807,13 @@ fn integrating_updated_portable_preserves_identity_configuration_and_private_hom
         mode: crate::models::LaunchMode::Direct,
         permissions: Default::default(),
     };
-    let configured = service.configure(&app.id, &config).unwrap();
+    let configured = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     let digest = crate::lifecycle::app_file::appimage_digest(&source).unwrap();
     let staged = staged_update(&directory.0, &source);
     let updated = service

@@ -15,6 +15,8 @@ import { GeneralPage } from "./app-settings/general-page";
 import { IntegrationPage } from "./app-settings/integration-page";
 import { PermissionsPage, initialLaunchConfig, useLaunchConfig, useSandboxStatus } from "./app-settings/permissions-page";
 import { UpdatesPage } from "./app-settings/updates-page";
+import { useAppReview } from "./app-settings/use-app-review";
+import { SaveStatus } from "./app-settings/save-status";
 
 type Page = "general" | "permissions" | "launch" | "updates" | "integration";
 
@@ -29,7 +31,13 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
-export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, isUpdating = false, error, returnFocusElement, update, updateCheck, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+function saveButtonLabel(isCommitting: boolean, operation: string | null, launchAfterSave: boolean) {
+  if (!isCommitting) return launchAfterSave ? "Save and launch" : "Save changes";
+  if (operation === "Verifying app file and starting app" || operation === "Preparing app launch") return "Starting app…";
+  return "Saving…";
+}
+
+export function AppSettingsDialog({ app, backend, openTo, originalName, launchAfterSave, onClose, onSaved, onSavePermissions, onSaveUpdates, onSaveIcon, onSaveName, onSetMenuEntry, isSaving, operation = null, isUpdating = false, error, returnFocusElement, update, updateCheck, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   app: InstalledApp;
   update?: UpdateInfo;
   updateCheck?: UpdateCheckResult;
@@ -42,12 +50,13 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   launchAfterSave: boolean;
   onClose: () => void;
   onSaved: () => void;
-  onSavePermissions: (config: LaunchConfig, launch: boolean) => Promise<boolean>;
+  onSavePermissions: (config: LaunchConfig, launch: boolean, reviewToken: string | null) => Promise<boolean>;
   onSaveUpdates: (config: UpdateConfig | null) => Promise<boolean>;
   onSaveIcon: (source: string) => Promise<boolean>;
   onSaveName: (name: string) => void;
   onSetMenuEntry: (enabled: boolean) => Promise<boolean>;
   isSaving: boolean;
+  operation?: string | null;
   isUpdating?: boolean;
   error: string | null;
   returnFocusElement?: HTMLElement | null;
@@ -59,9 +68,11 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const [launchDraft, setLaunchDraft] = useState(() => launchDraftFromConfig(initialLaunchConfig(app)));
   const [updateDraft, setUpdateDraft] = useState(() => draftFromConfig(app.update_config));
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const sandbox = useSandboxStatus(backend);
+  const review = useAppReview(app, backend);
 
-  const isReview = !app.launch_config || app.reviewed_digest === null;
+  const isReview = review.needsReview;
   const hasNameChange = name.trim() !== app.name;
   // A restored policy awaiting review needs confirmation even if its settings are unchanged.
   const hasPermissionChange = isReview || JSON.stringify(launchConfig) !== JSON.stringify(app.launch_config);
@@ -70,9 +81,10 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const hasUpdateChange = isDraftChanged(updateDraft, app.update_config);
   const changedPages: Record<Page, boolean> = { general: hasNameChange, permissions: hasPermissionChange, launch: hasLaunchChange, updates: hasUpdateChange, integration: false };
   const isPermissionsBlocked = hasConfigChange && launchConfig.mode === "bubblewrap" && !sandbox.isReady;
-  const isBusy = isSaving || isUpdating || isLoadingDefaults;
+  const isCommitting = isSaving || isSubmitting;
+  const isBusy = isCommitting || isUpdating || isLoadingDefaults;
   const canSave = !isBusy && !defaultsError && !!name.trim() && (hasNameChange || hasConfigChange || hasUpdateChange)
-    && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft));
+    && !isPermissionsBlocked && (!hasUpdateChange || isDraftComplete(updateDraft)) && !review.isVerifying && !review.error;
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
   const save = async () => {
@@ -91,15 +103,22 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
     })();
     if (!config) return;
 
-    if (hasNameChange) onSaveName(name.trim());
-    if (hasUpdateChange && !await onSaveUpdates(configFromDraft(updateDraft))) return;
-    // Permissions go last because saving them can also launch the app.
-    if (hasConfigChange && !await onSavePermissions(config, launchAfterSave)) return;
-    onSaved();
+    setIsSubmitting(true);
+    try {
+      if (hasNameChange) onSaveName(name.trim());
+      if (hasUpdateChange && !await onSaveUpdates(configFromDraft(updateDraft))) return;
+      // Permissions go last because saving them can also launch the app.
+      if (hasConfigChange && !await onSavePermissions(config, launchAfterSave, review.token)) return;
+      onSaved();
+    } catch (failure) {
+      setLocalError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog title={`Settings for ${app.name}`} onClose={onClose} canClose={!isSaving} returnFocusElement={returnFocusElement} isBare
+    <Dialog title={`Settings for ${app.name}`} onClose={onClose} canClose={!isCommitting} returnFocusElement={returnFocusElement} isBare
       className="w-[min(960px,100%)] h-[min(660px,calc(100vh-24px))] max-h-none">
       <div className="grid h-full min-h-0 grid-cols-[232px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col gap-5 border-r border-[var(--border)] bg-[color-mix(in_oklab,var(--panel2)_55%,var(--panel))] px-3 py-5">
@@ -131,7 +150,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
               <h3 className="text-[20px] font-bold tracking-[-0.03em] leading-tight">{current.label}</h3>
               <p className="mt-1 text-[13px] text-[var(--muted)]">{current.description}</p>
             </div>
-            <Button variant="ghost" size="icon" aria-label="Close settings" disabled={isSaving} onClick={onClose} className="-mr-2"><X size={18} /></Button>
+            <Button variant="ghost" size="icon" aria-label="Close settings" disabled={isCommitting} onClick={onClose} className="-mr-2"><X size={18} /></Button>
           </header>
 
           <div key={page} className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
@@ -149,12 +168,15 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
 
           <footer className="flex items-center gap-3 border-t border-[var(--border)] px-8 py-4">
             <div className="flex-1 min-w-0 text-[13px]">
-              {localError || defaultsError || error
-                ? <p role="alert" className="text-[var(--bad)]">{localError ?? defaultsError ?? error}</p>
-                : <p className="text-[var(--muted)]">{isLoadingDefaults ? "Loading default permissions…" : isReview ? "Confirm permissions before launching this app." : canSave ? "You have unsaved changes." : null}</p>}
+              <SaveStatus isVerifying={review.isVerifying} needsReview={isReview} verificationError={review.error}
+                isSaving={isCommitting} isUpdating={isUpdating} operation={operation} isLoadingDefaults={isLoadingDefaults}
+                hasChanges={hasNameChange || hasConfigChange || hasUpdateChange} onRetry={review.retry} />
+              {localError || defaultsError || review.error || error
+                ? <p role="alert" className="mt-2 text-[var(--bad)]">{localError ?? defaultsError ?? review.error ?? error}</p>
+                : null}
             </div>
-            <Button variant="ghost" disabled={isSaving} onClick={onClose}>Cancel</Button>
-            <Button variant="accent" disabled={!canSave} onClick={() => void save()}>{isSaving ? "Saving…" : launchAfterSave ? "Save and launch" : "Save changes"}</Button>
+            <Button variant="ghost" disabled={isCommitting} onClick={onClose}>Cancel</Button>
+            <Button variant="accent" disabled={!canSave} aria-describedby="app-settings-save-status" onClick={() => void save()}>{saveButtonLabel(isCommitting, operation, launchAfterSave)}</Button>
           </footer>
         </div>
       </div>

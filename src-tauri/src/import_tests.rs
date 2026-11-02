@@ -172,6 +172,7 @@ fn moving_a_registered_app_preserves_permissions_history_and_menu_shortcut() {
                 mode: crate::models::LaunchMode::Direct,
                 permissions: Default::default(),
             },
+            Some(&service.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     let configured = service.set_menu_entry(&configured.id, true).unwrap();

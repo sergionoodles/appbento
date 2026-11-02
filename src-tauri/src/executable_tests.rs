@@ -140,6 +140,7 @@ fn legacy_kinds_roundtrip_and_unknown_kind_preserves_library_on_write_attempt() 
                 environment: Default::default(),
                 permissions: Default::default(),
             },
+            Some(&service.prepare_review(&app.id).unwrap()),
         )
         .unwrap();
     let mut value = serde_json::to_value(&app).unwrap();
@@ -181,7 +182,13 @@ fn imports_in_place_preserves_settings_and_survives_scans_and_reload() {
         environment: Default::default(),
         permissions: crate::sandbox::default_permissions(&app, &directory.0.join("policy")),
     };
-    let configured = service.configure(&app.id, &config).unwrap();
+    let configured = service
+        .configure(
+            &app.id,
+            &config,
+            Some(&service.prepare_review(&app.id).unwrap()),
+        )
+        .unwrap();
     let prepared = service.prepare_launch(&app.id, true).unwrap();
     assert!(prepared.executable);
     let duplicate = service.import_app(&path, false).unwrap();
