@@ -18,8 +18,10 @@ async function openLaunchSettings() {
 describe("per-app launch settings", () => {
   it("saves, reopens, and clears options for only the selected app", async () => {
     const { backend, user } = await openLaunchSettings();
-    await user.type(screen.getByLabelText("Command-line arguments"), "--profile\nMy profile");
-    await user.type(screen.getByLabelText("Environment variables"), "GTK_THEME=Adwaita:dark\nEMPTY=");
+    await user.click(screen.getByLabelText("Command-line arguments"));
+    await user.paste("--profile\nMy profile");
+    await user.click(screen.getByLabelText("Environment variables"));
+    await user.paste("GTK_THEME=Adwaita:dark\nEMPTY=");
     await user.click(screen.getByRole("button", { name: "Permissions" }));
     await user.click(screen.getByRole("button", { name: "Launch" }));
     expect(screen.getByLabelText("Command-line arguments")).toHaveValue("--profile\nMy profile");
