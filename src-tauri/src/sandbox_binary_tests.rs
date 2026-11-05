@@ -11,6 +11,7 @@ fn reviewed_binary() -> (crate::persistence::tests::TemporaryDirectory, Installe
         permissions: SandboxPermissions {
             display: false,
             persistent_data: false,
+            desktop_integration: Default::default(),
             ..default_permissions(&app, &directory.0.join("policy"))
         },
     };
@@ -39,7 +40,10 @@ fn default_permissions_grant_only_valid_binary_parent_folders() {
     app.kind = AppKind::AppImage;
     assert_eq!(
         default_permissions(&app, &policy),
-        SandboxPermissions::default()
+        SandboxPermissions {
+            desktop_integration: crate::models::DesktopIntegration::recommended(),
+            ..SandboxPermissions::default()
+        }
     );
     app.kind = AppKind::Binary;
     for parent in [&directory.0, Path::new("/usr/local/bin"), Path::new("/app")] {

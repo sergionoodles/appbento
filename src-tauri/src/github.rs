@@ -32,12 +32,21 @@ pub(crate) struct Release {
     pub(crate) assets: Vec<ReleaseAsset>,
 }
 
+/// Checksum the source publishes for the update file, verified while the file downloads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpectedChecksum {
+    Sha1Hex(String),
+    Sha512Base64(String),
+}
+
+#[derive(Debug, Clone)]
 pub struct ResolvedUpdate {
     pub latest: String,
     pub download_url: String,
     pub asset_name: String,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub size_bytes: Option<u64>,
+    pub checksum: Option<ExpectedChecksum>,
 }
 
 pub fn validate_config(config: &GithubUpdateConfig) -> Result<(), String> {
@@ -102,10 +111,18 @@ pub(crate) fn client() -> Result<&'static reqwest::Client, String> {
 }
 
 pub(crate) async fn fetch_release_bytes(url: &str) -> Result<Vec<u8>, String> {
+    fetch_limited_bytes(url, MAX_RELEASE_RESPONSE_BYTES, "application/json").await
+}
+
+pub(crate) async fn fetch_limited_bytes(
+    url: &str,
+    limit: usize,
+    accept: &str,
+) -> Result<Vec<u8>, String> {
     validate_https_url(url)?;
     let mut response = client()?
         .get(url)
-        .header("Accept", "application/json")
+        .header("Accept", accept)
         .send()
         .await
         .map_err(|error| error.to_string())?
@@ -113,8 +130,8 @@ pub(crate) async fn fetch_release_bytes(url: &str) -> Result<Vec<u8>, String> {
         .map_err(|error| error.to_string())?;
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|error| error.to_string())? {
-        if bytes.len().saturating_add(chunk.len()) > MAX_RELEASE_RESPONSE_BYTES {
-            return Err("release response exceeds size limit".into());
+        if bytes.len().saturating_add(chunk.len()) > limit {
+            return Err("response exceeds size limit".into());
         }
         bytes.extend_from_slice(&chunk);
     }
@@ -258,6 +275,7 @@ fn find_matching_release(
             asset_name: asset.name.clone(),
             published_at: release.published_at,
             size_bytes: asset.size,
+            checksum: None,
         }));
     }
     Ok(None)

@@ -1,4 +1,4 @@
-use super::bind;
+use super::{bind, DesktopSession};
 use crate::models::SandboxPermissions;
 use std::fs;
 use std::os::unix::fs::FileTypeExt;
@@ -11,6 +11,9 @@ pub struct Runtime {
     pub x11_display: Option<String>,
     pub xauthority: Option<PathBuf>,
     pub pulse_cookie: Option<PathBuf>,
+    pub dbus_session_bus_address: Option<String>,
+    /// Prepared by the launcher when the app has desktop integration enabled.
+    pub desktop_session: Option<DesktopSession>,
 }
 
 impl Runtime {
@@ -23,6 +26,8 @@ impl Runtime {
                 .map(PathBuf::from)
                 .or_else(|| dirs::home_dir().map(|home| home.join(".Xauthority"))),
             pulse_cookie: dirs::home_dir().map(|home| home.join(".config/pulse/cookie")),
+            dbus_session_bus_address: std::env::var("DBUS_SESSION_BUS_ADDRESS").ok(),
+            desktop_session: None,
         }
     }
 

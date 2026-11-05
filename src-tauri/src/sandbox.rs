@@ -14,7 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::lifecycle::app_file::appimage_digest;
 use crate::lifecycle::{digest_file, open_app};
 use crate::models::{
-    AppKind, InstalledApp, LaunchConfig, LaunchMode, PathAccess, PathPermission, SandboxPermissions,
+    AppKind, DesktopIntegration, InstalledApp, LaunchConfig, LaunchMode, PathAccess,
+    PathPermission, SandboxPermissions,
 };
 
 #[path = "sandbox_launch.rs"]
@@ -24,11 +25,39 @@ pub(crate) use execution::launch_observed;
 
 #[path = "sandbox_status.rs"]
 mod capability;
-use capability::bwrap_program;
+use capability::{bwrap_program, xdg_dbus_proxy_program};
 pub use capability::{status, SandboxStatus};
 
 #[path = "sandbox_target.rs"]
 mod target;
+
+#[path = "sandbox_dbus.rs"]
+mod dbus;
+pub use dbus::DesktopSession;
+
+#[path = "sandbox_dbus_process.rs"]
+mod desktop_process;
+
+#[cfg(test)]
+#[path = "sandbox_dbus_cleanup_tests.rs"]
+mod dbus_cleanup_tests;
+
+/// Clears desktop-integration directories of launch monitors that were killed, off the UI thread.
+pub fn remove_stale_desktop_directories_at_startup() {
+    let Some(runtime_directory) = Runtime::current().directory else {
+        return;
+    };
+    let spawned = std::thread::Builder::new()
+        .name("appbento-desktop-cleanup".into())
+        .spawn(move || {
+            if let Err(error) = desktop_process::remove_stale_directories(&runtime_directory) {
+                eprintln!("desktop integration cleanup failed: {error}");
+            }
+        });
+    if let Err(error) = spawned {
+        eprintln!("cannot start desktop integration cleanup: {error}");
+    }
+}
 
 #[path = "launch_options.rs"]
 mod launch_options;
@@ -70,6 +99,7 @@ pub fn validate_config(
     policy_directory: &Path,
 ) -> Result<LaunchConfig, String> {
     launch_options::validate(config)?;
+    dbus::validate(&config.permissions.desktop_integration)?;
     let paths = config
         .permissions
         .paths
@@ -101,7 +131,10 @@ pub fn validate_config(
 }
 
 pub fn default_permissions(app: &InstalledApp, policy_directory: &Path) -> SandboxPermissions {
-    let mut permissions = SandboxPermissions::default();
+    let mut permissions = SandboxPermissions {
+        desktop_integration: DesktopIntegration::recommended(),
+        ..SandboxPermissions::default()
+    };
     if app.kind == AppKind::Binary {
         if let Some(parent) = Path::new(&app.file_path).parent() {
             if let Ok(path) = validate_grant(parent, policy_directory) {
@@ -275,6 +308,11 @@ pub fn plan(
         arguments.extend(["--dir".into(), path.into()]);
     }
     add_devices(&mut arguments, &config.permissions, runtime)?;
+    dbus::add_app_arguments(
+        &mut arguments,
+        &config.permissions,
+        runtime.desktop_session.as_ref(),
+    )?;
     for grant in &config.permissions.paths {
         bind(
             &mut arguments,
@@ -330,6 +368,10 @@ mod tests;
 #[cfg(test)]
 #[path = "sandbox_lifetime_tests.rs"]
 mod lifetime_tests;
+
+#[cfg(test)]
+#[path = "sandbox_dbus_runtime_tests.rs"]
+mod dbus_runtime_tests;
 
 #[cfg(test)]
 #[path = "launch_detachment_tests.rs"]

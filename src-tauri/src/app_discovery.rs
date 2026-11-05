@@ -2,8 +2,9 @@
 use super::{app_digest, file_created_at};
 use crate::app_identity::{self, AppIdentity};
 use crate::models::{AppKind, InstalledApp};
+use crate::update_detection::{self, UpdateSource};
 use chrono::Utc;
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -11,6 +12,30 @@ pub(super) fn path_id(path: &Path) -> Result<String, String> {
     path.to_str()
         .map(str::to_owned)
         .ok_or("App path must be UTF-8".into())
+}
+
+/// Executables have no update settings; AppImages follow the detection rules.
+fn update_source(
+    path: &Path,
+    kind: AppKind,
+    existing: Option<&InstalledApp>,
+    metadata: &Metadata,
+) -> UpdateSource {
+    if kind != AppKind::AppImage {
+        return existing.map_or(
+            UpdateSource {
+                config: None,
+                origin: None,
+            },
+            UpdateSource::of,
+        );
+    }
+    let file_changed = existing.is_some_and(|app| {
+        app.size_bytes != metadata.len() || app.file_created_at != file_created_at(metadata)
+    });
+    update_detection::source_after_discovery(existing.map(UpdateSource::of), file_changed, || {
+        update_detection::detect_logged(path)
+    })
 }
 
 pub(super) fn discovered_app(
@@ -26,6 +51,7 @@ pub(super) fn discovered_app(
         .ok_or("invalid filename")?
         .to_owned();
     let metadata = file.metadata().map_err(|error| error.to_string())?;
+    let source = update_source(path, kind, existing, &metadata);
     if let Some(existing) = existing {
         if existing.kind != kind {
             return Err("App format differs from the existing entry; remove the old entry before adding it again".into());
@@ -42,6 +68,8 @@ pub(super) fn discovered_app(
             } else {
                 None
             },
+            update_config: source.config,
+            update_config_origin: source.origin,
             size_bytes: metadata.len(),
             file_created_at: file_created_at(&metadata),
             executable: metadata.permissions().mode() & 0o111 != 0,
@@ -56,7 +84,8 @@ pub(super) fn discovered_app(
     }
     Ok(InstalledApp {
         kind,
-        update_config: None,
+        update_config: source.config,
+        update_config_origin: source.origin,
         id: path_id(path)?,
         name: identity.name,
         file_path: path_id(path)?,

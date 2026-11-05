@@ -76,6 +76,7 @@ int main(int argc, char **argv) {
                 environment: Default::default(),
                 permissions: SandboxPermissions {
                     display: false,
+                    desktop_integration: Default::default(),
                     ..default_permissions(&app, policy)
                 },
             },

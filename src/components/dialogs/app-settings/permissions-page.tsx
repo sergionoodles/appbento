@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { CircleCheck, FolderOpen, Folder, Loader2, ShieldCheck, ShieldOff, TriangleAlert, X } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, SandboxPath, SandboxPermissions, SandboxStatus } from "@/lib/types";
-import { restrictedPermissions, validateSandboxPaths } from "@/lib/sandbox";
+import { restrictedPermissions, unavailableSandboxStatus, validateSandboxPaths } from "@/lib/sandbox";
+import { DesktopIntegrationSettings } from "./desktop-integration";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
@@ -11,7 +12,7 @@ import { Switch } from "../../ui/switch";
 
 type PathAccess = SandboxPath["access"];
 
-type ToggleKey = Exclude<keyof SandboxPermissions, "paths">;
+type ToggleKey = Exclude<keyof SandboxPermissions, "paths" | "desktop_integration">;
 
 const PERMISSIONS: { key: ToggleKey; label: string; description: string }[] = [
   { key: "network", label: "Internet and network", description: "Connect to the internet and local network services." },
@@ -38,7 +39,7 @@ export function useSandboxStatus(backend: AppApi) {
     let isActive = true;
     backend.sandboxStatus()
       .then((result) => { if (isActive) setStatus(result); })
-      .catch((failure: unknown) => { if (isActive) setStatus({ available: false, version: null, error: errorMessage(failure) }); })
+      .catch((failure: unknown) => { if (isActive) setStatus(unavailableSandboxStatus(errorMessage(failure))); })
       .finally(() => { if (isActive) setIsChecking(false); });
     return () => { isActive = false; };
   }, [backend]);
@@ -48,7 +49,7 @@ export function useSandboxStatus(backend: AppApi) {
     try {
       setStatus(await backend.sandboxStatus());
     } catch (failure) {
-      setStatus({ available: false, version: null, error: errorMessage(failure) });
+      setStatus(unavailableSandboxStatus(errorMessage(failure)));
     } finally {
       setIsChecking(false);
     }
@@ -99,6 +100,7 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
         : <>
           <BubblewrapStatus status={sandbox.status} isChecking={sandbox.isChecking} isSaving={isSaving} onRecheck={() => void sandbox.recheck()} />
           <PermissionToggles permissions={config.permissions} isSaving={isSaving} onChange={setPermissions} />
+          <DesktopIntegrationSettings permissions={config.permissions} status={sandbox.status} isSaving={isSaving} onChange={setPermissions} onError={onError} />
           <SharedFolders permissions={config.permissions} backend={backend} isSaving={isSaving} onChange={setPermissions} onError={onError} />
         </>}
     </div>

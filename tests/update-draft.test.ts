@@ -12,6 +12,16 @@ it("round-trips a saved config without reporting a change", () => {
   expect(isDraftChanged(draftFromConfig(release), release)).toBe(false);
 });
 
+it.each(["direct-url", "zsync", "electron-feed"] as const)("round-trips a saved %s config through the URL field", (strategy) => {
+  const saved: UpdateConfig = { strategy, url: "https://example.org/feed" };
+  const draft = draftFromConfig(saved);
+  expect(draft).toMatchObject({ strategy, url: "https://example.org/feed" });
+  expect(configFromDraft({ ...draft, url: "  https://example.org/feed  " })).toEqual(saved);
+  expect(isDraftChanged(draft, saved)).toBe(false);
+  expect(isDraftChanged({ ...draft, url: "https://example.org/other" }, saved)).toBe(true);
+  expect(isDraftChanged({ ...draft, repo: "owner/unused" }, saved)).toBe(false);
+});
+
 it("ignores edits to fields the chosen strategy does not use", () => {
   const draft = { ...draftFromConfig(null), repo: "owner/unused" };
   expect(isDraftChanged(draft, null)).toBe(false);
@@ -20,7 +30,10 @@ it("ignores edits to fields the chosen strategy does not use", () => {
 
 it("requires a repository for releases and a URL for direct downloads", () => {
   expect(isDraftComplete({ ...draftFromConfig(null), strategy: "github-release" })).toBe(false);
-  expect(isDraftComplete({ ...draftFromConfig(null), strategy: "direct-url", url: "  " })).toBe(false);
+  for (const strategy of ["direct-url", "zsync", "electron-feed"] as const) {
+    expect(isDraftComplete({ ...draftFromConfig(null), strategy, url: "  " })).toBe(false);
+    expect(isDraftComplete({ ...draftFromConfig(null), strategy, url: "https://example.org/a" })).toBe(true);
+  }
   expect(isDraftComplete(draftFromConfig(release))).toBe(true);
 });
 

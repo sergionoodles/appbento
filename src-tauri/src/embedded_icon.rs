@@ -14,6 +14,8 @@ const LIST_LIMIT: usize = 1024 * 1024;
 const DESKTOP_LIMIT: usize = 64 * 1024;
 const APPSTREAM_LIMIT: usize = 256 * 1024;
 const ICON_LIMIT: usize = 5 * 1024 * 1024;
+const APP_UPDATE_LIMIT: usize = 16 * 1024;
+const APP_UPDATE_PATH: &str = "resources/app-update.yml";
 const CANDIDATE_LIMIT: usize = 8;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -77,34 +79,41 @@ struct SquashfsImage {
 
 impl SquashfsImage {
     fn open(path: &Path) -> Result<Self, String> {
-        let mut file = crate::lifecycle::open_appimage(path)?;
-        let offset = squashfs_offset(&mut file)?;
-        let source = format!("/proc/{}/fd/{}", std::process::id(), file.as_raw_fd());
-        let deadline = Instant::now() + DISCOVERY_TIMEOUT;
+        let mut image = Self::open_unlisted(path)?;
         let root = run_unsquashfs(
-            &source,
-            offset,
+            &image.source,
+            image.offset,
             &["-ls", "-max-depth", "1"],
             &[],
             LIST_LIMIT,
-            deadline,
+            image.deadline,
         )?;
         let nested = run_unsquashfs(
-            &source,
-            offset,
+            &image.source,
+            image.offset,
             &["-ls"],
             &METADATA_DIRECTORIES,
             LIST_LIMIT,
-            deadline,
+            image.deadline,
         )?;
-        let mut paths = parse_listing(&String::from_utf8_lossy(&root));
-        paths.extend(parse_listing(&String::from_utf8_lossy(&nested)));
+        image.paths = parse_listing(&String::from_utf8_lossy(&root));
+        image
+            .paths
+            .extend(parse_listing(&String::from_utf8_lossy(&nested)));
+        Ok(image)
+    }
+
+    /// For reading entries at known paths, without listing the filesystem first.
+    fn open_unlisted(path: &Path) -> Result<Self, String> {
+        let mut file = crate::lifecycle::open_appimage(path)?;
+        let offset = squashfs_offset(&mut file)?;
+        let source = format!("/proc/{}/fd/{}", std::process::id(), file.as_raw_fd());
         Ok(Self {
             _file: file,
             source,
             offset,
-            paths,
-            deadline,
+            paths: Vec::new(),
+            deadline: Instant::now() + DISCOVERY_TIMEOUT,
         })
     }
 
@@ -202,6 +211,14 @@ pub fn discover_identity(path: &Path) -> Result<EmbeddedIdentity, String> {
                 .find_map(|component| component.version.clone())
         });
     Ok(EmbeddedIdentity { name, version })
+}
+
+/// Reads electron-builder's `resources/app-update.yml`, which names where the app updates from.
+pub fn read_app_update_manifest(path: &Path) -> Result<Option<String>, String> {
+    let image = SquashfsImage::open_unlisted(path)?;
+    Ok(image
+        .read(APP_UPDATE_PATH, APP_UPDATE_LIMIT)?
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
 }
 
 fn squashfs_offset(file: &mut File) -> Result<u64, String> {

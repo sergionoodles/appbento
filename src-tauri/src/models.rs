@@ -28,7 +28,25 @@ fn default_channel() -> String {
 pub enum UpdateConfig {
     GithubRelease(GithubUpdateConfig),
     GitlabRelease(GithubUpdateConfig),
-    DirectUrl { url: String },
+    DirectUrl {
+        url: String,
+    },
+    /// HTTPS URL of a `.zsync` control file.
+    Zsync {
+        url: String,
+    },
+    /// HTTPS base URL of an electron-builder feed directory.
+    ElectronFeed {
+        url: String,
+    },
+}
+
+/// Who chose the saved update source; only detected sources are refreshed automatically.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateConfigOrigin {
+    Detected,
+    User,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Default, PartialEq, Eq)]
@@ -58,6 +76,8 @@ pub struct InstalledApp {
     pub kind: AppKind,
     #[serde(default)]
     pub update_config: Option<UpdateConfig>,
+    #[serde(default)]
+    pub update_config_origin: Option<UpdateConfigOrigin>,
     pub id: String,
     pub name: String,
     pub file_path: String,
@@ -90,6 +110,12 @@ impl InstalledApp {
             return Err("Executable entries cannot be integrated, have a source path, or have update settings".into());
         }
         Ok(())
+    }
+
+    /// Saves an update source the user chose; clearing it also stops automatic detection.
+    pub fn set_user_update_config(&mut self, config: Option<UpdateConfig>) {
+        self.update_config = config;
+        self.update_config_origin = Some(UpdateConfigOrigin::User);
     }
 
     pub fn require_appimage_update(&self) -> Result<(), String> {
@@ -200,6 +226,54 @@ pub struct SandboxPermissions {
     pub gpu: bool,
     pub persistent_data: bool,
     pub paths: Vec<PathPermission>,
+    pub desktop_integration: DesktopIntegration,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DbusAccess {
+    Talk,
+    Own,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DbusRule {
+    pub name: String,
+    pub access: DbusAccess,
+}
+
+/// Session bus names a sandboxed app may use through a filtering proxy.
+/// Everything is off by default so apps saved before this setting keep running without a bus.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct DesktopIntegration {
+    pub portals: bool,
+    pub notifications: bool,
+    pub tray: bool,
+    pub media_controls: bool,
+    pub secrets: bool,
+    pub custom: Vec<DbusRule>,
+}
+
+impl DesktopIntegration {
+    /// Defaults offered when an app is reviewed for the first time.
+    pub fn recommended() -> Self {
+        Self {
+            portals: true,
+            notifications: true,
+            ..Self::default()
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.portals
+            || self.notifications
+            || self.tray
+            || self.media_controls
+            || self.secrets
+            || !self.custom.is_empty()
+    }
 }
 
 impl Default for SandboxPermissions {
@@ -211,6 +285,7 @@ impl Default for SandboxPermissions {
             gpu: false,
             persistent_data: true,
             paths: Vec::new(),
+            desktop_integration: DesktopIntegration::default(),
         }
     }
 }

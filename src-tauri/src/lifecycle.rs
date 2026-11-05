@@ -363,3 +363,7 @@ mod import_tests;
 #[cfg(test)]
 #[path = "executable_tests.rs"]
 pub(crate) mod executable_tests;
+
+#[cfg(test)]
+#[path = "update_source_tests.rs"]
+mod update_source_tests;

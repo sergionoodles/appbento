@@ -1,4 +1,4 @@
-import type { UpdateConfig } from "./types";
+import type { UpdateConfig, UrlUpdateConfig, UrlUpdateStrategy } from "./types";
 
 export type UpdateDraftStrategy = UpdateConfig["strategy"] | "disabled";
 
@@ -12,6 +12,16 @@ export interface UpdateDraft {
   tagRegex: string;
   channel: string;
   prerelease: boolean;
+}
+
+const URL_STRATEGIES: readonly string[] = ["direct-url", "zsync", "electron-feed"] satisfies UrlUpdateStrategy[];
+
+function isUrlStrategy(strategy: UpdateDraftStrategy): strategy is UrlUpdateStrategy {
+  return URL_STRATEGIES.includes(strategy);
+}
+
+function isUrlConfig(config: UpdateConfig): config is UrlUpdateConfig {
+  return isUrlStrategy(config.strategy);
 }
 
 export const DEFAULT_ASSET_REGEX = ".*\\.AppImage$";
@@ -37,10 +47,10 @@ export function extractGithubRepository(value: string): string {
 }
 
 export function draftFromConfig(config: UpdateConfig | null | undefined): UpdateDraft {
-  const release = config && config.strategy !== "direct-url" ? config : null;
+  const release = config && !isUrlConfig(config) ? config : null;
   return {
     strategy: config?.strategy ?? "disabled",
-    url: config?.strategy === "direct-url" ? config.url : "",
+    url: config && isUrlConfig(config) ? config.url : "",
     repo: release?.repo ?? "",
     assetRegex: release?.asset_regex ?? DEFAULT_ASSET_REGEX,
     architecture: release?.architecture ?? "x86_64",
@@ -52,7 +62,7 @@ export function draftFromConfig(config: UpdateConfig | null | undefined): Update
 
 export function configFromDraft(draft: UpdateDraft): UpdateConfig | null {
   if (draft.strategy === "disabled") return null;
-  if (draft.strategy === "direct-url") return { strategy: draft.strategy, url: draft.url.trim() };
+  if (isUrlStrategy(draft.strategy)) return { strategy: draft.strategy, url: draft.url.trim() };
   return {
     strategy: draft.strategy,
     repo: draft.strategy === "github-release"
@@ -68,7 +78,7 @@ export function configFromDraft(draft: UpdateDraft): UpdateConfig | null {
 
 export function isDraftComplete(draft: UpdateDraft) {
   if (draft.strategy === "disabled") return true;
-  if (draft.strategy === "direct-url") return !!draft.url.trim();
+  if (isUrlStrategy(draft.strategy)) return !!draft.url.trim();
   return !!draft.repo.trim() && !!draft.assetRegex.trim();
 }
 

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import type { AppApi } from "../src/lib/api";
 import { createPreviewApi } from "../src/lib/preview";
+import { unavailableSandboxStatus } from "../src/lib/sandbox";
 import { chooseFromMenu } from "./menu-helpers";
 
 async function binaryBackend(patch: Partial<AppApi> = {}) {
@@ -100,7 +101,7 @@ it("offers removal without file deletion and explains how to add a moved binary 
 });
 
 it("shows unavailable Bubblewrap and blocks sandbox saving without launching unrestricted", async () => {
-  const { backend } = await binaryBackend({ async sandboxStatus() { return { available: false, version: null, error: "bwrap not installed" }; } });
+  const { backend } = await binaryBackend({ async sandboxStatus() { return unavailableSandboxStatus("bwrap not installed"); } });
   const libraryLaunch = vi.fn(backend.libraryLaunch);
   const user = userEvent.setup();
   render(<App backend={{ ...backend, libraryLaunch }} />);

@@ -2,6 +2,8 @@ mod app_identity;
 mod app_review;
 mod apps;
 mod configuration;
+mod electron_feed;
+mod elf_sections;
 mod embedded_icon;
 mod file_association;
 mod github;
@@ -17,10 +19,14 @@ mod self_launcher;
 mod self_update;
 mod self_update_installation;
 mod settings;
+mod simple_yaml;
 mod store;
+mod update_checksum;
+mod update_detection;
 mod update_download;
 mod update_sources;
 mod updates;
+mod zsync;
 
 use models::{UpdateCheckResult, UpdateReport};
 
@@ -57,7 +63,7 @@ async fn updates_configure(
             if let Some(config) = &config {
                 update_sources::validate_config(config)?;
             }
-            app.update_config = config;
+            app.set_user_update_config(config);
             Ok(app.clone())
         })
     })
@@ -129,6 +135,7 @@ pub fn run() {
         .setup(|_| {
             self_update_installation::notify_startup()?;
             file_association::register_at_startup();
+            sandbox::remove_stale_desktop_directories_at_startup();
             Ok(())
         })
         .on_window_event(|window, event| {

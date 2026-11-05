@@ -65,7 +65,7 @@ async fn download_and_integrate(
         .open(&path)
         .await
         .map_err(|error| error.to_string())?;
-    update_download::transfer(url, Some(&mut file), None).await?;
+    update_download::transfer(url, Some(&mut file), None, None).await?;
     file.sync_all().await.map_err(|error| error.to_string())?;
     drop(file);
     tokio::task::spawn_blocking(move || lifecycle.integrate_download(&path))

@@ -1,6 +1,10 @@
-use super::{open_app, plan, private_home_path, status, validate_grant, LaunchPlan, Runtime};
+use super::desktop_process::{resolve_session, DesktopProcess};
+use super::{
+    open_app, plan, private_home_path, status, validate_grant, xdg_dbus_proxy_program, LaunchPlan,
+    Runtime,
+};
 use crate::lifecycle::app_digest;
-use crate::models::{InstalledApp, LaunchMode};
+use crate::models::{DesktopIntegration, InstalledApp, LaunchMode};
 use crate::persistence;
 use std::fs::{self, File, OpenOptions};
 use std::os::fd::AsRawFd;
@@ -54,7 +58,12 @@ fn launch_recorded(
         .parent()
         .ok_or("invalid policy directory")?
         .to_owned();
-    let mut plan = plan(&app, uri_arguments, &policy_directory, &Runtime::current())?;
+    let desktop_integration = sandboxed_desktop_integration(&app);
+    let mut runtime = Runtime::current();
+    if desktop_integration.is_some() {
+        runtime.desktop_session = Some(resolve_session(&app.id, &runtime)?);
+    }
+    let mut plan = plan(&app, uri_arguments, &policy_directory, &runtime)?;
     if app
         .launch_config
         .as_ref()
@@ -66,6 +75,11 @@ fn launch_recorded(
                 .error
                 .unwrap_or_else(|| "Bubblewrap unavailable".into()));
         }
+        if desktop_integration.is_some() && !status.desktop_integration_available {
+            return Err(status
+                .desktop_integration_error
+                .unwrap_or_else(|| "Desktop integration unavailable".into()));
+        }
         if app
             .launch_config
             .as_ref()
@@ -74,7 +88,17 @@ fn launch_recorded(
             prepare_private_home(&policy_directory, id)?;
         }
     }
-    let pinned = pin_launch_paths_in_place(&mut plan, &app, &policy_directory)?;
+    let mut pinned = pin_launch_paths_in_place(&mut plan, &app, &policy_directory)?;
+    // Declared after `pinned` and dropped first: the proxy and instance files outlive the app.
+    let _desktop = match (runtime.desktop_session.take(), desktop_integration) {
+        (Some(session), Some(integration)) => Some(start_desktop(
+            session,
+            &integration,
+            &mut plan,
+            &mut pinned,
+        )?),
+        _ => None,
+    };
     let mut command = prepare_command(&plan);
     inherit_descriptors(&mut command, &pinned);
     let capture = recorder.capture(&mut command)?;
@@ -91,6 +115,26 @@ fn launch_recorded(
     };
     capture.join().map_err(|_| "launch log capture panicked")?;
     result
+}
+
+fn sandboxed_desktop_integration(app: &InstalledApp) -> Option<DesktopIntegration> {
+    app.launch_config
+        .as_ref()
+        .filter(|config| config.mode == LaunchMode::Bubblewrap)
+        .map(|config| config.permissions.desktop_integration.clone())
+        .filter(DesktopIntegration::is_enabled)
+}
+
+fn start_desktop(
+    session: super::DesktopSession,
+    integration: &DesktopIntegration,
+    plan: &mut LaunchPlan,
+    pinned: &mut PinnedLaunch,
+) -> Result<DesktopProcess, String> {
+    let program = xdg_dbus_proxy_program().ok_or("xdg-dbus-proxy is not installed")?;
+    let process = DesktopProcess::start(session, integration, program)?;
+    pinned.files.extend(process.attach(plan)?);
+    Ok(process)
 }
 
 fn spawn_checked(command: &mut Command) -> Result<Child, String> {

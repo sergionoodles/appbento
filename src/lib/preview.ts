@@ -68,7 +68,7 @@ export function createPreviewApi(includeBinary = false): AppApi {
     async librarySetIcon() { throw new Error("Saving icons requires the desktop app."); },
     async libraryIcon() { return null; },
     async pickIcon() { return null; },
-    async sandboxStatus() { return { available: true, version: "sample", error: null }; },
+    async sandboxStatus() { return { available: true, version: "sample", error: null, desktop_integration_available: true, desktop_integration_error: null }; },
     async libraryDefaultPermissions(id) {
       const app = findApp(id);
       return { ...restrictedPermissions(), paths: app.kind === "binary" ? [{ path: app.file_path.slice(0, app.file_path.lastIndexOf("/")), access: "read-only" }] : [] };

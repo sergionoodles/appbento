@@ -22,6 +22,7 @@ Available controls in the app's Settings:
 - Permissions: "Restrict with bubblewrap" or "Run without restrictions".
 - Bubblewrap access toggles: "Internet and network" (network), "Display" (display), "Audio" (audio), "Graphics acceleration" (gpu), and "Keep private app data" (persistent_data).
 - "Keep private app data" preserves an isolated home between launches; it does not expose my personal home folder.
+- "Desktop integration" toggles: "File dialogs, links and screen sharing" (portals), "Notifications", "Tray icon", "Media controls", "Saved passwords (keyring)" (secrets), plus "Advanced: custom D-Bus names" with "Talk to service" or "Own name" access.
 - "Shared folders": absolute folder paths with "Read only" or "Read and write" access.
 - Launch: "Command-line arguments" (one literal argument per line, no shell quotes) and "Environment variables" (one NAME=value per line).
 AppBento does not expose arbitrary Bubblewrap flags in its settings.

@@ -131,7 +131,7 @@ describe("AppImage permission review", () => {
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeEnabled());
     await user.click(within(dialog).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(libraryConfigure.mock.calls[0][1]).toEqual({ mode: "bubblewrap", permissions: { network: false, display: true, audio: false, gpu: false, persistent_data: true, paths: [] } });
+    expect(libraryConfigure.mock.calls[0][1]).toEqual({ mode: "bubblewrap", permissions: { network: false, display: true, audio: false, gpu: false, persistent_data: true, paths: [], desktop_integration: { portals: true, notifications: true, tray: false, media_controls: false, secrets: false, custom: [] } } });
     expect(libraryLaunch).not.toHaveBeenCalled();
   });
 
@@ -202,4 +202,61 @@ it("ignores old import suggestions and starts with generic permissions", async (
   await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
   expect(within(dialog).getByRole("checkbox", { name: /Internet and network/ })).not.toBeChecked();
   expect(within(dialog).queryByRole("button", { name: "Use import defaults" })).not.toBeInTheDocument();
+});
+
+describe("desktop integration", () => {
+  async function openIntegration(patch: Partial<AppApi> = {}) {
+    const result = unreviewedBackend(patch);
+    const { user, dialog } = await openReview(result.backend);
+    await restrict(user, dialog);
+    return { ...result, user, dialog };
+  }
+
+  it("starts a new review with portals and notifications on", async () => {
+    const { dialog } = await openIntegration();
+    expect(within(dialog).getByRole("checkbox", { name: "File dialogs, links and screen sharing" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "Notifications" })).toBeChecked();
+    for (const name of ["Tray icon", "Media controls", "Saved passwords (keyring)"]) {
+      expect(within(dialog).getByRole("checkbox", { name })).not.toBeChecked();
+    }
+  });
+
+  it("warns when saved passwords are enabled", async () => {
+    const { user, dialog } = await openIntegration();
+    expect(within(dialog).queryByText(/every password in your keyring/)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("checkbox", { name: "Saved passwords (keyring)" }));
+    expect(within(dialog).getByText(/every password in your keyring/)).toBeInTheDocument();
+  });
+
+  it("saves a valid custom name and rejects invalid ones", async () => {
+    const { user, dialog, libraryConfigure } = await openIntegration();
+    await user.click(within(dialog).getByText("Advanced: custom D-Bus names"));
+    const input = within(dialog).getByRole("textbox", { name: "D-Bus name" });
+    for (const invalid of ["org.freedesktop.*", "single"]) {
+      await user.clear(input);
+      await user.type(input, invalid);
+      await user.click(within(dialog).getByRole("button", { name: "Add name" }));
+      expect(within(dialog).getByRole("alert")).toBeInTheDocument();
+      expect(within(dialog).queryByRole("button", { name: `Remove D-Bus name ${invalid}` })).not.toBeInTheDocument();
+    }
+    await user.clear(input);
+    await user.type(input, "org.example.Service");
+    await user.click(within(dialog).getByRole("button", { name: "Add name" }));
+    expect(within(dialog).getByRole("button", { name: "Remove D-Bus name org.example.Service" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Advanced: custom D-Bus names (1)")).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save and launch" })).toBeEnabled());
+    await user.click(within(dialog).getByRole("button", { name: "Save and launch" }));
+    await waitFor(() => expect(libraryConfigure).toHaveBeenCalled());
+    expect(libraryConfigure.mock.calls[0][1].permissions.desktop_integration.custom).toEqual([{ name: "org.example.Service", access: "talk" }]);
+  });
+
+  it("shows the unavailable notice only while an integration is enabled", async () => {
+    const unavailable = async () => ({ available: true, version: "sample", error: null, desktop_integration_available: false, desktop_integration_error: null });
+    const { user, dialog } = await openIntegration({ sandboxStatus: unavailable });
+    expect(within(dialog).getByText("Desktop integration is unavailable.")).toBeInTheDocument();
+    expect(within(dialog).getByText("sudo pacman -S xdg-dbus-proxy")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("checkbox", { name: "File dialogs, links and screen sharing" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: "Notifications" }));
+    expect(within(dialog).queryByText(/Desktop integration is unavailable/)).not.toBeInTheDocument();
+  });
 });

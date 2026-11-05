@@ -162,7 +162,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
             {page === "integration" ? <IntegrationPage app={app} isSaving={isBusy} onSetMenuEntry={onSetMenuEntry} /> : null}
             {page === "updates" && app.kind === "binary" ? <p className="text-[13px] text-[var(--muted)]">Executable updates are not supported yet. Replace the file yourself, then review its permissions again.</p> : null}
             {page === "updates" && app.kind === "appimage" ? <UpdatesPage draft={updateDraft} onChange={setUpdateDraft} isSaving={isBusy}
-              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} update={update} updateCheck={updateCheck} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
+              hasUpdateSource={!!app.update_config} hasUnsavedSource={hasUpdateChange} origin={app.update_config_origin} update={update} updateCheck={updateCheck} isUpdating={isUpdating} isCheckingUpdates={isCheckingUpdates}
               onCheckUpdate={onCheckUpdate} onInstallUpdate={onInstallUpdate} /> : null}
           </div>
 
