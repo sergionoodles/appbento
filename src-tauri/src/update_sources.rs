@@ -32,7 +32,9 @@ pub fn validate_config(config: &UpdateConfig) -> Result<(), String> {
             github::validate_release_config(config)?;
             gitlab_api_url(&config.repo).map(|_| ())
         }
-        UpdateConfig::DirectUrl { url } => github::validate_https_url(url).map(|_| ()),
+        UpdateConfig::DirectUrl { url }
+        | UpdateConfig::Zsync { url }
+        | UpdateConfig::ElectronFeed { url } => github::validate_https_url(url).map(|_| ()),
     }
 }
 
@@ -46,6 +48,8 @@ pub async fn resolve(config: &UpdateConfig) -> Result<ResolvedUpdate, String> {
             resolve_gitlab_bytes(config, &bytes)
         }
         UpdateConfig::DirectUrl { url } => resolve_direct_url(url),
+        UpdateConfig::Zsync { url } => crate::zsync::resolve(url).await,
+        UpdateConfig::ElectronFeed { url } => crate::electron_feed::resolve(url).await,
     }
 }
 
@@ -63,6 +67,7 @@ fn resolve_direct_url(value: &str) -> Result<ResolvedUpdate, String> {
         asset_name,
         published_at: None,
         size_bytes: None,
+        checksum: None,
     })
 }
 

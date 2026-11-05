@@ -239,6 +239,7 @@ fn custom_icon_replaces_default_and_later_discovery_preserves_override() {
         launch_config: None,
         reviewed_digest: None,
         update_config: None,
+        update_config_origin: None,
     };
     persistence::mutate(&library_path, |library: &mut crate::store::Library| {
         library.insert(app.id.clone(), app.clone());

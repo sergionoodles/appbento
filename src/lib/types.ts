@@ -3,6 +3,20 @@ export interface SandboxPath {
   access: "read-only" | "read-write";
 }
 
+export interface DbusRule {
+  name: string;
+  access: "talk" | "own";
+}
+
+export interface DesktopIntegration {
+  portals: boolean;
+  notifications: boolean;
+  tray: boolean;
+  media_controls: boolean;
+  secrets: boolean;
+  custom: DbusRule[];
+}
+
 export interface SandboxPermissions {
   network: boolean;
   display: boolean;
@@ -10,6 +24,7 @@ export interface SandboxPermissions {
   gpu: boolean;
   persistent_data: boolean;
   paths: SandboxPath[];
+  desktop_integration: DesktopIntegration;
 }
 
 export interface LaunchConfig {
@@ -23,6 +38,8 @@ export interface SandboxStatus {
   available: boolean;
   version: string | null;
   error: string | null;
+  desktop_integration_available: boolean;
+  desktop_integration_error: string | null;
 }
 
 export type ReleaseUpdateStrategy = "github-release" | "gitlab-release";
@@ -37,7 +54,18 @@ export interface ReleaseUpdateConfig {
   channel: string;
 }
 
-export type UpdateConfig = ReleaseUpdateConfig | { strategy: "direct-url"; url: string };
+export type UrlUpdateStrategy = "direct-url" | "zsync" | "electron-feed";
+
+/** Sources identified by one HTTPS URL: a file, a `.zsync` control file, or an electron-builder feed folder. */
+export interface UrlUpdateConfig {
+  strategy: UrlUpdateStrategy;
+  url: string;
+}
+
+export type UpdateConfig = ReleaseUpdateConfig | UrlUpdateConfig;
+
+/** `detected` sources come from the app itself and refresh automatically; `user` ones never do. */
+export type UpdateConfigOrigin = "detected" | "user";
 
 export type AppKind = "appimage" | "binary";
 
@@ -46,6 +74,7 @@ export interface InstalledApp {
   reviewed_digest?: string | null;
   launch_config?: LaunchConfig | null;
   update_config?: UpdateConfig | null;
+  update_config_origin?: UpdateConfigOrigin | null;
   id: string;
   name: string;
   file_path: string;

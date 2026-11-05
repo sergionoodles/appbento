@@ -165,6 +165,12 @@ pub async fn check_app(app: &InstalledApp) -> UpdateCheckResult {
                 Err(message) => failure(&app.id, UpdateStatus::Error, message),
             }
         }
+        Ok(resolved) if matches!(config, UpdateConfig::Zsync { .. }) => {
+            match crate::update_download::check_zsync(app, resolved).await {
+                Ok(result) => result,
+                Err(message) => failure(&app.id, UpdateStatus::Error, message),
+            }
+        }
         Ok(resolved) => resolve_update(app, resolved),
         Err(message) => failure(&app.id, UpdateStatus::Error, message),
     }
@@ -263,6 +269,7 @@ mod tests {
             launch_config: None,
             reviewed_digest: None,
             update_config: None,
+            update_config_origin: None,
         }
     }
 
@@ -273,6 +280,7 @@ mod tests {
             asset_name: "App.AppImage".into(),
             published_at: None,
             size_bytes: None,
+            checksum: None,
         }
     }
 

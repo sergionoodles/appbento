@@ -17,6 +17,19 @@ async function openHome(backend: AppApi) {
   return user;
 }
 
+function detectedZsyncApi(): AppApi {
+  const preview = createPreviewApi();
+  return {
+    ...preview,
+    async libraryList() {
+      const apps = await preview.libraryList();
+      return apps.map((app) => app.name === "Joplin"
+        ? { ...app, update_config: { strategy: "zsync" as const, url: "https://example.org/Joplin.AppImage.zsync" }, update_config_origin: "detected" as const }
+        : app);
+    },
+  };
+}
+
 describe("library management", () => {
   it("creates a menu shortcut from a card and removes it from Integration settings", async () => {
     const preview = createPreviewApi();
@@ -303,6 +316,31 @@ describe("app update sources", () => {
     await user.click(screen.getByRole("button", { name: "Check for updates" }));
     expect(await screen.findByText("App is up to date.")).toHaveClass("text-[var(--ok)]");
     expect(screen.getByRole("dialog", { name: "Settings for Joplin" })).toBeInTheDocument();
+  });
+
+  it("shows a notice for a detected source until the user edits it", async () => {
+    const user = await openHome(detectedZsyncApi());
+    await openAppUpdates(user, "Joplin");
+    const notice = "Detected from the app. AppBento keeps this source in sync with new releases. If you edit it, it stays as you set it.";
+    expect(screen.getByText(notice)).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Control file URL" }), "x");
+    expect(screen.queryByText(notice)).not.toBeInTheDocument();
+    expect(screen.getByText("Save your source changes before checking or installing updates.")).toBeInTheDocument();
+  });
+
+  it("shows the saved control file URL for a zsync source", async () => {
+    const user = await openHome(detectedZsyncApi());
+    await openAppUpdates(user, "Joplin");
+    expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent("AppImage zsync file");
+    expect(screen.getByRole("textbox", { name: "Control file URL" })).toHaveValue("https://example.org/Joplin.AppImage.zsync");
+  });
+
+  it("asks for a feed URL when the Electron update feed is selected", async () => {
+    const user = await openHome(createPreviewApi());
+    await openAppUpdates(user, "Joplin");
+    expect(screen.queryByRole("textbox", { name: "Feed URL" })).not.toBeInTheDocument();
+    await chooseOption(user, screen.getByRole("combobox", { name: "Source" }), "Electron update feed");
+    expect(screen.getByRole("textbox", { name: "Feed URL" })).toBeInTheDocument();
   });
 
   it("blocks update actions until source edits are saved or reverted", async () => {

@@ -1,7 +1,7 @@
-import type { UpdateCheckResult, UpdateInfo } from "@/lib/types";
+import type { UpdateCheckResult, UpdateConfigOrigin, UpdateInfo } from "@/lib/types";
 import { updateLabel } from "../../app-status";
 import { Button } from "../../ui/button";
-import { CirclePause } from "lucide-react";
+import { CirclePause, Sparkles } from "lucide-react";
 import type { UpdateDraft, UpdateDraftStrategy } from "@/lib/update-draft";
 import { extractGithubRepository } from "@/lib/update-draft";
 import { Input } from "../../ui/card";
@@ -14,7 +14,27 @@ const STRATEGIES: SelectOption<UpdateDraftStrategy>[] = [
   { value: "github-release", label: "GitHub releases" },
   { value: "gitlab-release", label: "GitLab releases" },
   { value: "direct-url", label: "Direct HTTPS download" },
+  { value: "zsync", label: "AppImage zsync file" },
+  { value: "electron-feed", label: "Electron update feed" },
 ];
+
+const URL_FIELDS = {
+  "direct-url": {
+    label: "Download URL",
+    placeholder: "https://example.org/app.AppImage",
+    hint: "A stable link to the AppImage file. Each check downloads it and compares its content with your installed copy.",
+  },
+  zsync: {
+    label: "Control file URL",
+    placeholder: "https://example.org/app.AppImage.zsync",
+    hint: "The .zsync file published next to the AppImage. Checks download only this small file and compare checksums; downloads are verified against it.",
+  },
+  "electron-feed": {
+    label: "Feed URL",
+    placeholder: "https://example.org/releases",
+    hint: "The folder that contains latest-linux.yml. Checks read the version from the feed; downloads are verified with its SHA-512 checksum.",
+  },
+} as const;
 
 const ARCHITECTURES: SelectOption<string>[] = [
   { value: "x86_64", label: "x86_64" },
@@ -28,10 +48,11 @@ const CHANNELS: SelectOption<string>[] = [
 
 const MONO_INPUT = "font-mono text-[13px]";
 
-export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, update, updateCheck, isUpdating, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
+export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUnsavedSource, origin, update, updateCheck, isUpdating, isCheckingUpdates, onCheckUpdate, onInstallUpdate }: {
   draft: UpdateDraft;
   hasUpdateSource: boolean;
   hasUnsavedSource: boolean;
+  origin?: UpdateConfigOrigin | null;
   update?: UpdateInfo;
   updateCheck?: UpdateCheckResult;
   isUpdating: boolean;
@@ -42,6 +63,8 @@ export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUns
   isSaving: boolean;
 }) {
   const set = <K extends keyof UpdateDraft>(key: K, value: UpdateDraft[K]) => onChange({ ...draft, [key]: value });
+  const urlField = draft.strategy === "direct-url" || draft.strategy === "zsync" || draft.strategy === "electron-feed" ? URL_FIELDS[draft.strategy] : null;
+  const isDetectedNoticeVisible = origin === "detected" && !hasUnsavedSource && draft.strategy !== "disabled";
   const isRelease = draft.strategy === "github-release" || draft.strategy === "gitlab-release";
 
   const areActionsDisabled = isSaving || isCheckingUpdates || hasUnsavedSource;
@@ -71,6 +94,10 @@ export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUns
       </section>
       <fieldset disabled={isSaving} className="grid grid-cols-2 gap-x-4 gap-y-5">
         <legend className="sr-only">Update source</legend>
+        {isDetectedNoticeVisible ? <div className="col-span-2">
+          <Notice icon={<Sparkles size={16} />}>Detected from the app. AppBento keeps this source in sync with new releases. If you edit it, it stays as you set it.</Notice>
+        </div> : null}
+
         <Field label="Source" htmlFor="update-strategy" className="col-span-2">
           <Select id="update-strategy" value={draft.strategy} options={STRATEGIES} onChange={(strategy) => set("strategy", strategy)} />
         </Field>
@@ -79,9 +106,8 @@ export function UpdatesPage({ draft, onChange, isSaving, hasUpdateSource, hasUns
           <Notice icon={<CirclePause size={16} />}>This app is skipped when checking for updates.</Notice>
         </div> : null}
 
-        {draft.strategy === "direct-url" ? <Field label="Download URL" htmlFor="update-url" className="col-span-2"
-          hint="A stable link to the AppImage file. Each check downloads it and compares its content with your installed copy.">
-          <Input id="update-url" type="url" required placeholder="https://example.org/app.AppImage" value={draft.url} onChange={(event) => set("url", event.target.value)} />
+        {urlField ? <Field label={urlField.label} htmlFor="update-url" className="col-span-2" hint={urlField.hint}>
+          <Input id="update-url" type="url" required placeholder={urlField.placeholder} value={draft.url} onChange={(event) => set("url", event.target.value)} />
         </Field> : null}
 
         {isRelease ? <>

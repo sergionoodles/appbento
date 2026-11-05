@@ -69,6 +69,14 @@
 :root {
   --chrome: color-mix(in oklab, var(--panel) 45%, var(--bg));
   --hairline: color-mix(in oklab, var(--border) 70%, transparent);
+  /* The wordmark's accent letters echo the logo's two accent cells, lifted toward white so thin glyphs stay legible on dark chrome. */
+  --wordmark-primary: color-mix(in oklab, var(--accent) 55%, white);
+  --wordmark-secondary: color-mix(in oklab, var(--wordmark-primary) 88%, var(--chrome));
+}
+[data-theme="daylight"],
+[data-theme="paper"] {
+  --wordmark-primary: color-mix(in oklab, var(--accent) 75%, black);
+  --wordmark-secondary: color-mix(in oklab, var(--wordmark-primary) 80%, var(--chrome));
 }
 
 html, body, #root { height: 100%; }

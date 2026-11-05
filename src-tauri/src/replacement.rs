@@ -7,6 +7,7 @@ use super::{file_created_at, open_appimage, recovery, Lifecycle};
 use crate::models::InstalledApp;
 use crate::persistence::{self, Repository};
 use crate::store::Library;
+use crate::update_detection::UpdateSource;
 
 const EXECUTABLE_MODE: u32 = 0o755;
 
@@ -282,6 +283,12 @@ fn refresh_metadata(
         eprintln!("update icon unavailable for {}: {error}", app.id);
         Default::default()
     });
+    // The new release may declare a different update source.
+    let source =
+        crate::update_detection::source_after_discovery(Some(UpdateSource::of(&app)), true, || {
+            crate::update_detection::detect_logged(path)
+        });
+
     let icon_path = match metadata.icon {
         Some(bytes) => Some(
             crate::icons::save(icon_directory, &bytes)?
@@ -293,6 +300,8 @@ fn refresh_metadata(
     };
 
     Ok(InstalledApp {
+        update_config: source.config,
+        update_config_origin: source.origin,
         name: if identity.name.is_empty() {
             app.name
         } else {

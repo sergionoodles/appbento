@@ -80,6 +80,9 @@ fn default_plan_denies_host_access_and_preserves_uri_arguments() {
 #[path = "sandbox_display_tests.rs"]
 mod display_tests;
 
+#[path = "sandbox_desktop_tests.rs"]
+mod desktop_tests;
+
 #[test]
 fn sandbox_plan_creates_xdg_directories_after_mounting_home() {
     let (directory, mut app) = fixture();
