@@ -29,7 +29,9 @@ export function Wordmark({ onHome }: { onHome: () => void }) {
   return (
     <button type="button" onClick={onHome} aria-label="AppBento home" className="flex items-center gap-2 rounded-md px-1 -mx-1">
       <LogoMark />
-      <span className="font-display text-[17px] font-bold leading-none tracking-[-0.03em]">appbento</span>
+      <span className="font-display text-[18px] font-bold leading-none tracking-[-0.01em]">
+        <span className="text-[var(--wordmark-primary)]">a</span>pp<span className="text-[var(--wordmark-secondary)]">b</span>ento
+      </span>
     </button>
   );
 }
