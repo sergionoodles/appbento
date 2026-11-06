@@ -31,6 +31,10 @@ pub use capability::{status, SandboxStatus};
 #[path = "sandbox_target.rs"]
 mod target;
 
+#[path = "sandbox_shell.rs"]
+mod shell;
+pub use shell::manual_command;
+
 #[path = "sandbox_dbus.rs"]
 mod dbus;
 pub use dbus::DesktopSession;

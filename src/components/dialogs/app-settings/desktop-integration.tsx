@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TriangleAlert, X } from "lucide-react";
 import type { DbusRule, DesktopIntegration, SandboxPermissions, SandboxStatus } from "@/lib/types";
-import { validateDbusName } from "@/lib/sandbox";
+import { isDesktopIntegrationEnabled, validateDbusName } from "@/lib/sandbox";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
@@ -28,10 +28,6 @@ function DbusAccessSelect({ value, onChange, ...props }: { value: DbusAccess; on
   return <Select value={value} options={DBUS_ACCESS_OPTIONS} onChange={onChange} {...props} />;
 }
 
-function isAnyEnabled(integration: DesktopIntegration) {
-  return INTEGRATIONS.some(({ key }) => integration[key]) || integration.custom.length > 0;
-}
-
 export function DesktopIntegrationSettings({ permissions, status, isSaving, onChange, onError }: {
   permissions: SandboxPermissions;
   status: SandboxStatus | null;
@@ -41,7 +37,7 @@ export function DesktopIntegrationSettings({ permissions, status, isSaving, onCh
 }) {
   const integration = permissions.desktop_integration;
   const setIntegration = (next: DesktopIntegration) => onChange({ ...permissions, desktop_integration: next });
-  const isUnavailable = status !== null && !status.desktop_integration_available && isAnyEnabled(integration);
+  const isUnavailable = status !== null && !status.desktop_integration_available && isDesktopIntegrationEnabled(integration);
 
   return (
     <>

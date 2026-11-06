@@ -36,6 +36,7 @@
     "allow-library-configure",
     "allow-library-prepare-review",
     "allow-library-default-permissions",
+    "allow-library-sandbox-command",
     "allow-sandbox-status",
     "allow-library-remove",
     "allow-updates-check",

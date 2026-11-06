@@ -18,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "library_configure",
     "library_prepare_review",
     "library_default_permissions",
+    "library_sandbox_command",
     "sandbox_status",
     "library_remove",
     "updates_check",

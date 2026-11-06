@@ -507,3 +507,31 @@ fn old_launch_configs_default_to_empty_options_and_invalid_options_are_rejected(
         assert!(validate_config(&invalid, &directory.0).is_err());
     }
 }
+
+#[test]
+fn manual_command_uses_unsaved_config_and_leaves_out_desktop_integration() {
+    let (directory, app) = fixture();
+    let config = LaunchConfig {
+        arguments: vec!["--safe-mode".into()],
+        environment: Default::default(),
+        mode: LaunchMode::Bubblewrap,
+        permissions: SandboxPermissions {
+            desktop_integration: DesktopIntegration::recommended(),
+            ..Default::default()
+        },
+    };
+    let command = manual_command(
+        &app,
+        &config,
+        &directory.0.join("policy"),
+        &Runtime::default(),
+    )
+    .unwrap();
+    assert!(app.launch_config.is_none());
+    assert!(command.starts_with(bwrap_program()));
+    assert!(command.contains("--unshare-net"));
+    assert!(!command.contains("--info-fd"));
+    assert!(
+        command.ends_with("-- /app/application.AppImage --appimage-extract-and-run --safe-mode")
+    );
+}

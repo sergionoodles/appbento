@@ -5,6 +5,10 @@ export function recommendedDesktopIntegration(): DesktopIntegration {
   return { portals: true, notifications: true, tray: false, media_controls: false, secrets: false, custom: [] };
 }
 
+export function isDesktopIntegrationEnabled({ custom, ...switches }: DesktopIntegration): boolean {
+  return Object.values(switches).some(Boolean) || custom.length > 0;
+}
+
 export function restrictedPermissions(): SandboxPermissions {
   return {
     network: false,

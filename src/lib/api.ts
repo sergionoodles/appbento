@@ -24,6 +24,7 @@ export interface Commands {
   library_icon: { args: { id: string }; result: string | null };
   sandbox_status: { args: undefined; result: SandboxStatus };
   library_default_permissions: { args: { id: string }; result: SandboxPermissions };
+  library_sandbox_command: { args: { id: string; config: LaunchConfig }; result: string };
   library_prepare_review: { args: { id: string }; result: string };
   library_configure: { args: { id: string; config: LaunchConfig; reviewToken: string | null }; result: InstalledApp };
   library_list: { args: undefined; result: InstalledApp[] };
@@ -63,6 +64,7 @@ export interface AppApi extends SelfUpdateBackend {
   pickIcon(): Promise<string | null>;
   sandboxStatus(): Promise<SandboxStatus>;
   libraryDefaultPermissions(id: string): Promise<SandboxPermissions>;
+  librarySandboxCommand(id: string, config: LaunchConfig): Promise<string>;
   libraryPrepareReview(id: string): Promise<string>;
   libraryConfigure(id: string, config: LaunchConfig, reviewToken?: string | null): Promise<InstalledApp>;
   libraryList(): Promise<InstalledApp[]>;
@@ -131,6 +133,7 @@ export function createNativeApi(transport: CommandTransport): AppApi {
     },
     sandboxStatus: () => transport("sandbox_status", undefined),
     libraryDefaultPermissions: (id) => transport("library_default_permissions", { id }),
+    librarySandboxCommand: (id, config) => transport("library_sandbox_command", { id, config }),
     libraryPrepareReview: (id) => transport("library_prepare_review", { id }),
     libraryConfigure: (id, config, reviewToken = null) => transport("library_configure", { id, config, reviewToken }),
     libraryList: () => transport("library_list", undefined),

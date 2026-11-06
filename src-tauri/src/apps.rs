@@ -193,6 +193,24 @@ pub async fn library_default_permissions(
     .map_err(|error| error.to_string())?
 }
 
+#[tauri::command]
+pub async fn library_sandbox_command(id: String, config: LaunchConfig) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let app = crate::store::load_all()?
+            .remove(&id)
+            .ok_or("app not found")?;
+        let path = persistence::data_path("library.json")?;
+        crate::sandbox::manual_command(
+            &app,
+            &config,
+            path.parent().ok_or("invalid policy path")?,
+            &crate::sandbox::Runtime::current(),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 async fn discover_icon(app: &InstalledApp) -> Result<InstalledApp, String> {
     if app.kind == crate::models::AppKind::Binary || app.icon_path.is_some() {
         return Ok(app.clone());

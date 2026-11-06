@@ -73,6 +73,21 @@ export function createPreviewApi(includeBinary = false): AppApi {
       const app = findApp(id);
       return { ...restrictedPermissions(), paths: app.kind === "binary" ? [{ path: app.file_path.slice(0, app.file_path.lastIndexOf("/")), access: "read-only" }] : [] };
     },
+    async librarySandboxCommand(id, config) {
+      const app = findApp(id);
+      const destination = `/app/${app.file_path.slice(app.file_path.lastIndexOf("/") + 1)}`;
+      const folders = config.permissions.paths.map(({ path, access }) => `${access === "read-only" ? "--ro-bind" : "--bind"} ${path} ${path}`);
+      return [
+        "/usr/bin/bwrap",
+        "--unshare-user",
+        "--unshare-pid",
+        ...(config.permissions.network ? [] : ["--unshare-net"]),
+        "--clearenv",
+        ...folders,
+        `--ro-bind ${app.file_path} ${destination}`,
+        ["--", destination, ...(config.arguments ?? [])].join(" "),
+      ].join(" \\\n  ");
+    },
     async libraryPrepareReview(id) { return `preview-review:${id}`; },
     async libraryConfigure(id, config, reviewToken) {
       const app = findApp(id);

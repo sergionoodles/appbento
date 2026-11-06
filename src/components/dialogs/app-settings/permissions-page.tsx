@@ -4,6 +4,7 @@ import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, SandboxPath, SandboxPermissions, SandboxStatus } from "@/lib/types";
 import { restrictedPermissions, unavailableSandboxStatus, validateSandboxPaths } from "@/lib/sandbox";
 import { DesktopIntegrationSettings } from "./desktop-integration";
+import { ManualCommand } from "./manual-command";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
@@ -59,13 +60,12 @@ export function useSandboxStatus(backend: AppApi) {
   return { status, isChecking, isReady, recheck };
 }
 
-export function PermissionsPage({ app, backend, config, onChange, sandbox, isReview, isSaving, onError }: {
-  app: InstalledApp;
+export function PermissionsPage({ appId, backend, config, onChange, sandbox, isSaving, onError }: {
+  appId: string;
   backend: AppApi;
   config: LaunchConfig;
   onChange: (config: LaunchConfig) => void;
   sandbox: ReturnType<typeof useSandboxStatus>;
-  isReview: boolean;
   isSaving: boolean;
   onError: (error: string | null) => void;
 }) {
@@ -73,8 +73,6 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
 
   return (
     <div className="flex flex-col gap-7">
-      {isReview ? <Notice icon={<ShieldCheck size={16} />}>Review how this app can access your computer before its first launch. You can change this later.</Notice> : null}
-      {app.kind === "binary" ? <Notice icon={<Folder size={16} />}>AppBento uses this executable at its current location. GUI apps are the focus; console output appears in launch logs. The default read-only folder grant makes nearby libraries and resources available. Files in granted folders are not covered by the executable review and can change without a new review. Moving or renaming the executable requires a new entry with new permissions and private data.</Notice> : null}
       {!backend.isTauri ? <Notice tone="warn" icon={<TriangleAlert size={16} />}>Sample preview: permissions are simulated. No sandbox or app is launched here.</Notice> : null}
 
       <fieldset disabled={isSaving} className="grid grid-cols-2 gap-3">
@@ -102,6 +100,7 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
           <PermissionToggles permissions={config.permissions} isSaving={isSaving} onChange={setPermissions} />
           <DesktopIntegrationSettings permissions={config.permissions} status={sandbox.status} isSaving={isSaving} onChange={setPermissions} onError={onError} />
           <SharedFolders permissions={config.permissions} backend={backend} isSaving={isSaving} onChange={setPermissions} onError={onError} />
+          <ManualCommand backend={backend} appId={appId} config={config} />
         </>}
     </div>
   );
