@@ -209,6 +209,72 @@ fn settings_round_trip_to_another_home_preserves_every_configuration() {
 }
 
 #[test]
+fn legacy_permission_policies_restore_without_approval_and_do_not_block_other_apps() {
+    for blocked_service in [None, Some("org.kde.*")] {
+        let (directory, mut backup) = fixture();
+        let mut valid = backup.apps[0].clone();
+        valid.app.id = "second-old-id".into();
+        valid.app.name = "Other app".into();
+        valid.app.file_path = directory
+            .0
+            .join("old-home/Applications/Other.AppImage")
+            .to_string_lossy()
+            .into_owned();
+        create_appimage(Path::new(&valid.app.file_path));
+        let valid_digest = valid.app.reviewed_digest.clone();
+        backup.apps.push(valid);
+        let config = backup.apps[0].app.launch_config.as_mut().unwrap();
+        if let Some(name) = blocked_service {
+            config
+                .permissions
+                .desktop_integration
+                .custom
+                .push(crate::models::DbusRule {
+                    name: name.into(),
+                    access: crate::models::DbusAccess::Talk,
+                });
+        } else {
+            config.permissions.display = false;
+        }
+        let request = request(&directory, backup);
+        let path = directory.0.join("new-data/library.json");
+        restore_at(
+            &path,
+            &directory.0.join("new-desktop"),
+            &directory.0.join("new-home"),
+            request,
+        )
+        .unwrap();
+        let library: Library = persistence::load(&path).unwrap();
+        assert_eq!(library.len(), 2);
+        let restored = library
+            .values()
+            .find(|app| app.name != "Other app")
+            .unwrap();
+        assert!(restored.reviewed_digest.is_none());
+        let config = restored.launch_config.as_ref().unwrap();
+        assert!(crate::sandbox::plan(
+            restored,
+            &[],
+            path.parent().unwrap(),
+            &crate::sandbox::Runtime::default()
+        )
+        .is_err());
+        assert!(crate::sandbox::validate_config(config, path.parent().unwrap()).is_err());
+        let other = library
+            .values()
+            .find(|app| app.name == "Other app")
+            .unwrap();
+        assert_eq!(other.reviewed_digest, valid_digest);
+        assert!(crate::sandbox::validate_config(
+            other.launch_config.as_ref().unwrap(),
+            path.parent().unwrap()
+        )
+        .is_ok());
+    }
+}
+
+#[test]
 fn invalid_or_missing_files_do_not_change_existing_settings_or_library() {
     let (directory, backup) = fixture();
     let mut request = request(&directory, backup);

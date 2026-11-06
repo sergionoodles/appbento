@@ -2,7 +2,7 @@ use super::*;
 use crate::models::{PathPermission, SandboxPermissions};
 use crate::persistence::tests::TemporaryDirectory;
 
-fn fixture() -> (TemporaryDirectory, InstalledApp) {
+pub(super) fn fixture() -> (TemporaryDirectory, InstalledApp) {
     let directory = TemporaryDirectory::new();
     let image = directory.0.join("Example.AppImage");
     let mut header = [0; 20];
@@ -28,6 +28,20 @@ fn fixture() -> (TemporaryDirectory, InstalledApp) {
         .apps
         .remove(0);
     (directory, app)
+}
+
+pub(super) fn execute_pinned_plan(
+    planned: &mut LaunchPlan,
+    app: &InstalledApp,
+    policy: &Path,
+) -> std::process::Output {
+    let mut reviewed = app.clone();
+    reviewed.reviewed_digest = Some(appimage_digest(Path::new(&app.file_path)).unwrap());
+    let pinned = execution::pin_launch_paths_in_place(planned, &reviewed, policy).unwrap();
+    let mut command = execution::prepare_command(planned);
+    command.env("APPBENTO_HOST_SECRET", "host-only-test-value");
+    execution::inherit_descriptors(&mut command, planned, &pinned);
+    command.output().unwrap()
 }
 
 #[test]
@@ -226,12 +240,7 @@ fn actual_bubblewrap_isolates_home_files_environment_and_network() {
         .unwrap();
     planned.arguments.truncate(command_index + 1);
     planned.arguments.extend(["/bin/sh".into(), "-c".into(), format!("test ! -e '{}' && test -z \"$APPBENTO_HOST_SECRET\" && test \"$HOME\" = /home/app && test ! -e /run/dbus/system_bus_socket && test ! -e /dev/fuse && ! /usr/bin/timeout 1 /bin/bash -c 'echo >/dev/tcp/127.0.0.1/{port}'", secret.display())]);
-    let output = Command::new(planned.program)
-        .args(planned.arguments)
-        .env("APPBENTO_HOST_SECRET", "secret")
-        .env_clear()
-        .output()
-        .unwrap();
+    let output = execute_pinned_plan(&mut planned, &app, &directory.0.join("policy"));
     assert!(
         output.status.success(),
         "{}",
@@ -273,11 +282,7 @@ fn actual_bubblewrap_supports_app_directories_in_fresh_and_existing_homes() {
                 "-c".into(),
                 "for directory in \"$XDG_CONFIG_HOME\" \"$XDG_DATA_HOME\" \"$XDG_CACHE_HOME\"; do test -d \"$directory\" && mkdir -p \"$directory/OrcaSlicer\" && touch \"$directory/OrcaSlicer/settings\" || exit 1; done".into(),
             ]);
-            let output = Command::new(planned.program)
-                .args(planned.arguments)
-                .env_clear()
-                .output()
-                .unwrap();
+            let output = execute_pinned_plan(&mut planned, &app, &policy);
             assert!(
                 output.status.success(),
                 "{}",
@@ -349,9 +354,9 @@ fn folder_and_image_replacement_after_planning_preserves_reviewed_access() {
             approved.display()
         ),
     ]);
-    let mut command = Command::new(planned.program);
-    command.args(planned.arguments).env_clear();
-    execution::inherit_descriptors(&mut command, &pinned);
+    let mut command = Command::new(&planned.program);
+    command.args(&planned.arguments).env_clear();
+    execution::inherit_descriptors(&mut command, &planned, &pinned);
     let output = command.output().unwrap();
     assert!(
         output.status.success(),
@@ -366,6 +371,7 @@ fn direct_stdin_worker() {
         return;
     };
     let planned = LaunchPlan {
+        identity: None,
         environment: Default::default(),
         program: image.to_string_lossy().into_owned(),
         arguments: Vec::new(),
@@ -528,10 +534,11 @@ fn manual_command_uses_unsaved_config_and_leaves_out_desktop_integration() {
     )
     .unwrap();
     assert!(app.launch_config.is_none());
-    assert!(command.starts_with(bwrap_program()));
+    assert!(command.starts_with("sh -c "));
+    assert!(command.contains(bwrap_program()));
     assert!(command.contains("--unshare-net"));
     assert!(!command.contains("--info-fd"));
-    assert!(
-        command.ends_with("-- /app/application.AppImage --appimage-extract-and-run --safe-mode")
-    );
+    assert!(command.contains("-- /app/application.AppImage --appimage-extract-and-run --safe-mode"));
+    assert!(command.contains("APPBENTO_PASSWD"));
+    assert!(command.contains("APPBENTO_GROUP"));
 }

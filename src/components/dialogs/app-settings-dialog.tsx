@@ -90,6 +90,11 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
   const save = async () => {
+    if (hasConfigChange && launchConfig.mode === "bubblewrap" && launchConfig.permissions.network && !launchConfig.permissions.display) {
+      setLocalError("Internet and network requires Display. Turn off Internet and network, or enable Display explicitly to grant display access.");
+      setPage("permissions");
+      return;
+    }
     const pathError = hasPermissionChange && launchConfig.mode === "bubblewrap" ? validateSandboxPaths(launchConfig.permissions) : null;
     setLocalError(pathError);
     if (pathError || !canSave) return;

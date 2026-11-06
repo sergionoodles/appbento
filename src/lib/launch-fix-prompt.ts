@@ -21,8 +21,10 @@ ${app.kind === "binary" ? "This native executable stays at its current path. Its
 Available controls in the app's Settings:
 - Permissions: "Restrict with bubblewrap" or "Run without restrictions".
 - Bubblewrap access toggles: "Internet and network" (network), "Display" (display), "Audio" (audio), "Graphics acceleration" (gpu), and "Keep private app data" (persistent_data).
+- Restricted launches require "Display" to be on when "Internet and network" is on, because host networking can expose abstract X11 sockets. AppBento never enables Display automatically.
 - "Keep private app data" preserves an isolated home between launches; it does not expose my personal home folder.
 - "Desktop integration" toggles: "File dialogs, links and screen sharing" (portals), "Notifications", "Tray icon", "Media controls", "Saved passwords (keyring)" (secrets), plus "Advanced: custom D-Bus names" with "Talk to service" or "Own name" access.
+- Custom D-Bus names apply only to the session bus, not the system bus or logind. Known host command-execution services are blocked; other custom names can still weaken isolation.
 - "Shared folders": absolute folder paths with "Read only" or "Read and write" access.
 - Launch: "Command-line arguments" (one literal argument per line, no shell quotes) and "Environment variables" (one NAME=value per line).
 AppBento does not expose arbitrary Bubblewrap flags in its settings.

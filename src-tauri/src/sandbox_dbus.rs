@@ -26,6 +26,12 @@ pub(super) const PROXY_ROOT: &str = "appbento/dbus";
 const MAX_CUSTOM_RULES: usize = 32;
 const MAX_BUS_NAME_LENGTH: usize = 255;
 const BUS_DRIVER_NAME: &str = "org.freedesktop.DBus";
+const HOST_EXECUTION_SERVICES: &[&str] = &[
+    "org.freedesktop.systemd1",
+    "org.freedesktop.Flatpak",
+    "org.kde.KWin",
+    "org.gnome.Shell",
+];
 const SANDBOX_BUS_PATH: &str = "/run/user/app/bus";
 const MISSING_SESSION: &str = "Desktop integration needs a session bus. Turn off Desktop integration in this app's permissions";
 
@@ -102,6 +108,22 @@ pub fn proxy_rules(integration: &DesktopIntegration) -> Vec<String> {
 }
 
 pub fn validate(integration: &DesktopIntegration) -> Result<(), String> {
+    validate_for_restore(integration)?;
+    integration.custom.iter().try_for_each(|rule| {
+        let name = &rule.name;
+        let base = name.strip_suffix(".*").unwrap_or(name);
+        if HOST_EXECUTION_SERVICES.iter().any(|service| {
+            base == *service
+                || base.starts_with(&format!("{service}."))
+                || (base != name && service.starts_with(&format!("{base}.")))
+        }) {
+            return Err(format!("Invalid D-Bus name {name:?}: this grant covers a service that can run commands outside the sandbox"));
+        }
+        Ok(())
+    })
+}
+
+pub(super) fn validate_for_restore(integration: &DesktopIntegration) -> Result<(), String> {
     if integration.custom.len() > MAX_CUSTOM_RULES {
         return Err(format!(
             "Desktop integration allows at most {MAX_CUSTOM_RULES} custom D-Bus names"

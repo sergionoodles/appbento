@@ -4,7 +4,6 @@ use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
@@ -23,7 +22,6 @@ const PROXY_READY_TIMEOUT: Duration = Duration::from_secs(5);
 const REFERENCE_FILE: &str = ".ref";
 // An instance directory exists briefly before its reference lock does while a launch starts.
 const UNLOCKED_INSTANCE_GRACE: Duration = Duration::from_secs(60);
-const F_SETFD: i32 = 2;
 const F_SETLK: i32 = 6;
 const F_OFD_GETLK: i32 = 36;
 const F_RDLCK: i16 = 0;
@@ -169,17 +167,7 @@ impl DesktopProcess {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(log);
-        // Only descriptor flag changes run in the forked child before exec.
-        unsafe {
-            command.pre_exec(move || {
-                for descriptor in descriptors {
-                    if fcntl(descriptor, F_SETFD, 0) == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                }
-                Ok(())
-            });
-        }
+        super::execution::inherit_only_descriptors(&mut command, descriptors.to_vec());
         self.proxy = Some(
             command
                 .spawn()

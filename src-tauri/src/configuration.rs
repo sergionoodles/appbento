@@ -332,12 +332,11 @@ fn prepare_app(
                 .cloned()
                 .unwrap_or_else(|| remap_path(&permission.path, old_home, home));
         }
-        *config = crate::sandbox::validate_config(config, parent).map_err(|error| {
-            format!(
-                "{}: {error}. Create or relocate its permission folders before restoring.",
-                app.name
-            )
-        })?;
+        *config = crate::sandbox::validate_restored_config(config, parent)
+            .map_err(|error| format!("{}: cannot restore launch settings: {error}", app.name))?;
+        if crate::sandbox::validate_config(config, parent).is_err() {
+            app.reviewed_digest = None;
+        }
     }
     let mut changes = Vec::new();
     app.icon_path = entry
