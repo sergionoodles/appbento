@@ -56,10 +56,10 @@ export function Header({ isNative, query, onQuery, disabled, canEditFolders, onF
           <MenuItem icon={<FolderCog size={15} />} onSelect={onFolders} disabled={!canEditFolders || disabled}>Folders</MenuItem>
           <MenuItem icon={<Archive size={15} />} onSelect={onConfiguration} disabled={!isNative || disabled}>Export / restore settings</MenuItem>
           <MenuItem icon={<PackagePlus size={15} />} onSelect={onAddExecutable} disabled={!isNative}>Add an executable</MenuItem>
-          <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>
           <MenuSeparator />
           <ThemeSwatches />
           <MenuSeparator />
+          <MenuItem icon={<Download size={15} />} onSelect={onSelfUpdate} disabled={!isNative}>{updateVersion ? `Update available · v${updateVersion}` : "Check for AppBento updates"}</MenuItem>
           <MenuItem icon={<Info size={15} />} onSelect={onAbout}>About AppBento</MenuItem>
         </Menu>
       </div>
