@@ -135,6 +135,23 @@ describe("AppImage permission review", () => {
     expect(libraryLaunch).not.toHaveBeenCalled();
   });
 
+  it("requires explicit Display permission for host networking before saving and launching", async () => {
+    const { backend, libraryConfigure, libraryLaunch } = unreviewedBackend();
+    const { user, dialog } = await openReview(backend);
+    await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: "Internet and network" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: "Display" }));
+    expect(within(dialog).getByRole("checkbox", { name: "Display" })).not.toBeChecked();
+    await user.click(within(dialog).getByRole("button", { name: "Save and launch" }));
+    expect(libraryConfigure).not.toHaveBeenCalled();
+    expect(libraryLaunch).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Internet and network requires Display");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Display" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save and launch" }));
+    await waitFor(() => expect(libraryLaunch).toHaveBeenCalledOnce());
+    expect(libraryConfigure.mock.calls[0][1].permissions).toMatchObject({ network: true, display: true });
+  });
+
   it("preserves editable grants when saving fails", async () => {
     const libraryConfigure = vi.fn<(id: string, config: LaunchConfig) => Promise<InstalledApp>>(async () => { throw new Error("Cannot save configuration"); });
     const imported = createPreviewApp("Obsidian", "1");

@@ -4,6 +4,7 @@ import type { AppApi } from "@/lib/api";
 import type { InstalledApp, LaunchConfig, SandboxPath, SandboxPermissions, SandboxStatus } from "@/lib/types";
 import { restrictedPermissions, unavailableSandboxStatus, validateSandboxPaths } from "@/lib/sandbox";
 import { DesktopIntegrationSettings } from "./desktop-integration";
+import { ManualCommand } from "./manual-command";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
@@ -15,8 +16,8 @@ type PathAccess = SandboxPath["access"];
 type ToggleKey = Exclude<keyof SandboxPermissions, "paths" | "desktop_integration">;
 
 const PERMISSIONS: { key: ToggleKey; label: string; description: string }[] = [
-  { key: "network", label: "Internet and network", description: "Connect to the internet and local network services." },
-  { key: "display", label: "Display", description: "Open windows. X11 access can also expose other windows and keyboard input." },
+  { key: "network", label: "Internet and network", description: "Connect to the internet and local network services. Requires Display because host networking can also expose X11 windows and keyboard input." },
+  { key: "display", label: "Display", description: "Access Wayland and X11 displays, including X11 authentication and shared memory when available. X11 access can expose other windows and keyboard input." },
   { key: "audio", label: "Audio", description: "Play sound and record from microphones through the audio service." },
   { key: "gpu", label: "Graphics acceleration", description: "Access graphics devices and their drivers." },
   { key: "persistent_data", label: "Keep private app data", description: "Keep an isolated home folder between launches. This does not grant access to your personal home folder." },
@@ -59,13 +60,12 @@ export function useSandboxStatus(backend: AppApi) {
   return { status, isChecking, isReady, recheck };
 }
 
-export function PermissionsPage({ app, backend, config, onChange, sandbox, isReview, isSaving, onError }: {
-  app: InstalledApp;
+export function PermissionsPage({ appId, backend, config, onChange, sandbox, isSaving, onError }: {
+  appId: string;
   backend: AppApi;
   config: LaunchConfig;
   onChange: (config: LaunchConfig) => void;
   sandbox: ReturnType<typeof useSandboxStatus>;
-  isReview: boolean;
   isSaving: boolean;
   onError: (error: string | null) => void;
 }) {
@@ -73,8 +73,6 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
 
   return (
     <div className="flex flex-col gap-7">
-      {isReview ? <Notice icon={<ShieldCheck size={16} />}>Review how this app can access your computer before its first launch. You can change this later.</Notice> : null}
-      {app.kind === "binary" ? <Notice icon={<Folder size={16} />}>AppBento uses this executable at its current location. GUI apps are the focus; console output appears in launch logs. The default read-only folder grant makes nearby libraries and resources available. Files in granted folders are not covered by the executable review and can change without a new review. Moving or renaming the executable requires a new entry with new permissions and private data.</Notice> : null}
       {!backend.isTauri ? <Notice tone="warn" icon={<TriangleAlert size={16} />}>Sample preview: permissions are simulated. No sandbox or app is launched here.</Notice> : null}
 
       <fieldset disabled={isSaving} className="grid grid-cols-2 gap-3">
@@ -102,6 +100,7 @@ export function PermissionsPage({ app, backend, config, onChange, sandbox, isRev
           <PermissionToggles permissions={config.permissions} isSaving={isSaving} onChange={setPermissions} />
           <DesktopIntegrationSettings permissions={config.permissions} status={sandbox.status} isSaving={isSaving} onChange={setPermissions} onError={onError} />
           <SharedFolders permissions={config.permissions} backend={backend} isSaving={isSaving} onChange={setPermissions} onError={onError} />
+          <ManualCommand backend={backend} appId={appId} config={config} />
         </>}
     </div>
   );
@@ -162,7 +161,10 @@ function PermissionToggles({ permissions, isSaving, onChange }: {
   onChange: (permissions: SandboxPermissions) => void;
 }) {
   return (
-    <FieldGroup title="Access" description="Everything is blocked unless you turn it on.">
+    <FieldGroup title="Access" description="Choose the host resources this app can access.">
+      {permissions.network && !permissions.display
+        ? <div className="px-4 py-3"><Notice tone="warn" icon={<TriangleAlert size={16} />}>Launch is blocked: Internet and network requires Display. Turn off Internet and network, or explicitly enable Display to grant Wayland and X11 access, X11 authentication, and shared memory when available.</Notice></div>
+        : null}
       {PERMISSIONS.map(({ key, label, description }) => (
         <label key={key} className="flex items-center gap-4 px-4 py-3">
           <span className="flex-1 min-w-0">
@@ -229,7 +231,7 @@ function SharedFolders({ permissions, backend, isSaving, onChange, onError }: {
   );
 
   return (
-    <FieldGroup title="Shared folders" description="Your personal files are blocked unless you add a folder. Read and write access lets the app change or delete its contents." footer={addRow}>
+    <FieldGroup title="Shared folders" description="Your personal files are blocked unless you add a folder. Read and write access lets the app change or delete its contents, including code you might later run without restrictions. Keep executable folders read only and grant write access to data subfolders separately." footer={addRow}>
       {!permissions.paths.length ? <p className="px-4 py-3 text-[13px] text-[var(--muted)]">No personal paths allowed.</p> : null}
       {permissions.paths.map((grant, index) => (
         <div key={grant.path} className="flex items-center gap-3 px-4 py-2">

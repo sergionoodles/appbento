@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
         let mut planned = plan(&app, &[], policy, &Runtime::default()).unwrap();
         let pinned = execution::pin_launch_paths_in_place(&mut planned, &app, policy).unwrap();
         let mut command = execution::prepare_command(&planned);
-        execution::inherit_descriptors(&mut command, &pinned);
+        execution::inherit_descriptors(&mut command, &planned, &pinned);
         let output = command.output().unwrap();
         assert!(
             output.status.success(),

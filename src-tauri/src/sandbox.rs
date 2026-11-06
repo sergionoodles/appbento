@@ -4,8 +4,11 @@ use std::path::{Component, Path, PathBuf};
 #[cfg(test)]
 use std::process::Command;
 
+#[path = "sandbox_identity.rs"]
+mod identity;
 #[path = "sandbox_runtime.rs"]
 mod runtime;
+pub use identity::Identity;
 use runtime::add_devices;
 pub use runtime::Runtime;
 use sha2::{Digest, Sha256};
@@ -30,6 +33,10 @@ pub use capability::{status, SandboxStatus};
 
 #[path = "sandbox_target.rs"]
 mod target;
+
+#[path = "sandbox_shell.rs"]
+mod shell;
+pub use shell::manual_command;
 
 #[path = "sandbox_dbus.rs"]
 mod dbus;
@@ -61,6 +68,10 @@ pub fn remove_stale_desktop_directories_at_startup() {
 
 #[path = "launch_options.rs"]
 mod launch_options;
+
+#[cfg(test)]
+#[path = "sandbox_network_tests.rs"]
+mod network_tests;
 
 const SYSTEM_RUNTIME: &[&str] = &["/usr", "/bin", "/sbin", "/lib", "/lib64"];
 const SYSTEM_CONFIG: &[&str] = &[
@@ -98,8 +109,26 @@ pub fn validate_config(
     config: &LaunchConfig,
     policy_directory: &Path,
 ) -> Result<LaunchConfig, String> {
+    let canonical = validate_restored_config(config, policy_directory)?;
+    dbus::validate(&canonical.permissions.desktop_integration)?;
+    // Host networking also exposes abstract X11 sockets, including servers started later.
+    if config.mode == LaunchMode::Bubblewrap
+        && config.permissions.network
+        && !config.permissions.display
+    {
+        return Err("Internet and network requires Display because sharing the host network can expose X11 windows and keyboard input. Enable Display explicitly, or turn off Internet and network".into());
+    }
+    Ok(canonical)
+}
+
+// Backups retain older permission choices for editing, but never retain approval
+// when those choices fail the current launch policy.
+pub(crate) fn validate_restored_config(
+    config: &LaunchConfig,
+    policy_directory: &Path,
+) -> Result<LaunchConfig, String> {
     launch_options::validate(config)?;
-    dbus::validate(&config.permissions.desktop_integration)?;
+    dbus::validate_for_restore(&config.permissions.desktop_integration)?;
     let paths = config
         .permissions
         .paths
@@ -178,6 +207,7 @@ fn validate_grant(path: &Path, policy_directory: &Path) -> Result<PathBuf, Strin
 
 #[derive(Debug)]
 pub struct LaunchPlan {
+    pub identity: Option<Identity>,
     pub environment: std::collections::BTreeMap<String, String>,
     pub program: String,
     pub arguments: Vec<String>,
@@ -199,6 +229,7 @@ pub fn plan(
     let mut file = open_app(Path::new(&app.file_path), app.kind)?;
     if config.mode == LaunchMode::Direct {
         return Ok(LaunchPlan {
+            identity: None,
             program: app.file_path.clone(),
             arguments: config
                 .arguments
@@ -211,6 +242,7 @@ pub fn plan(
             application_destination: None,
         });
     }
+    runtime.identity.validate()?;
     let config = validate_config(config, policy_directory)?;
     let target = target::prepare(app, &mut file, &config.permissions)?;
     // The detached monitor owns this sandbox, so closing the UI leaves it alive.
@@ -263,6 +295,18 @@ pub fn plan(
     .into_iter()
     .map(str::to_owned)
     .collect::<Vec<_>>();
+    arguments.extend([
+        "--uid".into(),
+        runtime.identity.uid.to_string(),
+        "--gid".into(),
+        runtime.identity.gid.to_string(),
+        "--setenv".into(),
+        "USER".into(),
+        "app".into(),
+        "--setenv".into(),
+        "LOGNAME".into(),
+        "app".into(),
+    ]);
     for path in SYSTEM_RUNTIME.iter().chain(SYSTEM_CONFIG) {
         if Path::new(path).exists() {
             bind(&mut arguments, "--ro-bind", path, path);
@@ -343,6 +387,7 @@ pub fn plan(
     arguments.extend_from_slice(&config.arguments);
     arguments.extend_from_slice(uri_arguments);
     Ok(LaunchPlan {
+        identity: Some(runtime.identity),
         program: bwrap_program().into(),
         arguments,
         clear_environment: true,
@@ -392,3 +437,7 @@ mod binary_tests;
 #[cfg(test)]
 #[path = "sandbox_binary_runtime_tests.rs"]
 mod binary_runtime_tests;
+
+#[cfg(test)]
+#[path = "sandbox_identity_tests.rs"]
+mod identity_tests;

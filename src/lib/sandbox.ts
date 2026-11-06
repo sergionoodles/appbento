@@ -5,6 +5,10 @@ export function recommendedDesktopIntegration(): DesktopIntegration {
   return { portals: true, notifications: true, tray: false, media_controls: false, secrets: false, custom: [] };
 }
 
+export function isDesktopIntegrationEnabled({ custom, ...switches }: DesktopIntegration): boolean {
+  return Object.values(switches).some(Boolean) || custom.length > 0;
+}
+
 export function restrictedPermissions(): SandboxPermissions {
   return {
     network: false,
@@ -34,6 +38,7 @@ export function unavailableSandboxStatus(error: string): SandboxStatus {
 const DBUS_NAME_MAX_LENGTH = 255;
 const DBUS_ELEMENT_PATTERN = /^[A-Za-z_-][A-Za-z0-9_-]*$/;
 const DBUS_DAEMON_ELEMENTS = ["org", "freedesktop", "DBus"];
+const HOST_EXECUTION_SERVICES = ["org.freedesktop.systemd1", "org.freedesktop.Flatpak", "org.kde.KWin", "org.gnome.Shell"];
 
 export function validateDbusName(name: string, existing: DbusRule[], access: DbusRule["access"]): string | null {
   if (!name || name.length > DBUS_NAME_MAX_LENGTH) return "Enter a D-Bus name of at most 255 characters.";
@@ -48,6 +53,11 @@ export function validateDbusName(name: string, existing: DbusRule[], access: Dbu
   const isDaemonPrefix = elements.length <= DBUS_DAEMON_ELEMENTS.length && elements.every((element, index) => element === DBUS_DAEMON_ELEMENTS[index]);
   const coversDaemon = hasWildcard ? isDaemonPrefix : isDaemonPrefix && elements.length === DBUS_DAEMON_ELEMENTS.length;
   if (coversDaemon) return "This name would cover the D-Bus service itself and cannot be allowed.";
+
+  const base = elements.join(".");
+  if (HOST_EXECUTION_SERVICES.some((service) => base === service || base.startsWith(`${service}.`) || (hasWildcard && service.startsWith(`${base}.`)))) {
+    return "This grant covers a service that can run commands outside the sandbox and cannot be allowed.";
+  }
 
   if (existing.some((rule) => rule.name === name && rule.access === access)) return "This name is already added with this access.";
   return null;

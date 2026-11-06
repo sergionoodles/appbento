@@ -65,11 +65,7 @@ fn sandbox_can_read_system_ca_bundles_without_network_access() {
     planned
         .arguments
         .extend(bundles.into_iter().map(str::to_owned));
-    let output = Command::new(planned.program)
-        .args(planned.arguments)
-        .env_clear()
-        .output()
-        .unwrap();
+    let output = tests::execute_pinned_plan(&mut planned, &app, &directory.0.join("policy"));
     assert!(
         output.status.success(),
         "{}",

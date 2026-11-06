@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TriangleAlert, X } from "lucide-react";
 import type { DbusRule, DesktopIntegration, SandboxPermissions, SandboxStatus } from "@/lib/types";
-import { validateDbusName } from "@/lib/sandbox";
+import { isDesktopIntegrationEnabled, validateDbusName } from "@/lib/sandbox";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
 import { FieldGroup, Notice } from "../../ui/field";
@@ -28,10 +28,6 @@ function DbusAccessSelect({ value, onChange, ...props }: { value: DbusAccess; on
   return <Select value={value} options={DBUS_ACCESS_OPTIONS} onChange={onChange} {...props} />;
 }
 
-function isAnyEnabled(integration: DesktopIntegration) {
-  return INTEGRATIONS.some(({ key }) => integration[key]) || integration.custom.length > 0;
-}
-
 export function DesktopIntegrationSettings({ permissions, status, isSaving, onChange, onError }: {
   permissions: SandboxPermissions;
   status: SandboxStatus | null;
@@ -41,7 +37,7 @@ export function DesktopIntegrationSettings({ permissions, status, isSaving, onCh
 }) {
   const integration = permissions.desktop_integration;
   const setIntegration = (next: DesktopIntegration) => onChange({ ...permissions, desktop_integration: next });
-  const isUnavailable = status !== null && !status.desktop_integration_available && isAnyEnabled(integration);
+  const isUnavailable = status !== null && !status.desktop_integration_available && isDesktopIntegrationEnabled(integration);
 
   return (
     <>
@@ -102,6 +98,7 @@ function CustomDbusNames({ integration, isSaving, onChange, onError }: {
   return (
     <details open={custom.length > 0 || undefined}>
       <summary className="cursor-pointer px-4 py-3 text-[13px] text-[var(--muted)]">Advanced: custom D-Bus names{custom.length > 0 ? ` (${custom.length})` : ""}</summary>
+      <div className="px-4 py-3"><Notice tone="warn" icon={<TriangleAlert size={16} />}>Custom D-Bus access can weaken isolation. Talk to service grants access to every method of that service. Own name lets the app impersonate that service. Known host command services are blocked, but other services may also expose your files or run commands outside the sandbox.</Notice></div>
       {custom.map((rule, index) => (
         <div key={`${rule.name}:${rule.access}`} className="flex items-center gap-3 px-4 py-2">
           <span className="flex-1 min-w-0 truncate font-mono text-[13px]" title={rule.name}>{rule.name}</span>

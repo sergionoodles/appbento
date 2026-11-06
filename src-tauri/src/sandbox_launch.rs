@@ -16,9 +16,12 @@ use std::process::{Child, Command};
 const O_PATH: i32 = 0x200000;
 const O_NOFOLLOW: i32 = 0x20000;
 const F_SETFD: i32 = 2;
+const FIRST_EXTRA_DESCRIPTOR: u32 = 3;
+const CLOSE_RANGE_CLOEXEC: i32 = 1 << 2;
 const STARTUP_CHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
 unsafe extern "C" {
     fn fcntl(fd: i32, command: i32, ...) -> i32;
+    fn close_range(first: u32, last: u32, flags: i32) -> i32;
 }
 
 pub(crate) fn launch_observed(
@@ -100,7 +103,7 @@ fn launch_recorded(
         _ => None,
     };
     let mut command = prepare_command(&plan);
-    inherit_descriptors(&mut command, &pinned);
+    inherit_descriptors(&mut command, &plan, &pinned);
     let capture = recorder.capture(&mut command)?;
     let startup = spawn_checked(&mut command);
     drop(command);
@@ -207,6 +210,7 @@ pub(super) fn pin_launch_paths_in_place(
     }
     let image_descriptor = image.as_raw_fd();
     pinned.files.push(image);
+    let option_indices = mount_option_indices(&plan.arguments)?;
     for grant in &app
         .launch_config
         .as_ref()
@@ -227,15 +231,14 @@ pub(super) fn pin_launch_paths_in_place(
         let pinned_path = fs::canonicalize(format!("/proc/self/fd/{}", file.as_raw_fd()))
             .map_err(|error| error.to_string())?;
         validate_grant(&pinned_path, policy_directory)?;
-        let mount_indices = plan
-            .arguments
-            .windows(3)
-            .enumerate()
-            .filter(|(_, arguments)| {
+        let mount_indices = option_indices
+            .iter()
+            .copied()
+            .filter(|index| {
+                let arguments = &plan.arguments[*index..*index + 3];
                 (arguments[0] == "--bind" || arguments[0] == "--ro-bind")
                     && arguments[1] == grant.path
             })
-            .map(|(index, _)| index)
             .collect::<Vec<_>>();
         if mount_indices.len() != 1 || pinned_path != Path::new(&grant.path) {
             return Err("folder grant changed since review; review permissions again".into());
@@ -251,10 +254,11 @@ pub(super) fn pin_launch_paths_in_place(
         }
         pinned.files.push(file);
     }
-    let image_index = plan
-        .arguments
-        .windows(3)
-        .position(|arguments| {
+    let image_index = option_indices
+        .iter()
+        .copied()
+        .find(|index| {
+            let arguments = &plan.arguments[*index..*index + 3];
             arguments[0] == "--ro-bind"
                 && Some(arguments[2].as_str()) == plan.application_destination.as_deref()
                 && arguments[1] == app.file_path
@@ -273,27 +277,92 @@ pub(super) fn pin_launch_paths_in_place(
             .custom_flags(O_PATH | O_NOFOLLOW)
             .open(&home)
             .map_err(|error| error.to_string())?;
-        let index = plan
-            .arguments
-            .windows(3)
-            .position(|arguments| arguments[0] == "--bind" && arguments[2] == "/home/app")
+        let index = option_indices
+            .iter()
+            .copied()
+            .find(|index| {
+                plan.arguments[*index] == "--bind" && plan.arguments[*index + 2] == "/home/app"
+            })
             .ok_or("private home mount missing")?;
         plan.arguments[index] = "--bind-fd".into();
         plan.arguments[index + 1] = file.as_raw_fd().to_string();
         pinned.files.push(file);
     }
+    pin_identity_in_place(plan, &mut pinned)?;
     Ok(pinned)
 }
 
-pub(super) fn inherit_descriptors(command: &mut Command, pinned: &PinnedLaunch) {
+fn pin_identity_in_place(plan: &mut LaunchPlan, pinned: &mut PinnedLaunch) -> Result<(), String> {
+    let identity = plan.identity.ok_or("sandbox identity missing")?;
+    let mut account_arguments = Vec::new();
+    for (file, destination) in identity.files()? {
+        account_arguments.extend([
+            "--ro-bind-data".into(),
+            file.as_raw_fd().to_string(),
+            destination.into(),
+        ]);
+        pinned.files.push(file);
+    }
+    // Prepend complete options: no placeholder can collide with user-provided values.
+    plan.arguments.splice(0..0, account_arguments);
+    Ok(())
+}
+
+// Walk options by arity, so environment values and application arguments cannot
+// masquerade as mount options or the command delimiter.
+fn mount_option_indices(arguments: &[String]) -> Result<Vec<usize>, String> {
+    let mut indices = Vec::new();
+    let mut index = 0;
+    while let Some(option) = arguments.get(index) {
+        let arity = match option.as_str() {
+            "--" => return Ok(indices),
+            "--bind" | "--ro-bind" | "--dev-bind" | "--bind-fd" | "--ro-bind-fd"
+            | "--ro-bind-data" | "--setenv" | "--symlink" => 2,
+            "--uid" | "--gid" | "--cap-drop" | "--proc" | "--dev" | "--tmpfs" | "--dir"
+            | "--perms" | "--chdir" | "--info-fd" => 1,
+            "--unshare-user"
+            | "--unshare-pid"
+            | "--unshare-uts"
+            | "--unshare-cgroup-try"
+            | "--die-with-parent"
+            | "--new-session"
+            | "--clearenv"
+            | "--unshare-ipc"
+            | "--unshare-net" => 0,
+            _ => return Err(format!("unsupported sandbox option: {option}")),
+        };
+        if index + arity >= arguments.len() {
+            return Err("incomplete sandbox option".into());
+        }
+        if matches!(option.as_str(), "--bind" | "--ro-bind") {
+            indices.push(index);
+        }
+        index += arity + 1;
+    }
+    Err("sandbox command delimiter missing".into())
+}
+
+pub(super) fn inherit_descriptors(command: &mut Command, plan: &LaunchPlan, pinned: &PinnedLaunch) {
+    if !plan.clear_environment {
+        return;
+    }
     let descriptors = pinned
         .files
         .iter()
         .map(AsRawFd::as_raw_fd)
         .collect::<Vec<_>>();
+    inherit_only_descriptors(command, descriptors);
+}
+
+pub(super) fn inherit_only_descriptors(command: &mut Command, descriptors: Vec<i32>) {
     // Only descriptor flag changes run in the forked child before exec.
     unsafe {
         command.pre_exec(move || {
+            // Libraries may open descriptors without CLOEXEC concurrently with
+            // launch. Fail closed, then preserve only descriptors bwrap consumes.
+            if close_range(FIRST_EXTRA_DESCRIPTOR, u32::MAX, CLOSE_RANGE_CLOEXEC) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
             for descriptor in &descriptors {
                 if fcntl(*descriptor, F_SETFD, 0) == -1 {
                     return Err(std::io::Error::last_os_error());
@@ -354,4 +423,53 @@ pub(super) fn prepare_command(plan: &LaunchPlan) -> Command {
     }
     command.envs(&plan.environment);
     command
+}
+
+#[cfg(test)]
+mod descriptor_tests {
+    use super::*;
+    use crate::persistence::tests::TemporaryDirectory;
+
+    #[test]
+    fn restricted_mode_cleans_descriptors_even_with_an_empty_allowlist() {
+        let directory = TemporaryDirectory::new();
+        let path = directory.0.join("host-only-test-data");
+        fs::write(&path, "host-only-test-value").unwrap();
+        let file = File::open(path).unwrap();
+        let descriptor = file.as_raw_fd();
+        for is_restricted in [true, false] {
+            let planned = LaunchPlan {
+                identity: None,
+                environment: Default::default(),
+                program: "/bin/sh".into(),
+                arguments: vec![
+                    "-c".into(),
+                    format!(
+                        "test {} -e /proc/self/fd/{descriptor}",
+                        if is_restricted { "!" } else { "" }
+                    ),
+                ],
+                clear_environment: is_restricted,
+                application_destination: None,
+            };
+            let pinned = PinnedLaunch {
+                files: Vec::new(),
+                snapshot_path: None,
+            };
+            let mut command = prepare_command(&planned);
+            unsafe {
+                command.pre_exec(move || {
+                    if fcntl(descriptor, F_SETFD, 0) == -1 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+            inherit_descriptors(&mut command, &planned, &pinned);
+            assert!(
+                command.status().unwrap().success(),
+                "restricted={is_restricted}"
+            );
+        }
+    }
 }

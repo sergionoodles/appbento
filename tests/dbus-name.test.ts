@@ -18,4 +18,16 @@ describe("validateDbusName", () => {
     expect(validateDbusName("org.example.Service", existing, "talk")).not.toBeNull();
     expect(validateDbusName("org.example.Service", existing, "own")).toBeNull();
   });
+
+  it.each([
+    "org.freedesktop.systemd1", "org.freedesktop.systemd1.*", "org.freedesktop.Flatpak",
+    "org.kde.KWin", "org.kde.*", "org.gnome.Shell", "org.gnome.Shell.*", "org.gnome.*",
+  ])("rejects host execution service grants for %s", (name) => {
+    expect(validateDbusName(name, [], "talk")).not.toBeNull();
+    expect(validateDbusName(name, [], "own")).not.toBeNull();
+  });
+
+  it.each(["org.kde.StatusNotifierWatcher", "org.gnome.ShellExtensions"])("accepts unrelated names %s", (name) => {
+    expect(validateDbusName(name, [], "talk")).toBeNull();
+  });
 });

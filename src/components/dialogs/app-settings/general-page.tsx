@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, RotateCcw } from "lucide-react";
+import { Folder, Pencil, RotateCcw } from "lucide-react";
 import type { AppApi } from "@/lib/api";
 import type { InstalledApp } from "@/lib/types";
 import { formatAge } from "@/lib/relative-time";
@@ -7,7 +7,7 @@ import { AppIcon } from "../../app-icon";
 import { versionLabel } from "../../app-status";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/card";
-import { Field, FieldGroup } from "../../ui/field";
+import { Field, FieldGroup, Notice } from "../../ui/field";
 
 const BYTES_PER_MEGABYTE = 1e6;
 
@@ -60,6 +60,11 @@ export function GeneralPage({ app, backend, name, originalName, onNameChange, is
           </div>
         ))}
       </FieldGroup>
+
+      {app.kind === "binary" ? <Notice icon={<Folder size={16} />}>
+        This executable runs from its current location. If you move or rename it, add it again; permissions and app data start fresh.
+        Only the executable is verified, so files in shared folders can change without a new review. Console output appears in launch logs.
+      </Notice> : null}
     </div>
   );
 }

@@ -31,6 +31,8 @@ const PAGES: { page: Page; label: string; icon: LucideIcon; description: string 
   { page: "updates", label: "Updates", icon: RefreshCw, description: "Where AppBento looks for new versions. Installing an update keeps these settings." },
 ];
 
+const REVIEW_DESCRIPTION = "Review what this app can access before its first launch. You can change this later.";
+
 function saveButtonLabel(isCommitting: boolean, operation: string | null, launchAfterSave: boolean) {
   if (!isCommitting) return launchAfterSave ? "Save and launch" : "Save changes";
   if (operation === "Verifying app file and starting app" || operation === "Preparing app launch") return "Starting app…";
@@ -88,6 +90,11 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
   const current = PAGES.find((entry) => entry.page === page) ?? PAGES[0];
 
   const save = async () => {
+    if (hasConfigChange && launchConfig.mode === "bubblewrap" && launchConfig.permissions.network && !launchConfig.permissions.display) {
+      setLocalError("Internet and network requires Display. Turn off Internet and network, or enable Display explicitly to grant display access.");
+      setPage("permissions");
+      return;
+    }
     const pathError = hasPermissionChange && launchConfig.mode === "bubblewrap" ? validateSandboxPaths(launchConfig.permissions) : null;
     setLocalError(pathError);
     if (pathError || !canSave) return;
@@ -148,7 +155,7 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
           <header className="flex items-start justify-between gap-4 px-8 pt-6 pb-5">
             <div>
               <h3 className="text-[20px] font-bold tracking-[-0.03em] leading-tight">{current.label}</h3>
-              <p className="mt-1 text-[13px] text-[var(--muted)]">{current.description}</p>
+              <p className="mt-1 text-[13px] text-[var(--muted)]">{page === "permissions" && isReview ? REVIEW_DESCRIPTION : current.description}</p>
             </div>
             <Button variant="ghost" size="icon" aria-label="Close settings" disabled={isCommitting} onClick={onClose} className="-mr-2"><X size={18} /></Button>
           </header>
@@ -156,8 +163,8 @@ export function AppSettingsDialog({ app, backend, openTo, originalName, launchAf
           <div key={page} className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
             {page === "general" ? <GeneralPage app={app} backend={backend} name={name} originalName={originalName} onNameChange={setName}
               isEditingIcon={isEditingIcon} onEditIcon={setIsEditingIcon} onSaveIcon={onSaveIcon} isSaving={isBusy} /> : null}
-            {page === "permissions" ? <PermissionsPage app={app} backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
-              isReview={isReview} isSaving={isBusy} onError={setLocalError} /> : null}
+            {page === "permissions" ? <PermissionsPage appId={app.id} backend={backend} config={launchConfig} onChange={setLaunchConfig} sandbox={sandbox}
+              isSaving={isBusy} onError={setLocalError} /> : null}
             {page === "launch" ? <LaunchPage draft={launchDraft} onChange={setLaunchDraft} isSaving={isBusy} /> : null}
             {page === "integration" ? <IntegrationPage app={app} isSaving={isBusy} onSetMenuEntry={onSetMenuEntry} /> : null}
             {page === "updates" && app.kind === "binary" ? <p className="text-[13px] text-[var(--muted)]">Executable updates are not supported yet. Replace the file yourself, then review its permissions again.</p> : null}

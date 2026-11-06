@@ -42,7 +42,7 @@ it("requires first-launch review in direct mode, loads backend folder defaults, 
   const dialog = screen.getByRole("dialog", { name: "Settings for Native Editor" });
   expect(within(dialog).getByRole("radio", { name: "Run without restrictions" })).toBeChecked();
   expect(libraryLaunch).not.toHaveBeenCalled();
-  expect(await within(dialog).findByText(/Files in granted folders are not covered/)).toBeInTheDocument();
+  expect(await within(dialog).findByText(/Review what this app can access before its first launch/)).toBeInTheDocument();
   await waitFor(() => expect(within(dialog).getByRole("button", { name: "Save and launch" })).toBeEnabled());
   expect(libraryDefaultPermissions).toHaveBeenCalledWith(binary.id);
   await user.click(within(dialog).getByRole("radio", { name: "Restrict with bubblewrap" }));
