@@ -88,12 +88,17 @@ fn sandbox_shares_ipc_only_when_an_x11_socket_is_exposed() {
             assert!(planned.arguments.iter().any(|argument| argument == flag));
         }
         if can_run_bubblewrap {
-            assert_ipc_namespace(planned, has_x11_access);
+            assert_ipc_namespace(planned, has_x11_access, &app, &directory.0.join("policy"));
         }
     }
 }
 
-fn assert_ipc_namespace(mut planned: LaunchPlan, should_share_ipc: bool) {
+fn assert_ipc_namespace(
+    mut planned: LaunchPlan,
+    should_share_ipc: bool,
+    app: &InstalledApp,
+    policy: &Path,
+) {
     let host_ipc_namespace = fs::read_link("/proc/self/ns/ipc").unwrap();
     let command_index = planned
         .arguments
@@ -104,10 +109,7 @@ fn assert_ipc_namespace(mut planned: LaunchPlan, should_share_ipc: bool) {
     planned
         .arguments
         .extend(["/usr/bin/readlink".into(), "/proc/self/ns/ipc".into()]);
-    let output = Command::new(&planned.program)
-        .args(&planned.arguments)
-        .output()
-        .unwrap();
+    let output = execute_pinned_plan(&mut planned, app, policy);
     assert!(
         output.status.success(),
         "{}",

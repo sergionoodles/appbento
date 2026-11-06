@@ -9,6 +9,8 @@ const PROXY_CANDIDATES: &[&str] = &[
     "/usr/local/bin/xdg-dbus-proxy",
     "/bin/xdg-dbus-proxy",
 ];
+const ERRNO_INVALID_ARGUMENT: i32 = 22;
+const ERRNO_NOT_IMPLEMENTED: i32 = 38;
 
 #[derive(Debug, Serialize)]
 pub struct SandboxStatus {
@@ -116,27 +118,59 @@ fn bubblewrap_status() -> SandboxStatus {
     }) {
         return SandboxStatus::bubblewrap(false, Some(version), Some("Bubblewrap must support --ro-bind-fd (version 0.13 or newer). On Arch Linux, upgrade with sudo pacman -Syu bubblewrap".into()));
     }
-    let probe = Command::new(bwrap_program())
-        .env_clear()
-        .args([
-            "--unshare-all",
-            "--unshare-user",
-            "--new-session",
-            "--die-with-parent",
-            "--ro-bind",
-            "/",
-            "/",
-            "--",
-            "/bin/true",
-        ])
-        .output();
+    let mut probe_command = Command::new(bwrap_program());
+    probe_command.env_clear().args([
+        "--unshare-all",
+        "--unshare-user",
+        "--new-session",
+        "--die-with-parent",
+        "--ro-bind",
+        "/",
+        "/",
+        "--",
+        "/bin/true",
+    ]);
+    super::execution::inherit_only_descriptors(&mut probe_command, Vec::new());
+    let probe = probe_command.output();
     let error = match probe {
         Ok(output) if output.status.success() => None,
         Ok(output) => Some(format!(
             "Bubblewrap is installed but namespaces are unavailable: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )),
-        Err(error) => Some(format!("Bubblewrap capability check failed: {error}")),
+        Err(error) => Some(describe_probe_spawn_error(&error)),
     };
     SandboxStatus::bubblewrap(error.is_none(), Some(version), error)
+}
+
+fn describe_probe_spawn_error(error: &std::io::Error) -> String {
+    let hint = match error.raw_os_error() {
+        Some(ERRNO_INVALID_ARGUMENT | ERRNO_NOT_IMPLEMENTED) => ". Safe descriptor isolation requires Linux 5.11 or newer and a syscall policy allowing close_range",
+        _ => "",
+    };
+    format!("Bubblewrap capability check failed: {error}{hint}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unrelated_probe_errors_do_not_blame_the_kernel() {
+        for code in [1, 2, 8] {
+            let error = std::io::Error::from_raw_os_error(code);
+            let message = describe_probe_spawn_error(&error);
+            assert!(message.contains(&error.to_string()));
+            assert!(!message.contains("Linux 5.11"));
+        }
+    }
+
+    #[test]
+    fn unsupported_probe_errors_explain_kernel_and_syscall_policy_requirements() {
+        for code in [ERRNO_INVALID_ARGUMENT, ERRNO_NOT_IMPLEMENTED] {
+            let message = describe_probe_spawn_error(&std::io::Error::from_raw_os_error(code));
+            assert!(message.contains("Linux 5.11"));
+            assert!(message.contains("syscall policy"));
+        }
+    }
 }

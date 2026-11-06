@@ -20,6 +20,29 @@ const FIXTURE: &str = r#"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <dirent.h>
+static int descriptors_are_private(char *leak, size_t capacity) {
+  DIR *directory = opendir("/proc/self/fd");
+  if (!directory) return 0;
+  int is_private = 1;
+  struct dirent *entry;
+  while ((entry = readdir(directory))) {
+    if (entry->d_name[0] == '.') continue;
+    int descriptor = atoi(entry->d_name);
+    if (descriptor > STDERR_FILENO && descriptor != dirfd(directory)) {
+      char path[128], target[4096];
+      snprintf(path, sizeof(path), "/proc/self/fd/%d", descriptor);
+      ssize_t length = readlink(path, target, sizeof(target) - 1);
+      if (length < 0) continue;
+      target[length] = '\0';
+      snprintf(leak, capacity, "descriptor %d: %s", descriptor, target);
+      is_private = 0;
+      break;
+    }
+  }
+  closedir(directory);
+  return is_private;
+}
 static int touch(const char *directory, const char *name, const char *text) {
   char path[4096];
   snprintf(path, sizeof(path), "%s/%s", directory, name);
@@ -30,7 +53,8 @@ static int touch(const char *directory, const char *name, const char *text) {
 }
 int main(int argc, char **argv) {
   if (argc != 3) return 1;
-  char path[4096], command[8192];
+  char path[4096], command[8192], leak[4096] = "cannot inspect descriptors";
+  if (touch(argv[2], "descriptors", descriptors_are_private(leak, sizeof(leak)) ? "private" : leak)) return 4;
   if (touch(argv[2], "started", "started")) return 2;
   snprintf(path, sizeof(path), "%s/release", argv[2]);
   for (int i = 0; i < 200 && access(path, F_OK) != 0; i++) usleep(50000);
@@ -169,7 +193,7 @@ fn desktop_integration_worker() {
                 environment: Default::default(),
                 mode: LaunchMode::Bubblewrap,
                 permissions: SandboxPermissions {
-                    persistent_data: false,
+                    persistent_data: true,
                     desktop_integration: DesktopIntegration {
                         portals: true,
                         ..Default::default()
@@ -203,6 +227,10 @@ fn desktop_integration_worker() {
 
     fs::write(output.join("release"), "").unwrap();
     wait_for("the app to finish", || output.join("done").exists());
+    assert_eq!(
+        fs::read_to_string(output.join("descriptors")).unwrap(),
+        "private"
+    );
     let result = fs::read_to_string(output.join("result")).unwrap();
     assert!(result.contains(&format!("name={app_id}")), "{result}");
     assert!(result.contains("(<uint32 "), "portal unreachable: {result}");

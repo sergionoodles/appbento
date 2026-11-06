@@ -16,8 +16,8 @@ type PathAccess = SandboxPath["access"];
 type ToggleKey = Exclude<keyof SandboxPermissions, "paths" | "desktop_integration">;
 
 const PERMISSIONS: { key: ToggleKey; label: string; description: string }[] = [
-  { key: "network", label: "Internet and network", description: "Connect to the internet and local network services." },
-  { key: "display", label: "Display", description: "Open windows. X11 access can also expose other windows and keyboard input." },
+  { key: "network", label: "Internet and network", description: "Connect to the internet and local network services. Requires Display because host networking can also expose X11 windows and keyboard input." },
+  { key: "display", label: "Display", description: "Access Wayland and X11 displays, including X11 authentication and shared memory when available. X11 access can expose other windows and keyboard input." },
   { key: "audio", label: "Audio", description: "Play sound and record from microphones through the audio service." },
   { key: "gpu", label: "Graphics acceleration", description: "Access graphics devices and their drivers." },
   { key: "persistent_data", label: "Keep private app data", description: "Keep an isolated home folder between launches. This does not grant access to your personal home folder." },
@@ -161,7 +161,10 @@ function PermissionToggles({ permissions, isSaving, onChange }: {
   onChange: (permissions: SandboxPermissions) => void;
 }) {
   return (
-    <FieldGroup title="Access" description="Everything is blocked unless you turn it on.">
+    <FieldGroup title="Access" description="Choose the host resources this app can access.">
+      {permissions.network && !permissions.display
+        ? <div className="px-4 py-3"><Notice tone="warn" icon={<TriangleAlert size={16} />}>Launch is blocked: Internet and network requires Display. Turn off Internet and network, or explicitly enable Display to grant Wayland and X11 access, X11 authentication, and shared memory when available.</Notice></div>
+        : null}
       {PERMISSIONS.map(({ key, label, description }) => (
         <label key={key} className="flex items-center gap-4 px-4 py-3">
           <span className="flex-1 min-w-0">
@@ -228,7 +231,7 @@ function SharedFolders({ permissions, backend, isSaving, onChange, onError }: {
   );
 
   return (
-    <FieldGroup title="Shared folders" description="Your personal files are blocked unless you add a folder. Read and write access lets the app change or delete its contents." footer={addRow}>
+    <FieldGroup title="Shared folders" description="Your personal files are blocked unless you add a folder. Read and write access lets the app change or delete its contents, including code you might later run without restrictions. Keep executable folders read only and grant write access to data subfolders separately." footer={addRow}>
       {!permissions.paths.length ? <p className="px-4 py-3 text-[13px] text-[var(--muted)]">No personal paths allowed.</p> : null}
       {permissions.paths.map((grant, index) => (
         <div key={grant.path} className="flex items-center gap-3 px-4 py-2">

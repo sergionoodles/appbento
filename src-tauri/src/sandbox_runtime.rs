@@ -4,8 +4,9 @@ use std::fs;
 use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Runtime {
+    pub identity: super::Identity,
     pub directory: Option<PathBuf>,
     pub wayland_display: Option<String>,
     pub x11_display: Option<String>,
@@ -16,9 +17,32 @@ pub struct Runtime {
     pub desktop_session: Option<DesktopSession>,
 }
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self {
+            // Unit tests deliberately avoid dependence on the runner's account.
+            #[cfg(test)]
+            identity: super::Identity {
+                uid: 1000,
+                gid: 1000,
+            },
+            #[cfg(not(test))]
+            identity: super::Identity::current(),
+            directory: None,
+            wayland_display: None,
+            x11_display: None,
+            xauthority: None,
+            pulse_cookie: None,
+            dbus_session_bus_address: None,
+            desktop_session: None,
+        }
+    }
+}
+
 impl Runtime {
     pub fn current() -> Self {
         Self {
+            identity: super::Identity::current(),
             directory: std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from),
             wayland_display: std::env::var("WAYLAND_DISPLAY").ok(),
             x11_display: std::env::var("DISPLAY").ok(),

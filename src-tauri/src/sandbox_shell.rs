@@ -48,7 +48,26 @@ pub(super) fn render(plan: &LaunchPlan) -> String {
             .collect::<Vec<_>>()
             .join(" ");
     }
-    sandbox_lines(program, &plan.arguments).join(LINE_CONTINUATION)
+    let Some(identity) = plan.identity else {
+        return sandbox_lines(program, &plan.arguments).join(LINE_CONTINUATION);
+    };
+    let [(passwd, _), (group, _)] = identity.contents();
+    // These descriptors exist only in this shell invocation and are consumed by bwrap.
+    let arguments = [
+        "--ro-bind-data",
+        "3",
+        "/etc/passwd",
+        "--ro-bind-data",
+        "4",
+        "/etc/group",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .chain(plan.arguments.iter().cloned())
+    .collect::<Vec<_>>();
+    let command = sandbox_lines(program, &arguments).join(LINE_CONTINUATION);
+    let script = format!("{command} 3<<'APPBENTO_PASSWD' 4<<'APPBENTO_GROUP'\n{passwd}APPBENTO_PASSWD\n{group}APPBENTO_GROUP\n");
+    format!("sh -c {}", quote(&script))
 }
 
 fn sandbox_lines(program: String, arguments: &[String]) -> Vec<String> {
@@ -83,7 +102,18 @@ fn quote(value: &str) -> String {
     if is_safe {
         return value.to_owned();
     }
-    format!("'{}'", value.replace('\'', r"'\''"))
+    // Fish interprets backslashes inside single quotes, unlike POSIX sh. Escape
+    // both quotes and backslashes outside the quoted spans so either shell works.
+    let mut quoted = String::from("'");
+    for character in value.chars() {
+        match character {
+            '\'' => quoted.push_str(r"'\''"),
+            '\\' => quoted.push_str(r"'\\'"),
+            _ => quoted.push(character),
+        }
+    }
+    quoted.push('\'');
+    quoted
 }
 
 #[cfg(test)]

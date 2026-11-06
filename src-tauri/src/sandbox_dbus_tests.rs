@@ -114,6 +114,30 @@ fn custom_names_must_be_well_formed_and_never_expose_the_bus_itself() {
 }
 
 #[test]
+fn custom_rules_reject_host_execution_services_and_covering_wildcards() {
+    for name in [
+        "org.freedesktop.systemd1",
+        "org.freedesktop.systemd1.*",
+        "org.freedesktop.Flatpak",
+        "org.kde.KWin",
+        "org.kde.*",
+        "org.gnome.Shell",
+        "org.gnome.Shell.*",
+        "org.gnome.*",
+    ] {
+        for access in [DbusAccess::Talk, DbusAccess::Own] {
+            let integration = DesktopIntegration {
+                custom: vec![rule(name, access)],
+                ..Default::default()
+            };
+            assert!(validate(&integration).is_err(), "{name} must be blocked");
+        }
+    }
+    assert!(validate_bus_name("org.kde.StatusNotifierWatcher").is_ok());
+    assert!(validate_bus_name("org.gnome.ShellExtensions").is_ok());
+}
+
+#[test]
 fn custom_rule_list_is_capped() {
     let rules = |count: usize| DesktopIntegration {
         custom: (0..count)

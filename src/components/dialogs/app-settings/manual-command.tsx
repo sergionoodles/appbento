@@ -39,6 +39,7 @@ function useSandboxCommand(backend: AppApi, appId: string, config: LaunchConfig)
 function notesFor(config: LaunchConfig) {
   return [
     "AppBento's file check and launch logs are skipped.",
+    "AppBento's inherited file descriptor cleanup is skipped. For the full launch protections, launch from AppBento.",
     ...(isDesktopIntegrationEnabled(config.permissions.desktop_integration)
       ? ["Desktop integration is left out because AppBento only provides it when it launches the app."]
       : []),
